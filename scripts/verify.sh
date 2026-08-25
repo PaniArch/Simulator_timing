@@ -3,7 +3,9 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 project_root="$(cd -- "${script_dir}/.." && pwd -P)"
-expected_go="$(cd -- "${project_root}/../tools/go1.26.2/bin" && pwd -P)/go"
+source "${project_root}/env/env.sh"
+"${project_root}/scripts/environment-check.sh"
+expected_go="${GO_TOOLCHAIN_ROOT}/bin/go"
 expected_version="go1.26.2"
 expected_go_sha256="1a0f01bdb35c622c78bdc49f26f85dda53f9d7955f453f63c4c023b0dc7c754d"
 
@@ -26,14 +28,15 @@ actual_go="$(command -v go)"
 [[ "$(go env GOTOOLCHAIN)" == "local" ]] || fail "GOTOOLCHAIN must be local"
 [[ "${GOENV:-}" == "off" ]] || fail "GOENV must be off"
 [[ "$(go env GOWORK)" == "off" ]] || fail "GOWORK must be off"
-[[ "$(go env GOMODCACHE)" == "${project_root}/.cache/go-mod" ]] || \
-    fail "GOMODCACHE is not project-local"
-[[ "$(go env GOCACHE)" == "${project_root}/.cache/go-build" ]] || \
-    fail "GOCACHE is not project-local"
-[[ "$(go env GOPATH)" == "${project_root}/.cache/gopath" ]] || \
-    fail "GOPATH is not project-local"
+[[ "$(go env GOMODCACHE)" == "${SIMULATOR_RUNTIME_ROOT}/go-mod" ]] || \
+    fail "GOMODCACHE is not in the isolated runtime"
+[[ "$(go env GOCACHE)" == "${SIMULATOR_RUNTIME_ROOT}/go-build" ]] || \
+    fail "GOCACHE is not in the isolated runtime"
+[[ "$(go env GOPATH)" == "${SIMULATOR_RUNTIME_ROOT}/gopath" ]] || \
+    fail "GOPATH is not in the isolated runtime"
 [[ "$(go env GOFLAGS)" == "-mod=vendor" ]] || fail "GOFLAGS must be -mod=vendor"
 [[ "$(go env GOPROXY)" == "off" ]] || fail "GOPROXY must be off"
+[[ "$(go env GOSUMDB)" == "off" ]] || fail "GOSUMDB must be off"
 [[ "$(go env CGO_ENABLED)" == "1" ]] || fail "CGO_ENABLED must be 1"
 [[ "$(go env CC)" == "/usr/bin/gcc" ]] || fail "CC must be /usr/bin/gcc"
 [[ "${CXX:-}" == "/usr/bin/g++" ]] || fail "CXX must be /usr/bin/g++"
@@ -80,6 +83,7 @@ mapfile -d '' go_files < <(
         -not -path './vendor/*' \
         -not -path './.cache/*' \
         -not -path './.env-cache/*' \
+        -not -path './.harness-environment/*' \
         -print0
 )
 if ((${#go_files[@]} > 0)); then

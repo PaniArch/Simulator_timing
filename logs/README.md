@@ -1,4 +1,7 @@
 # Experiment logs
 
-Runtime experiment logs belong in this directory and are ignored by Git.
-`support/logging` creates append-only text logs here when `env/env.sh` is active.
+This tracked directory is retained only as documentation and is not the default
+runtime log destination. With `env/env.sh` active, `support/logging` writes
+append-only text logs under `$SIMULATOR_LOG_DIR`: the Harness invocation runtime
+or `.cache/logs` for a manually activated shell. Callers may still select another
+directory explicitly through the logging package API.

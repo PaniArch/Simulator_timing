@@ -2,8 +2,6 @@
 package softfloat
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../vortex/third_party/softfloat/source/include
-#cgo LDFLAGS: ${SRCDIR}/../../.cache/softfloat/build/softfloat.a
 #include "bridge.h"
 */
 import "C"

@@ -1,5 +1,7 @@
 .cache/
 .env-cache/
+.harness-environment/
+.harness-runtime/
 
 logs/*
 !logs/README.md

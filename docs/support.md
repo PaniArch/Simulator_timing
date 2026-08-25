@@ -45,4 +45,6 @@ implied. SoftFloat comparison functions expose the upstream quiet/signaling
 behavior and do not choose any RISC-V instruction policy.
 
 With `env/env.sh` active, `logging.Open("experiment", nil)` appends to
-`logs/experiment.log`. Call `Close` when the experiment ends.
+`$SIMULATOR_LOG_DIR/experiment.log`. Harness places that directory in its
+per-invocation runtime; a manually activated shell uses `.cache/logs`. Call
+`Close` when the experiment ends.

@@ -5,17 +5,23 @@
 | Dependency | Version | Scope | Status | Reason |
 | --- | --- | --- | --- | --- |
 | Go | 1.26.2 | toolchain | FROZEN | Simulator and future Akita/MGPUSim compatibility |
-| GCC/G++ | 9.4.0 | cgo/build | FROZEN ON HOST | Build the SoftFloat archive and cgo bridge |
+| GCC/G++ | 9.4.0 | cgo/build | FROZEN ON HOST | Compile the cgo bridge against the pinned SoftFloat archive |
 | Berkeley SoftFloat | Release 3e, commit `b51ef8f3201669b2288104c28546fc72532a1ea4` | floating-point mathematics | USED | Deterministic F32 operations, rounding modes, and exception flags |
 
-SoftFloat is reused from the existing Vortex submodule at
-`vortex/third_party/softfloat`; it is not downloaded or copied into this module.
+SoftFloat is deployed once in the repository-owned, ignored environment capsule
+`.harness-environment/v1/softfloat` and mounted read-only by Harness at
+`/opt/simulator-environment/softfloat`. It is never discovered from another
+Vortex checkout and is never downloaded during a Run.
+The verified archive is stored at `softfloat/lib/softfloat.a` in that capsule
+and linked in place. No Worker or validation turn extracts, copies, or
+recompiles SoftFloat.
 The source is BSD 3-clause licensed (`COPYING.txt` SHA-256
 `145ea96b4a4a04a1a7738d2a2bf9e830f861971e69606187b018d9e8fc0b95c7`).
-The build uses Vortex's Linux x86-64 Makefile, `RISCV` specialization, `-fPIC`,
-`SOFTFLOAT_ROUND_ODD`, and the same fast division/inlining options as Vortex.
-Objects and `softfloat.a` are generated only under
-`Simulator_v0/.cache/softfloat/build`.
+During one-time capsule provisioning, the archive was built with the frozen
+Linux x86-64 Makefile, `RISCV` specialization, `-fPIC`,
+`SOFTFLOAT_ROUND_ODD`, and the recorded fast division/inlining options. Normal
+development and Harness runs do not rebuild it; GCC compiles only the cgo bridge
+that links to the pinned archive.
 
 `support/softfloat` exposes raw-bit binary32 add, subtract, multiply, divide,
 square root, fused multiply-add, signed/unsigned 32-bit conversions, comparisons,
@@ -62,4 +68,3 @@ must remain a separate integration layer.
   proves a capability gap in the pinned SoftFloat interface.
 - Core support and future core simulator packages must not depend on Akita or
   MGPUSim merely in anticipation of integration.
-

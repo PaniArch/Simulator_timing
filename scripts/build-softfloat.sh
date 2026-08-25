@@ -17,22 +17,23 @@ fail() {
 [[ "${CC:-}" == "/usr/bin/gcc" ]] || fail "CC must be /usr/bin/gcc"
 [[ "$(command -v gcc)" == "/usr/bin/gcc" ]] || fail "gcc does not resolve to /usr/bin/gcc"
 
-softfloat_root="${SOFTFLOAT_SOURCE_ROOT:-${VORTEX_ROOT}/third_party/softfloat}"
+softfloat_root="${SOFTFLOAT_SOURCE_ROOT:?SOFTFLOAT_SOURCE_ROOT is required}"
 source_dir="${softfloat_root}/source"
 upstream_build_dir="${softfloat_root}/build/Linux-x86_64-GCC"
-build_dir="${SOFTFLOAT_BUILD_ROOT:-${project_root}/.cache/softfloat/build}"
 makefile="${upstream_build_dir}/Makefile"
 platform="${upstream_build_dir}/platform.h"
+archive="${SOFTFLOAT_ARCHIVE:?SOFTFLOAT_ARCHIVE is required}"
 
 [[ -d "${source_dir}" ]] || fail "SoftFloat source is missing: ${source_dir}"
 [[ -f "${makefile}" ]] || fail "SoftFloat Makefile is missing: ${makefile}"
 [[ -f "${platform}" ]] || fail "SoftFloat platform.h is missing: ${platform}"
+[[ -s "${archive}" ]] || fail "frozen SoftFloat archive is missing: ${archive}"
 
-actual_commit="$(git -C "${softfloat_root}" rev-parse HEAD)"
+commit_marker="${softfloat_root}/.harness-source-commit"
+[[ -f "${commit_marker}" ]] || fail "SoftFloat source commit marker is missing"
+actual_commit="$(<"${commit_marker}")"
 [[ "${actual_commit}" == "${expected_commit}" ]] || \
     fail "SoftFloat commit is ${actual_commit}; expected ${expected_commit}"
-[[ -z "$(git -C "${softfloat_root}" status --short)" ]] || \
-    fail "SoftFloat source tree has local changes"
 
 read -r actual_makefile_sha256 _ < <(sha256sum "${makefile}")
 read -r actual_platform_sha256 _ < <(sha256sum "${platform}")
@@ -41,23 +42,11 @@ read -r actual_platform_sha256 _ < <(sha256sum "${platform}")
 [[ "${actual_platform_sha256}" == "${expected_platform_sha256}" ]] || \
     fail "SoftFloat platform.h checksum mismatch"
 
-mkdir -p -- "${build_dir}"
-if [[ ! -f "${build_dir}/platform.h" ]] || ! cmp -s "${platform}" "${build_dir}/platform.h"; then
-    install -m 0644 "${platform}" "${build_dir}/platform.h"
-fi
-
-echo "build-softfloat: building Release 3e (${expected_commit:0:12})"
-make -s -C "${build_dir}" -f "${makefile}" \
-    SOURCE_DIR="${source_dir}" \
-    SPECIALIZE_TYPE=RISCV \
-    SOFTFLOAT_OPTS="-fPIC -DSOFTFLOAT_ROUND_ODD -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -DSOFTFLOAT_FAST_DIV64TO32"
-
-archive="${build_dir}/softfloat.a"
-[[ -s "${archive}" ]] || fail "SoftFloat archive was not produced"
+echo "build-softfloat: checking frozen Release 3e (${expected_commit:0:12})"
 for symbol in f32_add f32_sub f32_mul f32_mulAdd f32_div f32_sqrt \
     f32_to_i32 f32_to_ui32 i32_to_f32 ui32_to_f32 f32_eq f32_lt f32_le; do
     nm -g --defined-only "${archive}" | grep -Eq "[[:space:]]${symbol}$" || \
         fail "SoftFloat archive is missing symbol ${symbol}"
 done
 
-echo "build-softfloat: PASS (${archive})"
+echo "build-softfloat: PASS (${archive}, reused read-only)"
