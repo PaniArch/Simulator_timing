@@ -13,6 +13,7 @@
 - RTL/config 事实必须使用第 11 节的证据格式。实现偏好不能伪装成 RTL 事实。
 - 证据不足时必须登记为 `UNRESOLVED`；不得为了推进实现而猜测。
 - 本文只约束架构功能。pipeline、cache timing、issue width、周期调度、性能计数精度以及 RTL 物理存储布局，除非以后被明确提升为契约，否则不是功能模拟器要求。
+- Simulator implementation uses the project-frozen E0 Go environment. Toolchain and third-party dependency changes are environment-level changes, not individual T1–T7 implementation decisions. 后续 T1–T7 开始 Go 工作前必须执行 `source env/env.sh`；若架构实现确需新增依赖，须同步维护 `docs/dependencies.md`，不得静默改变 E0 环境。
 
 ## 2. Contract 状态分类
 
