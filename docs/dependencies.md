@@ -1,55 +1,65 @@
-# Dependency baseline and policy
+# Dependencies and support baseline
 
-## Approved baseline
+## Active dependencies
 
 | Dependency | Version | Scope | Status | Reason |
 | --- | --- | --- | --- | --- |
 | Go | 1.26.2 | toolchain | FROZEN | Simulator and future Akita/MGPUSim compatibility |
+| GCC/G++ | 9.4.0 | cgo/build | FROZEN ON HOST | Build the SoftFloat archive and cgo bridge |
+| Berkeley SoftFloat | Release 3e, commit `b51ef8f3201669b2288104c28546fc72532a1ea4` | floating-point mathematics | USED | Deterministic F32 operations, rounding modes, and exception flags |
+
+SoftFloat is reused from the existing Vortex submodule at
+`vortex/third_party/softfloat`; it is not downloaded or copied into this module.
+The source is BSD 3-clause licensed (`COPYING.txt` SHA-256
+`145ea96b4a4a04a1a7738d2a2bf9e830f861971e69606187b018d9e8fc0b95c7`).
+The build uses Vortex's Linux x86-64 Makefile, `RISCV` specialization, `-fPIC`,
+`SOFTFLOAT_ROUND_ODD`, and the same fast division/inlining options as Vortex.
+Objects and `softfloat.a` are generated only under
+`Simulator_v0/.cache/softfloat/build`.
+
+`support/softfloat` exposes raw-bit binary32 add, subtract, multiply, divide,
+square root, fused multiply-add, signed/unsigned 32-bit conversions, comparisons,
+rounding selection, and exception flags. It is a mathematical service only; it
+does not decode or implement a RISC-V instruction. Berkeley SoftFloat stores its
+control and flag state globally in this build, so the Go wrapper serializes calls
+to keep concurrent users deterministic.
+
+The functional memory, ELF32 loader, and logging packages use only the Go
+standard library. The ELF loader uses `debug/elf`; no external ELF package is
+needed.
+
+## Approved but not currently required
+
+| Dependency | Version baseline | Scope | Status | Reason |
+| --- | --- | --- | --- | --- |
 | `github.com/pelletier/go-toml/v2` | v2.4.3 | config | APPROVED / NOT YET REQUIRED | Parse Vortex TOML without a custom parser |
-| `github.com/google/go-cmp/cmp` | v0.7.0 | test only | APPROVED / NOT YET REQUIRED | Deterministic comparison of architecture effects and state |
-| Akita v5 | v5.0.0-beta.10 compatibility baseline | adapter only | NOT INSTALLED | Optional future integration |
+| `github.com/google/go-cmp/cmp` | v0.7.0 | test only | APPROVED / NOT YET REQUIRED | Deterministic comparison of complex state |
+| Akita v5 | v5.0.0-beta.10 | adapter only | NOT INSTALLED | Optional future integration |
 | MGPUSim v5 | future v5 adapter version | adapter only | NOT INSTALLED | Optional future integration |
 
-The two approved packages are exact version baselines, not current imports.
-There is no fake import or unused `require` directive: `go mod tidy` would
-correctly remove either one until implementation actually needs it. When first
-used, add only its exact approved version and regenerate `go.sum` and `vendor/`.
+There is no fake import or unused `require` directive for approved packages.
+When a real import appears, add only the approved exact version and regenerate
+`go.mod`, `go.sum`, and `vendor/`.
 
-The approved TOML baseline declares Go 1.21.0 and is MIT-licensed. The approved
-go-cmp baseline declares Go 1.21 and uses a BSD 3-clause license. Both are
-compatible with the frozen Go 1.26.2 toolchain. Version provenance:
-
-- <https://github.com/pelletier/go-toml/releases/tag/v2.4.3>
-- <https://github.com/google/go-cmp/releases/tag/v0.7.0>
-
-## Future compatibility, not core dependencies
-
-MGPUSim v5 uses module `github.com/sarchlab/mgpusim/v5` and requires Go
-1.26.0 or newer. Akita v5 uses module `github.com/sarchlab/akita/v5`; the
-compatible baseline is v5.0.0-beta.10, requiring Go 1.26.0 or newer and
-preferring toolchain Go 1.26.2.
-
-Neither module, nor any of their indirect dependencies, belongs in the current
-core dependency graph. A future MGPUSim adapter must live in a separate adapter
-or integration layer. ISA, State, Warp, CTA, and other core packages must not
-depend back on Akita or MGPUSim.
+MGPUSim v5 uses module `github.com/sarchlab/mgpusim/v5` and requires Go 1.26.0
+or newer. Akita v5 uses `github.com/sarchlab/akita/v5`; the compatible baseline
+is v5.0.0-beta.10, requiring Go 1.26.0 or newer and preferring Go 1.26.2. Neither
+module nor its transitive graph belongs in the simulator core. A future adapter
+must remain a separate integration layer.
 
 ## Policy
 
-- Later tasks must not upgrade or switch Go on their own.
+- Later tasks must not upgrade or switch Go, GCC, or SoftFloat silently.
 - Do not use unpinned `go get ...@latest`.
 - Do not add an unrecorded third-party dependency.
-- Every new dependency requires a documented need, an exact version, a license
-  and maintenance review, Go 1.26 compatibility confirmation, updated
-  `go.mod`/`go.sum`/`vendor`, and the complete verification run.
-- Let the Go module resolver manage transitive dependencies; do not add them by
-  hand.
-- Prefer the standard library where it reliably covers the need, including
-  `math/big`, `debug/elf`, `encoding/binary`, `bytes`, `errors`, `fmt`, `io`,
-  `math/bits`, `log/slog`, and `testing`.
-- Do not add a softfloat or other ISA/FP library until T1 proves a concrete
-  semantic gap. Such a proposal must explain why the standard library is
-  insufficient and satisfy the full review and vendoring process above.
-- Toolchain and third-party dependency changes are E0 environment decisions,
-  not silent T1-T7 implementation choices.
+- A new dependency requires a concrete need, exact version, license and
+  maintenance review, toolchain compatibility confirmation, updated dependency
+  records and vendor metadata, and the complete verification run.
+- Let the Go resolver manage transitive dependencies; do not add them by hand.
+- Prefer stable standard-library facilities such as `debug/elf`,
+  `encoding/binary`, `log/slog`, `math/big`, and `testing`.
+- Do not add another floating-point library unless a later architecture task
+  proves a capability gap in the pinned SoftFloat interface.
+- Core support and future core simulator packages must not depend on Akita or
+  MGPUSim merely in anticipation of integration.
 

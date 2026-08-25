@@ -1,3 +1,5 @@
 .cache/
 .env-cache/
 
+logs/*
+!logs/README.md

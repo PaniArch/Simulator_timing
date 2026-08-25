@@ -1,7 +1,9 @@
 # Vendor directory
 
-E0 currently has no imported third-party Go package. This directory is kept so
-the repository makes that state explicit; `go test -mod=vendor ./...` is still
-the required offline test mode. When an approved dependency gains a real import,
-replace this placeholder with the output of `go mod vendor`.
+The project currently has no imported third-party Go module. Berkeley SoftFloat
+is a C dependency built from the existing Vortex submodule and is not part of Go
+vendoring. This directory keeps the empty Go vendor state explicit;
+`go test -mod=vendor ./...` remains the required offline mode. When an approved
+Go dependency gains a real import, replace this placeholder with `go mod vendor`
+output.
 

@@ -34,6 +34,12 @@ actual_go="$(command -v go)"
     fail "GOPATH is not project-local"
 [[ "$(go env GOFLAGS)" == "-mod=vendor" ]] || fail "GOFLAGS must be -mod=vendor"
 [[ "$(go env GOPROXY)" == "off" ]] || fail "GOPROXY must be off"
+[[ "$(go env CGO_ENABLED)" == "1" ]] || fail "CGO_ENABLED must be 1"
+[[ "$(go env CC)" == "/usr/bin/gcc" ]] || fail "CC must be /usr/bin/gcc"
+[[ "${CXX:-}" == "/usr/bin/g++" ]] || fail "CXX must be /usr/bin/g++"
+[[ "${AR:-}" == "/usr/bin/ar" ]] || fail "AR must be /usr/bin/ar"
+[[ "$(gcc -dumpfullversion -dumpversion)" == "9.4.0" ]] || fail "GCC must be 9.4.0"
+[[ "$(g++ -dumpfullversion -dumpversion)" == "9.4.0" ]] || fail "G++ must be 9.4.0"
 
 read -r actual_go_sha256 _ < <(sha256sum "${expected_go}")
 [[ "${actual_go_sha256}" == "${expected_go_sha256}" ]] || \
@@ -45,11 +51,17 @@ cd -- "${project_root}"
 grep -qx 'go 1.26.0' go.mod || fail "go.mod must declare go 1.26.0"
 grep -qx 'toolchain go1.26.2' go.mod || fail "go.mod must freeze toolchain go1.26.2"
 
+echo "verify: SoftFloat"
+./scripts/build-softfloat.sh
+
 echo "verify: go mod verify"
 go mod verify
 
 if packages="$(go list -mod=vendor ./...)"; then
     if [[ -n "${packages}" ]]; then
+        echo "verify: go build -mod=vendor ./..."
+        go build -mod=vendor ./...
+
         echo "verify: go test -mod=vendor ./..."
         go test -mod=vendor ./...
 

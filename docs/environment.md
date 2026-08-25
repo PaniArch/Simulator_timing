@@ -1,94 +1,80 @@
-# E0 Go environment
+# Development environment
 
-## Frozen baseline
+## Frozen toolchains
 
-- Project: `/hpc2hdd/home/zekaiwang/vortex-work/Simulator_v0`
-- Module: `vortex.local/simulator`
-- Language version: Go 1.26.0
-- Frozen toolchain: Go 1.26.2 for `linux/amd64`
-- Go executable: `/hpc2hdd/home/zekaiwang/vortex-work/tools/go1.26.2/bin/go`
+| Tool | Frozen executable | Version |
+| --- | --- | --- |
+| Go | `/hpc2hdd/home/zekaiwang/vortex-work/tools/go1.26.2/bin/go` | go1.26.2 linux/amd64 |
+| C | `/usr/bin/gcc` | GCC 9.4.0 |
+| C++ | `/usr/bin/g++` | G++ 9.4.0 |
+| Archiver | `/usr/bin/ar` | GNU Binutils 2.34 |
 
-`Simulator_v0` has no Git remote. The stable local module path
-`vortex.local/simulator` was therefore selected deliberately. It must not be
-changed casually; moving to a hosted module path is an environment-level
-migration.
+The project is `/hpc2hdd/home/zekaiwang/vortex-work/Simulator_v0` and its Go
+module is `vortex.local/simulator` with language version Go 1.26.0. Because the
+repository has no Git remote, that stable local module path was chosen
+deliberately and must not change outside an environment migration.
 
-The server login environment currently resolves `go` to
-`/opt/hkust/go/bin/go` (Go 1.21.3). E0 does not modify that installation or any
-shell startup file. The frozen Go 1.26.2 tree was copied into the workspace tool
-directory from the already present official Go toolchain module distribution:
+On 2026-08-25 the unsourced login shell resolved `go` to the separate
+`MGPUSim/env/go/bin/go` installation (Go 1.26.0). That binary attempted an
+automatic go1.26.2 toolchain lookup when used in this module. The older
+`/opt/hkust/go/bin/go` path recorded during initial E0 setup is no longer
+present. Neither server state is used after activating this project.
 
-- source module: `golang.org/toolchain@v0.0.1-go1.26.2.linux-amd64`
-- source module zip hash: `h1:mCBp0gCL9gQVqXpC60jQ7R46JDxL73qeF8hv6SnV2ss=`
+The frozen Go 1.26.2 tree came from the already present official toolchain
+module `golang.org/toolchain@v0.0.1-go1.26.2.linux-amd64`:
+
+- module zip hash: `h1:mCBp0gCL9gQVqXpC60jQ7R46JDxL73qeF8hv6SnV2ss=`
 - installed `bin/go` SHA-256: `1a0f01bdb35c622c78bdc49f26f85dda53f9d7955f453f63c4c023b0dc7c754d`
 
-The source tree was checked with `go version` and `go tool compile -V=full`
-before and after copying. Both report `go1.26.2`.
+## Enter and verify
 
-## Use
-
-Every T0-T7 Go session starts with:
+Every development shell starts with:
 
 ```bash
 cd /hpc2hdd/home/zekaiwang/vortex-work/Simulator_v0
 source env/env.sh
 ```
 
-The entry point fixes `GOROOT` and puts the frozen executable first on `PATH`.
-It also sets `GOTOOLCHAIN=local`, disables user `GOENV` and workspace discovery,
-uses project-local `GOCACHE`, `GOMODCACHE`, `GOPATH`, `GOBIN`, and `GOTMPDIR`,
-and defaults to `GOFLAGS=-mod=vendor` plus `GOPROXY=off`.
+The entry point fixes the Go and C/C++ executables, enables cgo, sets
+`GOTOOLCHAIN=local`, disables user `GOENV` and workspace discovery, and uses
+project-local Go and SoftFloat build caches. It also exports:
 
-Confirm the active shell with:
+- `VORTEX_ROOT=/hpc2hdd/home/zekaiwang/vortex-work/vortex`
+- `SOFTFLOAT_SOURCE_ROOT=$VORTEX_ROOT/third_party/softfloat`
+- `SOFTFLOAT_BUILD_ROOT=$SIMULATOR_ROOT/.cache/softfloat/build`
+- `SIMULATOR_LOG_DIR=$SIMULATOR_ROOT/logs`
+
+Confirm that no unrelated Go or compiler is active with:
 
 ```bash
-command -v go
+command -v go gcc g++
 go version
-go env GOROOT GOTOOLCHAIN GOMODCACHE GOCACHE GOPATH GOFLAGS GOPROXY
+go env GOROOT GOTOOLCHAIN GOMODCACHE GOCACHE CGO_ENABLED CC
+gcc --version
+g++ --version
 ```
 
-`command -v go` must print the path under `vortex-work/tools/go1.26.2`, never
-`/opt/hkust/go` or a user module-cache path.
-
-Run the complete project check with:
+Then run the only complete validation entry point:
 
 ```bash
 ./scripts/verify.sh
 ```
 
-The script refuses an unsourced or altered environment and checks the frozen Go
-binary checksum before module, test, vet, formatting, and Git whitespace checks.
+It validates toolchain paths and versions, verifies and incrementally builds
+SoftFloat in the project cache, then runs module verification, build, tests,
+vet, gofmt, and Git whitespace checks.
 
-## Vendor and offline policy
+## Cache, vendor, and recovery
 
-Normal T0-T7 work is network-independent: `GOTOOLCHAIN=local` forbids silent
-toolchain switching, `GOPROXY=off` forbids module downloads, and builds/tests use
-`-mod=vendor`. E0 has no imported third-party package yet, so `go.sum` is empty
-and `vendor/README.md` records the intentionally empty vendor set. Once a real,
-approved import exists, the exact version, `go.sum`, and generated vendor tree
-must be committed together.
+`.cache/` is disposable and ignored by Git. Sourcing `env/env.sh` recreates its
+directory layout. `scripts/build-softfloat.sh` can reconstruct the exact static
+library from the pinned Vortex submodule without network access or writes to the
+Vortex source tree. Go dependencies remain offline with `GOPROXY=off`,
+`GOTOOLCHAIN=local`, and `-mod=vendor`.
 
-Dependency maintenance is an explicit environment-level operation. During such
-an approved task only, override the offline defaults for the specific pinned
-module, then regenerate all metadata:
-
-```bash
-GOPROXY=https://proxy.golang.org,direct GOFLAGS=-mod=mod go get example.org/module@vX.Y.Z
-GOFLAGS=-mod=mod go mod tidy
-GOFLAGS=-mod=mod go mod verify
-GOFLAGS=-mod=mod go mod vendor
-./scripts/verify.sh
-```
-
-Never leave `@latest` in the workflow or dependency records.
-
-## Cache recovery
-
-The `.cache/` directory is disposable and ignored by Git. If it is absent, a
-fresh `source env/env.sh` recreates its directory layout. With the committed
-vendor tree, `./scripts/verify.sh` rebuilds build/test cache without network and
-without reselecting dependency versions. A corrupt cache may be moved aside and
-recreated the same way. The frozen toolchain under `vortex-work/tools/go1.26.2`
-is not a cache; if it is damaged, restore the exact official 1.26.2 distribution
-and verify the recorded hashes rather than selecting a newer Go version.
+There is currently no third-party Go module import, so `go.sum` is empty and
+`vendor/README.md` records the empty Go vendor set. The SoftFloat C archive is a
+generated cache artifact and is not committed. If any cache is damaged, move it
+aside, source the environment again, and rerun `./scripts/verify.sh`; dependency
+versions are never reselected during recovery.
 
