@@ -56,7 +56,7 @@ func NewBarrierCoordinator(ctas *CTAManager) (*BarrierCoordinator, error) {
 	}
 	ctas.mu.Lock()
 	defer ctas.mu.Unlock()
-	if len(ctas.ctas) == 0 {
+	if len(ctas.ctas) == 0 && !ctas.dynamic {
 		return nil, fmt.Errorf("core: cannot bind barriers to an empty CTA manager")
 	}
 	ctas.sealed = true

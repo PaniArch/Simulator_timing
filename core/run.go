@@ -225,6 +225,10 @@ func detachStepResult(result StepResult) StepResult {
 	return detached
 }
 
+// DetachStepResult deep-copies every mutable observation reachable from one
+// Core step so upper-level Device trace/result boundaries cannot alias it.
+func DetachStepResult(result StepResult) StepResult { return detachStepResult(result) }
+
 func detachedCoreTrace(step uint64, result StepResult) TraceRecord {
 	detached := detachStepResult(result)
 	return TraceRecord{
@@ -234,6 +238,12 @@ func detachedCoreTrace(step uint64, result StepResult) TraceRecord {
 		WarpResult: detached.WarpResult, CTAValid: detached.CTAValid, CTAID: detached.CTAID,
 		Barrier: detached.Barrier, CTACompletion: detached.CTACompletion,
 	}
+}
+
+// TraceRecordFromStep constructs the same detached Core trace record used by
+// Core.Run for an upper-level scheduler which directly calls Core.Step.
+func TraceRecordFromStep(step uint64, result StepResult) TraceRecord {
+	return detachedCoreTrace(step, result)
 }
 
 func detachCTACompletion(completion CTACompletionSnapshot) CTACompletionSnapshot {

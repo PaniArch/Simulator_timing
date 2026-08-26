@@ -97,6 +97,7 @@ type SlotSnapshot struct {
 	Lifecycle             WarpLifecycle
 	BlockReason           BlockReason
 	Participated          bool
+	InitializedForKernel  bool
 	ArchitecturalState    state.WarpLifecycle
 	ArchitecturalLaneMask isa.LaneMask
 	BarrierKey            *BarrierKey
@@ -112,6 +113,7 @@ type Core struct {
 	pendingWork PendingWorkProvider
 	ctas        *CTAManager
 	barriers    *BarrierCoordinator
+	initialized [isa.FrozenWarpCount]bool
 }
 
 // PendingWorkProvider supplies the functional WSYNC predicate owned outside
@@ -346,6 +348,188 @@ func (c *Core) Activate(warpID uint8) error {
 	selected.lifecycle, selected.blockReason, selected.participated = WarpRunnable, BlockNone, true
 	selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
 	return c.validateSlot(warpID)
+}
+
+// AdmitCTA atomically selects free frozen Warp/CTA/LMEM slots, installs the
+// canonical CTA context, launches every member through the WarpState owner,
+// and makes the resulting slots runnable. CTAConfig.ID and WarpIDs are output
+// facts in dynamic mode; callers must not supply WarpIDs.
+func (c *Core) AdmitCTA(config CTAConfig) (CTASnapshot, error) {
+	admitted, err := c.AdmitCTACluster([]CTAConfig{config})
+	if err != nil {
+		return CTASnapshot{}, err
+	}
+	return admitted[0], nil
+}
+
+// AdmitCTACluster atomically admits one complete KMU cluster. No CTA in the
+// group becomes resident unless every required Warp, CTA, LMEM, WarpState,
+// and scheduler transition can commit.
+func (c *Core) AdmitCTACluster(configs []CTAConfig) ([]CTASnapshot, error) {
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+	if c.ctas == nil || !c.ctas.dynamic {
+		return nil, fmt.Errorf("core: dynamic CTA admission requires a dynamic CTA manager")
+	}
+	if len(configs) == 0 || len(configs) > int(isa.FrozenWarpCount) {
+		return nil, fmt.Errorf("core: dynamic CTA cluster size %d is invalid", len(configs))
+	}
+	clusterSize := configs[0].ClusterSize
+	clusterDimensions := configs[0].ClusterDimensions
+	if clusterSize != uint32(len(configs)) {
+		return nil, fmt.Errorf("core: complete cluster requires %d CTA configs, got %d", clusterSize, len(configs))
+	}
+	clusterProduct := uint32(1)
+	for axis, dimension := range clusterDimensions {
+		if dimension == 0 || dimension > 7 {
+			return nil, fmt.Errorf("core: cluster dimension on axis %d is invalid", axis)
+		}
+		clusterProduct *= dimension
+	}
+	if clusterProduct != clusterSize {
+		return nil, fmt.Errorf("core: cluster dimensions produce %d CTAs, got %d", clusterProduct, clusterSize)
+	}
+	var clusterOrigin [3]uint32
+	warpIDs := make([][]uint8, len(configs))
+	var selected isa.WarpMask
+	for index, config := range configs {
+		if len(config.WarpIDs) != 0 {
+			return nil, fmt.Errorf("core: dynamic CTA admission selects WarpIDs")
+		}
+		if config.ClusterSize != clusterSize || config.ClusterDimensions != clusterDimensions || config.IsFirstOfCluster != (index == 0) {
+			return nil, fmt.Errorf("core: CTA %d does not preserve complete cluster order/context", index)
+		}
+		first := configs[0]
+		if config.StartupPC != first.StartupPC || config.BlockDimensions != first.BlockDimensions ||
+			config.GridDimensions != first.GridDimensions || config.BlockSize != first.BlockSize ||
+			config.WarpStep != first.WarpStep || config.Entry != first.Entry ||
+			config.ParameterAddress != first.ParameterAddress || config.LocalMemorySize != first.LocalMemorySize {
+			return nil, fmt.Errorf("core: CTA %d differs from its cluster launch context", index)
+		}
+		rank := uint32(index)
+		offset := [3]uint32{
+			rank % clusterDimensions[0],
+			(rank / clusterDimensions[0]) % clusterDimensions[1],
+			rank / (clusterDimensions[0] * clusterDimensions[1]),
+		}
+		for axis := range 3 {
+			if config.BlockID[axis] < offset[axis] {
+				return nil, fmt.Errorf("core: CTA %d block id precedes its cluster offset on axis %d", index, axis)
+			}
+			origin := config.BlockID[axis] - offset[axis]
+			if index == 0 {
+				clusterOrigin[axis] = origin
+			} else if origin != clusterOrigin[axis] {
+				return nil, fmt.Errorf("core: CTA %d does not share cluster origin on axis %d", index, axis)
+			}
+		}
+		if config.BlockSize == 0 || config.BlockSize > uint32(isa.FrozenWarpCount*isa.FrozenLaneCount) {
+			return nil, fmt.Errorf("core: dynamic CTA block size %d is invalid", config.BlockSize)
+		}
+		required := (config.BlockSize + uint32(isa.FrozenLaneCount) - 1) / uint32(isa.FrozenLaneCount)
+		warpIDs[index] = make([]uint8, 0, required)
+		for id := uint8(0); id < isa.FrozenWarpCount && uint32(len(warpIDs[index])) < required; id++ {
+			if !selected.Active(id) && c.slots[id].lifecycle == WarpInactive && !c.slots[id].participated {
+				warpIDs[index] = append(warpIDs[index], id)
+				selected |= 1 << id
+			}
+		}
+		if uint32(len(warpIDs[index])) != required {
+			return nil, fmt.Errorf("%w: cluster CTA %d needs %d free warp slots", ErrCTAResourcesUnavailable, index, required)
+		}
+	}
+
+	admission, err := c.ctas.stageDynamicAdmissions(configs, warpIDs)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]state.WarpLaunchTarget, 0, isa.FrozenWarpCount)
+	for _, candidate := range admission.candidates {
+		for _, member := range candidate.members {
+			targets = append(targets, state.WarpLaunchTarget{
+				WarpID: member.WarpID, Owner: c.slots[member.WarpID].owner,
+				StartupPC: candidate.config.StartupPC, ActiveMask: member.ActiveMask,
+				ParameterAddress: candidate.config.ParameterAddress,
+				FirstUse:         !c.initialized[member.WarpID],
+			})
+		}
+	}
+	launch, err := state.StageWarpLaunch(targets)
+	if err != nil {
+		return nil, err
+	}
+	if err := admission.commit(func() error {
+		for _, candidate := range admission.candidates {
+			for _, member := range candidate.members {
+				slot := &c.slots[member.WarpID]
+				if slot.lifecycle != WarpInactive || slot.participated || slot.blockReason != BlockNone ||
+					slot.barrierWait || slot.barrierDrain || slot.barrierKey != (BarrierKey{}) {
+					return fmt.Errorf("core: warp %d scheduler slot changed before CTA admission", member.WarpID)
+				}
+			}
+		}
+		return launch.Commit()
+	}); err != nil {
+		return nil, err
+	}
+	result := make([]CTASnapshot, len(admission.candidates))
+	for index, candidate := range admission.candidates {
+		for _, member := range candidate.members {
+			slot := &c.slots[member.WarpID]
+			slot.lifecycle, slot.blockReason, slot.participated = WarpRunnable, BlockNone, true
+			slot.barrierKey, slot.barrierWait, slot.barrierDrain = BarrierKey{}, false, false
+			c.initialized[member.WarpID] = true
+		}
+		result[index] = snapshotCTA(candidate)
+	}
+	return result, nil
+}
+
+// ReclaimCTA releases a normally complete dynamic CTA. Completion includes
+// every explicit member, scheduler blocks, canonical barrier records, and the
+// configured functional pending-work owner. Successful reclaim removes all
+// reverse membership and empty phase history while retaining Warp registers
+// and LMEM bytes whose reset values are not architecturally frozen.
+func (c *Core) ReclaimCTA(ctaID uint32) (CTASnapshot, error) {
+	if err := c.validate(); err != nil {
+		return CTASnapshot{}, err
+	}
+	if c.ctas == nil || !c.ctas.dynamic {
+		return CTASnapshot{}, fmt.Errorf("core: dynamic CTA reclaim requires a dynamic CTA manager")
+	}
+	snapshot, err := c.ctas.Snapshot(ctaID)
+	if err != nil {
+		return CTASnapshot{}, err
+	}
+	completion, err := c.CTACompletion(ctaID)
+	if err != nil {
+		return CTASnapshot{}, err
+	}
+	if !completion.Complete {
+		return CTASnapshot{}, fmt.Errorf("core: CTA %d is not normally complete", ctaID)
+	}
+	for _, member := range snapshot.Members {
+		if c.pendingWork != nil {
+			pending, pendingErr := c.pendingWork.PendingPriorWork(member.WarpID)
+			if pendingErr != nil {
+				return CTASnapshot{}, fmt.Errorf("core: pending-work view for reclaim warp %d: %w", member.WarpID, pendingErr)
+			}
+			if pending {
+				return CTASnapshot{}, fmt.Errorf("core: CTA %d warp %d retains pending functional work", ctaID, member.WarpID)
+			}
+		}
+	}
+	if err := c.ctas.commitDynamicReclaim(ctaID, func(members []WarpMembership) {
+		for _, member := range members {
+			slot := &c.slots[member.WarpID]
+			slot.lifecycle, slot.blockReason, slot.participated = WarpInactive, BlockNone, false
+			slot.barrierKey, slot.barrierWait, slot.barrierDrain = BarrierKey{}, false, false
+		}
+	}); err != nil {
+		return CTASnapshot{}, err
+	}
+	return snapshot, nil
 }
 
 // StepOutcome describes whether one Core step selected an executor.
@@ -954,6 +1138,7 @@ func (c *Core) snapshotSlot(warpID uint8) (SlotSnapshot, error) {
 	result := SlotSnapshot{
 		WarpID: warpID, Lifecycle: selected.lifecycle,
 		BlockReason: selected.blockReason, Participated: selected.participated,
+		InitializedForKernel:  c.initialized[warpID],
 		ArchitecturalState:    architectural.Lifecycle(),
 		ArchitecturalLaneMask: architectural.ActiveMask(),
 		BarrierDraining:       selected.barrierDrain,
@@ -989,7 +1174,7 @@ func (c *Core) validate() error {
 
 func (c *Core) validateCTAMemoryRoutes(manager *CTAManager) error {
 	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
-		if !manager.HasWarp(id) {
+		if !manager.dynamic && !manager.HasWarp(id) {
 			continue
 		}
 		route, ok := c.slots[id].executor.DataMemoryService().(*CTAMemory)

@@ -108,4 +108,4 @@ fi
 echo "verify: git diff --check"
 git diff --check
 
-echo "verify: PASS (${expected_version}, vendor/offline mode)"
+printf 'verify: PASS (%s, vendor/offline mode)' "${expected_version}"

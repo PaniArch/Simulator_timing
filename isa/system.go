@@ -17,7 +17,11 @@ type CTAView struct {
 	BlockID            [3]uint32
 	BlockDimensions    [3]uint32
 	GridDimensions     [3]uint32
+	BlockSize          uint32
+	WarpStep           [3]uint32
+	ParameterAddress   uint32
 	LocalMemoryAddress uint32
+	ClusterDimensions  [3]uint32
 	ClusterSize        uint32
 	Entry              uint32
 }
