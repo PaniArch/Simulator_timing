@@ -60,6 +60,37 @@ func (s *EffectStage) Commit() error {
 	return s.commit()
 }
 
+// CommitWithExternal atomically coordinates one synchronous external owner
+// operation with a local-only stage. Staleness is checked before apply, so a
+// rejected stage never calls the external owner. Once apply succeeds, the
+// already-validated local replacement cannot fail. If apply reports failure,
+// the canonical owner is restored to the exact pre-apply image; the external
+// operation's own contract must likewise be all-or-error.
+func (s *EffectStage) CommitWithExternal(apply func() error) error {
+	if s == nil {
+		return fmt.Errorf("state: nil effect stage")
+	}
+	if apply == nil {
+		return fmt.Errorf("state: nil external apply callback")
+	}
+	if s.requiresExternal {
+		return fmt.Errorf("state: coordinated commit requires a local-only effect stage")
+	}
+	if s.committed {
+		return fmt.Errorf("state: effect stage was already committed")
+	}
+	if s.owner == nil || *s.owner != s.before {
+		return fmt.Errorf("state: effect stage is stale because canonical state changed")
+	}
+	if err := apply(); err != nil {
+		*s.owner = s.before
+		return err
+	}
+	*s.owner = s.after
+	s.committed = true
+	return nil
+}
+
 // CommitAfterExternal applies a stage after its caller has successfully
 // committed every forwarded prerequisite. A stale stage is still rejected.
 func (s *EffectStage) CommitAfterExternal() error {

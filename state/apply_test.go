@@ -86,6 +86,69 @@ func TestApplyFloatRegisterFlagsAndPC(t *testing.T) {
 	}
 }
 
+func TestCommitWithExternalCoordinatesOneInfallibleBoundary(t *testing.T) {
+	makeStage := func(t *testing.T, w *state.WarpState) *state.EffectStage {
+		t.Helper()
+		stage, err := w.StageEffects(isa.InstructionEffects{
+			Control: &isa.ControlEffect{Reason: isa.PCSequential, CurrentPC: 0x100, NextPC: 0x104},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return stage
+	}
+	t.Run("success", func(t *testing.T) {
+		w := newWarp(t)
+		before := snapshot(t, w)
+		stage := makeStage(t, w)
+		calls := 0
+		err := stage.CommitWithExternal(func() error {
+			calls++
+			// A synchronous external callback cannot make the already-validated
+			// local replacement stale after it succeeds.
+			return w.SetFCSR(0x22)
+		})
+		if err != nil || calls != 1 {
+			t.Fatalf("CommitWithExternal calls=%d err=%v", calls, err)
+		}
+		after := snapshot(t, w)
+		if after.PC() != 0x104 || after.FCSR() != before.FCSR() {
+			t.Fatalf("coordinated state pc=%#x fcsr=%#x", after.PC(), after.FCSR())
+		}
+	})
+	t.Run("external-failure", func(t *testing.T) {
+		w := newWarp(t)
+		before := snapshot(t, w)
+		stage := makeStage(t, w)
+		wantErr := errors.New("external failure")
+		err := stage.CommitWithExternal(func() error {
+			if setErr := w.SetFCSR(0x22); setErr != nil {
+				return setErr
+			}
+			return wantErr
+		})
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("CommitWithExternal error=%v", err)
+		}
+		requireUnchanged(t, w, before)
+	})
+	t.Run("stale-before-external", func(t *testing.T) {
+		w := newWarp(t)
+		stage := makeStage(t, w)
+		if err := w.SetFCSR(0x22); err != nil {
+			t.Fatal(err)
+		}
+		called := false
+		if err := stage.CommitWithExternal(func() error { called = true; return nil }); err == nil || called {
+			t.Fatalf("stale coordinated commit err=%v called=%t", err, called)
+		}
+		after := snapshot(t, w)
+		if after.PC() != 0x100 || after.FCSR() != 0x22 {
+			t.Fatalf("stale state pc=%#x fcsr=%#x", after.PC(), after.FCSR())
+		}
+	})
+}
+
 func TestApplyRegisterMaskX0AndWGatherException(t *testing.T) {
 	t.Run("exact-mask-and-x0", func(t *testing.T) {
 		w := newWarp(t)
