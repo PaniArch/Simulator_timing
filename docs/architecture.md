@@ -114,14 +114,14 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 | DCR/Kernel launch 描述 | Device/launch | `PROVISIONAL`: Kernel launch state | `VX_types.toml` KMU DCR；`VX_kmu.sv` 形成 PC/entry/dimensions/param/LMEM 请求。 |
 | CTA context：CTA id/rank/size、block/grid dimensions/index、entry、param、LMEM allocation | CTA | `PROVISIONAL`: CTA state | `VX_cta_dispatch.sv` 有 per-CTA/per-warp tables和 CTA CSR readback；Warp/Lane 仅持 CTA key/view。 |
 | warp membership 与 warp→CTA link | CTA/Core | `PROVISIONAL`: CTA manager owns membership；Warp 仅持稳定 CTA key | 禁止 CTA list 和 Warp backlink 同时可写并各自声称真值。 |
-| Lane/thread/warp/CTA identity 与 thread coordinates | Lane view over CTA/Warp | `PROVISIONAL`: CTA context + immutable core/warp/lane ids；Lane view 派生 | `VX_csr_unit.sv` 从 wid/lane/CTA tables形成 thread/hart/CTA CSR；不另设可写 Lane context mirror。 |
-| warp PC、active lane mask | Warp | `PROVISIONAL`: Warp/SIMT state | `VX_scheduler.sv` 的 warp_pcs/thread_masks；fetch/evaluator 只读 view，PC effect 只回此 owner。 |
-| warp active、blocked/wait reason、runnable、termination | Warp/Core scheduling scope | `PROVISIONAL`: Warp lifecycle owner；runnable 是由 lifecycle/wait reason 派生的 view | `active_warps`、stall/control/retire 路径证明这些事实存在；不得另存第二个可写 runnable truth。 |
-| GPR x0..x31（每 lane） | Warp × Lane | `PROVISIONAL`: Warp register state | operand collector 的 banked namespace与 masked writeback；功能模型忽略 banking，x0 恒为 0。 |
-| FPR f0..f31（每 lane） | Warp × Lane | `PROVISIONAL`: Warp register state | F decode/read/writeback 证明 FPR namespace；Lane view 不复制寄存器数组。 |
-| FFLAGS/FRM/FCSR | Warp | `PROVISIONAL`: CSR state keyed by warp | `VX_csr_data.sv` 的 per-warp fcsr；FP flags 累积 effect 只交 CSR owner。 |
-| trap/return CSR 与 mscratch：mstatus、mtvec、mepc、mcause、mtval、恢复 mask 等 | Warp/Core | `PROVISIONAL`: 单一 CSR state keyed by warp，Warp control 仅通过 CSR effect/view 使用 | T1 已冻结地址、RMW mask 与 trap/return 单指令 effect；owner 的 reset/apply/transaction 集成仍见 U-CSR-01。 |
-| divergence/reconvergence stack、stack pointer | Warp | `PROVISIONAL`: Warp/SIMT state | `VX_split_join.sv`/`VX_ipdom_stack.sv` 保存 reconvergence PC/mask/pointer。 |
+| Lane/thread/warp/CTA identity 与 thread coordinates | Lane view over CTA/Warp | `FROZEN（T2/01-canonical-state-views）`: Warp id 与四个 lane id 在 `WarpState` 初始化时校验；core/CTA identity 与 thread coordinates 只在 `ReadContext` 中按次传入并复制到 snapshot | `VX_csr_unit.sv` 从 wid/lane/CTA tables形成 thread/hart/CTA CSR；`state/view.go` 不长期保存 CTA/Core context。 |
+| warp PC、active lane mask | Warp | `FROZEN（T2/01-canonical-state-views）`: `WarpState` 是唯一 owner | `VX_scheduler.sv` 的 warp_pcs/thread_masks；`state.WarpSnapshot` 只复制值，ISA input 不含 owner 引用。 |
+| warp active、blocked/wait reason、runnable、termination | Warp/Core scheduling scope | `FROZEN（T2/01-canonical-state-views）` running/inactive lifecycle 与 lane mask 由 `WarpState` 一致持有；blocked/wait/runnable 仍属于未来 owner且不在 T2 state 中预存 | `active_warps`、stall/control/retire 路径证明事实分层；`state.WarpLifecycle` 只表达当前已闭合的 running/inactive。 |
+| GPR x0..x31（每 lane） | Warp × Lane | `FROZEN（T2/01-canonical-state-views）`: `WarpState` 的每 lane 独立 GPR namespace | `state/state.go` 使用私有 `[4][32]uint32` 等价布局；所有 read/view 返回值副本，State 层保证 x0 恒零。 |
+| FPR f0..f31（每 lane） | Warp × Lane | `FROZEN（T2/01-canonical-state-views）`: `WarpState` 的每 lane 独立 FPR namespace | F decode/read/writeback 与 `state` namespace 定向测试；Lane view 不复制出第二份长期数组。 |
+| FFLAGS/FRM/FCSR | Warp | `FROZEN（T2/01-canonical-state-views）`: `WarpState` 唯一持有八位 FCSR；`FROZEN（T2/02-atomic-effect-apply）`：本地事务先 sticky OR FFLAGS，后应用软件 FFLAGS/FRM/FCSR 写，故软件写按 RTL 覆盖重叠字段 | `VX_csr_data.sv` 的 per-warp fcsr/fcsr_n 顺序；snapshot 保留 raw FCSR，FloatInput 将 raw FRM 0..4 映射到 T1 enum。异步硬件来源/reset 仍见 U-CSR-01。 |
+| trap/return CSR 与 mscratch：mstatus、mtvec、mepc、mcause、mtval、恢复 mask 等 | Warp | `FROZEN（T2/01-canonical-state-views）`: `WarpState` 唯一持有 T1 已确认可写的六个 32-bit CSR 与 saved thread mask；`FROZEN（T2/02-atomic-effect-apply）`：T1 CSR/trap bundle 经 old-value/mask/scope/一致性预校验后与 PC/mask 一次提交 | RTL 虽物理分散在 scheduler/CSR data，功能模型没有第二份 CTA/counter/core state；异步 trap 与 reset/launch priority仍见 U-CSR-01。 |
+| divergence/reconvergence stack、stack pointer | Warp | `FROZEN（T2/01-canonical-state-views）`: `WarpState` 唯一持有三行 record 与 0..3 write pointer | `DV_STACK_SIZE=UP(NUM_THREADS-1)=3`、`DV_STACK_SIZEW=LOG2UP(3)=2`；初始化要求 `[0, writePointer)` 完整 live prefix，JOIN view只复制 decoded rs1 指向的一行。跨指令 under/overflow policy仍见 U-LOWER-01。 |
 | barrier mask/count/event/phase；warp barrier wait relation | CTA/Core/barrier ID | `UNRESOLVED owner candidate`: Barrier coordinator owns barrier record；Warp lifecycle owns自身 block reason并只保存 barrier key | `VX_bar_unit.sv` 证明记录存在，但并发 CTA namespace/visibility 未闭合，见 U-BAR-01。 |
 | local/shared memory bytes（冻结 RTL 名称 LMEM）及 allocation | CTA/cluster address scope | `UNRESOLVED owner candidate`: Memory/local space owns bytes，CTA state owns allocation descriptor | LMEM enabled；其与软件 shared memory 的等价性、跨 CTA scope/visibility 见 U-MEM-01。两者不得各存一份 bytes。 |
 | 架构可读 counters | Core/Device | `PROVISIONAL`: Counter owner 构造显式 44-bit `CounterView` | T1 已冻结 MCYCLE/MINSTRET low/high read 和 instruction-originated MPM 零窗口；非周期计数策略与 checker observation 仍见 U-COUNT-01。 |
@@ -133,7 +133,7 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 
 ### 5.1 ISA 层职责
 
-`FROZEN（T1/01-catalog-decode，decoder 边界）`：`isa` package 的 catalog/decode 已验证 ISA 是无长期状态的叶子。`Decode(word)` 不读取或保存 PC、GPR/FPR、CSR、memory、lane mask、divergence stack、barrier 或 lifecycle state；返回的 `Decoded` 只含寄存器 namespace/index、immediate、rounding/format、所需 PC/active mask、write-mask policy 及 memory/CSR/control/warp/barrier/ordering effect 边界。它不选择 Warp、不调度 Core/CTA、不结束 Kernel，也不绕过 owner mutation。T1 已冻结 integer/memory、RV32F、CSR/System 与 Vortex custom/SIMT 的单指令 evaluate/effect 接口；canonical owner apply 和上层 Warp/Barrier/CTA 协调仍为 `PROVISIONAL`，并须保持该已验证依赖方向。
+`FROZEN（T1/01-catalog-decode，decoder 边界）`：`isa` package 的 catalog/decode 已验证 ISA 是无长期状态的叶子。`Decode(word)` 不读取或保存 PC、GPR/FPR、CSR、memory、lane mask、divergence stack、barrier 或 lifecycle state；返回的 `Decoded` 只含寄存器 namespace/index、immediate、rounding/format、所需 PC/active mask、write-mask policy 及 memory/CSR/control/warp/barrier/ordering effect 边界。它不选择 Warp、不调度 Core/CTA、不结束 Kernel，也不绕过 owner mutation。T1 已冻结 integer/memory、RV32F、CSR/System 与 Vortex custom/SIMT 的单指令 evaluate/effect 接口；T2 已冻结 Lane/Warp owner 的 State/View/apply 及单指令连接子范围，上层 fetch、Warp/Barrier/CTA 协调仍为 `PROVISIONAL`，并须保持该已验证依赖方向。
 
 `PROVISIONAL` 抽象边界（其中 decoder 与 integer/memory、RV32F、CSR/System、custom/SIMT evaluator/effect 的 T1 具体化已分别在第 5.1、5.3、5.4、5.5、5.6 节标为 `FROZEN`）：
 
@@ -257,9 +257,33 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 
 最终离线证据为 `TestCatalogDecodeEvaluatorVectorCoverageGate`、`TestFinalIllegalEncodingClassGate`、`TestISAPublicSurfaceIsStatelessAndSingleInstruction` 与所有既有 functional tests，并统一由 `scripts/verify.sh` 执行 build/test/vet/gofmt/diff 门禁。外部 `Vortex_rtl` 仅经只读审计，最终检查时 worktree clean，HEAD 为 `85a88fe250b0da483cb33ed34126d675ecb93c1c`；交付从未向该路径写入。上述结论只闭合 T1 ISA 单指令层，canonical owner apply、Warp/Barrier/CTA 协调、memory scope、counter progression 与 checker/ABI 仍按第 10 节保持 `UNRESOLVED`。
 
+### 5.8 T2 canonical State 与只读 ISA View 实证
+
+`FROZEN（T2/01-canonical-state-views）`：`state.WarpState` 已成为一条 warp 的 lane/warp 范围长期真值 owner。初始化必须显式提供并校验冻结拓扑（4 lanes、4 warps、1 core、每 namespace 32 registers、IPDOM depth 3）、warp id、四个不重复 lane id、四字节对齐 PC、active mask 与 running/inactive lifecycle 一致性、saved thread mask、八位 FCSR、六个 T1 可写 trap/system CSR、每 lane GPR/FPR，以及完整 divergence live prefix。U-ABI-01 尚未决定的 startup 值没有 reset/launch 默认值；调用者必须明确给出。x0 非零初始化被拒绝，此后读取恒零且写入为 no-op。
+
+`FROZEN（T2/01-canonical-state-views）`：`WarpSnapshot` 是 owner 字段、lane arrays 和 divergence records 的 detached value copy，字段私有，accessor 再返回数组/record 值。`IntegerInput`、`FloatInput`、`SystemInput`、`CustomInput` builder 按 `Decoded.Sources` 的 register namespace/index 读取 canonical snapshot；inactive lane 读取不改状态，写 mask 不在 read path 暗中与 active mask 求交。JOIN 只取得控制 lane rs1 指向的单行 `DivergenceRecordView`，不暴露 stack；FCSR raw bits 同时进入 System view，FRM 经显式 encoding 映射进入 Float view。
+
+`FROZEN（T2/01-canonical-state-views）`：Core id/active-warps、CTA view、44-bit counters、memory bounds、barrier phase、pending prior work 与 pending LSU 均只存在于按调用提供的 `state.ReadContext`。builder 校验并复制所需值（包括对 `AddressBounds` 重新分配副本），`WarpState`/`WarpSnapshot` 从不保存 context 或其指针。因此后续 Core/CTA/Memory/Barrier owner 无需从 Warp 收回重复真值。实现与定向验证位于 `state/state.go`、`state/view.go`、`state/state_test.go`；该里程碑当时保留的 staged apply/future-owner routing 已由第 5.9 节闭合。
+
+### 5.9 T2 原子 effect apply 与 future-owner 路由实证
+
+`FROZEN（T2/02-atomic-effect-apply）`：`state.StageEffects` 在 canonical mutation 前复制完整 `WarpState`，并只在候选副本上处理 bundle。它预校验 register namespace/index/mask 与重复 destination、所有携带的 warp identity、Control 的 current-PC/next-PC/taken/target/decision-lane 关系、CSR catalog address/scope/warp/old-value/write-mask/ignored metadata、trap entry/return 的 PC/mask/精确 CSR write 组合（TrapEnter 的 Vector、Control NextPC/Target 必须共同等于 canonical `MTVec &^ 3`），以及 SPLIT/JOIN push/mark/pop 的 pointer、capacity、record、mask partition 和配套 Control/WarpMask。任何错误都丢弃候选；canonical GPR/FPR、PC、mask/lifecycle、CSR、saved mask 和 IPDOM records 保持逐位不变。
+
+`FROZEN（T2/02-atomic-effect-apply）`：成功的本地 stage 一次替换 canonical owner，masked GPR/FPR write 不与 active mask 二次求交，因而普通 effect 只改其显式 Mask、WGATHER 的 non-source mask 仍可写 input inactive lanes；x0 effect 在 owner 再次成为 no-op。TMC/PRED 同步更新 mask/lifecycle，SPLIT/JOIN 同步更新 stack/mask/PC，trap entry 同步写 MEPC/MCAUSE/MTVAL、saved mask和PC，xRET按非零 saved mask恢复 lifecycle/mask。FFLAGS 先 sticky OR，随后同一 bundle 的软件 FFLAGS/FRM/FCSR 写覆盖其实现字段，直接对应 `VX_csr_data.sv` 的 `fcsr_n` 组合顺序。
+
+`FROZEN（T2/02-atomic-effect-apply）`：MemoryRequest、PackedLoadRequest、Ordering、WarpSpawn、WarpDrain、Barrier、Fault、全部 CSRRead（包括 Core/CTA scope）及非本地 CSRWrite 都以 detached `ForwardedEffects` 保留，Warp owner 不标记为已消费。只要存在需未来 owner 成功的 effect，`ApplyEffects` 返回 `Pending EffectStage` 且不修改本地状态；普通 `Commit` 被拒绝，协调者只能在外部成功后显式调用 `CommitAfterExternal`。stage 保存完整 before image，期间任一 canonical 修改都会令提交确定性 stale-fail，阻止跨 owner partial commit。返回的 forwarded bundle 另作深拷贝，调用者不能反向篡改 stage。实现和验证证据为 `state/apply.go`、`state/apply_test.go` 及 `scripts/verify.sh`。
+
+### 5.10 T2 ISA→State 单指令连接与集成实证
+
+`FROZEN（T2/03-isa-state-integration-contract）`：`state.ExecuteSingle` 是一条由调用者提供 word 的 Decode → detached `WarpSnapshot`/最小 `ReadContext` View → 既有 T1 evaluator → `ApplyEffects` 连接边界。它只按 decoded category 分派 `EvaluateInteger`、`EvaluateFloat`、`EvaluateSystem` 或 `EvaluateCustom`，返回 decoded operation、detached effects 和 apply/forwarding 结果；不读取 instruction memory，不循环，不选择 warp，不保存 evaluator 状态，也不提供 fetch、`Warp.Step`、scheduler、dispatch、launch 或 tick API。连续 ADD→ADDI、branch→JAL、SPLIT→JOIN→JOIN 及 trap→xRET 调用证明跨调用事实只持续在 `WarpState`，两个独立 owner 用同一 instruction word 得到各自结果，`isa` 仍是无长期状态的叶子。
+
+`FROZEN（T2/03-isa-state-integration-contract）`：`state.CompleteMemoryAndApply` 只把调用者已取得的 decoded memory operation、expected lane mask 和 future Memory owner responses交给 T1 completion helper，再走同一原子 apply；它不拥有 memory bytes、pending request 或服务循环。成功 load completion 将 masked GPR 与顺序 PC 一次提交；任一 lane service fault 只形成无损 forwarded fault，GPR/PC 均保持 completion 前状态。instruction issue 的 MemoryRequest、FENCE ordering、BAR/WarpDrain 和 WSPAWN 仍返回 pending stage，在未来 owner 明确成功前不执行或丢失。
+
+`FROZEN（T2/03-isa-state-integration-contract）`：`state/integration_test.go` 的端到端路径覆盖 integer GPR+PC、RV32F FPR+sticky FFLAGS、taken branch/JAL、TMC/PRED mask、SPLIT/JOIN record 生命周期、CSR RMW、ECALL/xRET、memory register+PC completion、illegal decode/fault 无 partial mutation，以及 BAR/WSPAWN/ordering 保真转交。该范围将第 6 节步骤 4–8 的单 warp、单指令、已拥有 word 子链从设计方向提升为实现契约；instruction source、fault router、Memory/Core/CTA/Barrier owner 和 progress/completion 仍未实现。
+
 ## 6. 单条指令的功能执行流程
 
-以下顺序是 `PROVISIONAL` 的功能边界，不是 RTL cycle/pipeline 模型：
+以下完整顺序仍是 `PROVISIONAL` 的功能边界，不是 RTL cycle/pipeline 模型；其中调用者已提供 word 后的步骤 4–8 Lane/Warp 本地子链已由第 5.10 节冻结，不代表 fetch、调度或其他 owner 已实现：
 
 1. **Launch/prepare**：Device/CTA manager 根据 launch context 建立 CTA，并请求 Warp owner 建立 entry PC、CTA key、LMEM allocation view 和初始 active lane mask。
 2. **Select runnable warp**：Core/Warp manager 从 owner 提供的 runnable view 选择一个 Warp。调度策略在不改变架构结果时可替换，不复刻 RTL arbitration。
@@ -273,7 +297,7 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 
 ## 7. 后续公共接口清单
 
-除第 5.1、5.3、5.4、5.5、5.6 节已冻结的 ISA decoder/evaluator/effect 具体接口外，下表描述的上层集成接口仍是 `PROVISIONAL` 的用途契约，不固定 Go 名称、interface/struct、字段、具体类型或调用风格。箭头方向均从调用者到服务，结果/effect 显式返回；任何接口都不授权全局查找或旁路 mutation。
+除第 5.1、5.3、5.4、5.5、5.6 节已冻结的 ISA decoder/evaluator/effect 具体接口、第 5.8 节的 Lane/Warp State/View、第 5.9 节的本地原子 apply/forwarding 和第 5.10 节的 caller-supplied-word 单指令连接接口外，下表描述的上层集成接口仍是 `PROVISIONAL` 的用途契约，不固定 Go 名称、interface/struct、字段、具体类型或调用风格。箭头方向均从调用者到服务，结果/effect 显式返回；任何接口都不授权全局查找或旁路 mutation。
 
 | 公共边界（用途名） | 输入 | 输出 | 允许的依赖方向/约束 |
 | --- | --- | --- | --- |
@@ -300,6 +324,8 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 ### 8.2 明确非目标
 
 `FROZEN`：正确性不要求复刻 RTL 的 cycle accuracy、pipeline stages、cache timing/替换、hazard/scoreboard、stall/backpressure、arbiter 优先级、吞吐、latency、带宽、bank conflict、MSHR、issue/dispatch/commit queue、performance scheduling 或任何其他微架构行为。也不要求性能等价、波形等价或相同 warp 交错顺序，除非后续证据证明某种交错会改变架构可见结果；此时应冻结所需的最小功能 ordering，而不是复制整条 pipeline。
+
+`FROZEN（T2 scope）`：T2 不实现 instruction fetch/stream、`Warp.Step`、scheduler、CoreState/CTAState、BarrierCoordinator、WSPAWN 创建、barrier completion、Kernel execution、cache/MMU/pipeline/timing model。第 5.10 节连接接口只处理一条调用者提供的 instruction word 或一组调用者提供的 memory responses，不能被解释为上述系统能力。
 
 禁用扩展和可选加速器不是未来兼容性要求；T0 不为它们实现占位语义。
 
@@ -329,13 +355,13 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 | ID | `UNRESOLVED` 问题 | 已知 RTL 事实 | 缺失证据 | 受影响边界 | 最晚闭合阶段 |
 | --- | --- | --- | --- | --- | --- |
 | U-FAULT-01 | typed integer instruction-address/load/store alignment/access fault 如何映射到 trap cause/CSR，多个 lane 或不同 fault 同时出现时优先级是什么？ | Integer evaluator 已确定 fault effect 边界：fault 时不返回 PC/memory/partial register apply；alignment 先于显式 bounds view；memory owner 可返回 bounds/service access fault。RTL default/`x` 仍不是 trap priority oracle。 | reference checker、完整 trap cause/priority oracle 被排除。 | Effect router、Memory/CSR service、Warp trap/PC owner。 | fault effect 与 Warp trap/CSR 模型验收前。 |
-| U-CSR-01 | 已冻结的 CSR/trap effects 如何由唯一 canonical owner 原子 apply、reset，并与同一执行边界的 FP flags/其他硬件写仲裁？ | T1 已闭合严格地址、scope、RMW mask、identity view 与 synchronous trap/xRET 单指令 effects；RTL 同周期 hardware trap 可覆盖 software CSR write。 | State/effect router 尚未实现；跨来源 transaction/priority 与 snapshot owner API 不在本里程碑。 | CSR owner、Warp trap/lifecycle、snapshot。 | canonical State/effect router 集成验收前。 |
-| U-LOWER-01 | compiler/runtime 如何生成并约束 SPLIT/JOIN、PRED/TMC、BAR、WSPAWN、WSYNC 序列，stack under/overflow 如何处理？ | T1 已闭合全部相关 encoding 与显式单指令 mask/PC/stack/barrier/lifecycle effects；ISA 对 invalid JOIN view 原子拒绝。 | `sw/`、compiler/runtime 与跨指令 stack capacity/error policy 被排除。 | SIMT owner、Barrier、Warp lifecycle、runtime lowering。 | 首个 SIMT 程序验收前。 |
+| U-CSR-01 | 已冻结的 CSR/trap effects 如何 reset，并与 T1 以外的异步硬件写来源仲裁？ | T1 已闭合严格地址/scope/RMW与 synchronous trap/xRET effects；T2/01 建立唯一 owner，T2/02 已闭合单个 T1 bundle 内 CSR/FFLAGS/trap 的原子 apply，T2/03 已闭合真实 State 上连续 CSR RMW→trap entry→xRET 的单指令连接子范围。软件 FCSR 写按 RTL 覆盖先前 sticky flags；RTL 同周期 async hardware trap 可覆盖 software CSR write。 | async RTU/fault router 的跨来源 transaction、reset/launch policy 尚未实现。 | CSR owner、Warp trap/lifecycle、future fault/RTU router。 | 异步 trap/fault 与 launch 集成验收前。 |
+| U-LOWER-01 | compiler/runtime 如何生成并约束 SPLIT/JOIN、PRED/TMC、BAR、WSPAWN、WSYNC 序列，stack under/overflow 如何处理？ | T1 已闭合全部相关 encoding 与显式单指令 effects；T2/03 已闭合真实 State 上 TMC/PRED 和 SPLIT→JOIN mark→JOIN pop 的跨调用存续，并证明 BAR/WSPAWN 保真转交。 | `sw/`、compiler/runtime、Barrier/Core owner 与超出合法 effect sequence 的程序级 stack under/overflow policy 被排除。 | SIMT owner、Barrier、Warp lifecycle、runtime lowering。 | 首个 SIMT 程序验收前。 |
 | U-WSPAWN-01 | WSPAWN 的 target 之外，初始 registers/CSR/CTA context 与软件使用协议的完整语义是什么？ | T1 effect 已冻结低编号非当前 target mask、lane0、PC、single-active-warp gate 和 mscratch copy；RTL/ISA均不复制 GPR/FPR。 | runtime lowering、目标 warp 预初始化与 CTA membership 协议缺失。 | Core/Warp manager、register/CSR state、CTA membership。 | WSPAWN/Warp lifecycle 集成验收前。 |
 | U-WSYNC-01 | WSYNC 的 pending predicate 如何由 owner产生，并保证何种 memory visibility/order？ | T1 已冻结 consume显式 pending-work view并返回 wait/drain/release effect；RTL 在 warp pending ALM 非空时 drain，结束后 scheduler release。 | pipeline pending 集合到功能级 ordering 的最小映射、software convention 缺失。 | Warp executor/lifecycle、Memory ordering、Barrier integration。 | WSYNC 与多 warp memory/barrier 集成前。 |
 | U-BAR-01 | 并发 CTA barrier namespace、ID 复用、event/phase、memory visibility 和异常退出释放是什么？ | T1 已冻结所有 barrier variant 的 id/size/phase/event/arrive/wait/LSU-drain request边界；`VX_bar_unit` 有 indexed mask/count/events/phase，冻结单 core不走 global path。 | 物理 index 不说明 concurrent CTA software namespace；coordinator apply、runtime/fault协议缺失。 | Barrier owner、CTA key、Warp wait reason、Memory ordering。 | Barrier/CTA 并发与 memory ordering 集成前。 |
 | U-CTA-01 | CTA 分派、部分 warp coordinates、WSPAWN membership、正常/异常 warp 与 CTA termination 的完整规则是什么？ | dispatcher维护 CTA context/membership/remaining warps；TMC mask zero 是已见 warp-done 路径。 | runtime launch、fault/early-exit/partial-warp termination协议缺失。 | CTA manager、Warp lifecycle、Device completion。 | CTA/Warp lifecycle 阶段验收前。 |
-| U-ABI-01 | Kernel image、startup PC/entry、arguments、初始 registers/CSR、host launch/completion ABI 是什么？ | KMU/dispatcher形成 launch/context请求，顶层暴露聚合 busy；KMU running仅代表 launch发送进度。 | host/runtime/software 和 completion consumer 被排除。 | Loader、Kernel executor、Device lifecycle、公共 API。 | Kernel loader/runner 公共 API 冻结前。 |
+| U-ABI-01 | Kernel image、startup PC/entry、arguments、初始 registers/CSR、host launch/completion ABI 是什么？ | KMU/dispatcher形成 launch/context请求，顶层暴露聚合 busy；KMU running仅代表 launch发送进度。T2 State 初始化因此要求 PC/mask/register/CSR/divergence 全部显式输入，不补 reset/launch 默认值。 | host/runtime/software 和 completion consumer 被排除。 | Loader、Kernel executor、Device lifecycle、公共 API。 | Kernel loader/runner 公共 API 冻结前。 |
 | U-CHK-01 | checker 比较哪些 registers/CSRs/memory ranges，如何处理 FP、fault、console和未初始化状态？ | RTL 提供架构状态更新路径和顶层输出，但不定义 comparison contract。 | reference checker 被刻意排除。 | Snapshot/result、fault model、端到端验收。 | 端到端 differential harness 验收前。 |
 | U-MEM-01 | global/LMEM 的最终地址范围与 scope、FENCE/BAR/WSYNC 的跨 warp 可见性及 self-modifying code 规则是什么？ | Integer LSU 已冻结自然对齐、typed request/response、可选 bounds view 和 FENCE ordering 边界；RTL 仍按 LMEM base/size 分 local/global lane masks并走不同 physical paths。 | cache/LSU wiring 不等于跨 scope 可见性 contract；软件/checker约定缺失。 | Instruction source、Memory spaces、Barrier/ordering owners。 | Memory space 与同步指令集成前。 |
 | U-COUNT-01 | Counter owner 在非周期模型中如何推进显式 MCYCLE/MINSTRET view，checker 是否观察这些值？ | T1 已闭合 ISA read contract：44-bit Cycle/Instret explicit view 的 low/high halves；instruction MPM BASE windows 固定读零。 | State/execution 尚未提供推进 policy，checker visibility未知；cycle timing/performance仍是非目标。 | Counter owner、CSR service、snapshot。 | execution progress 与 checker contract 集成前。 |
@@ -356,6 +382,11 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 | U-WSYNC-01 / 单指令 drain boundary | WSYNC消费显式 pending predicate并返回 typed wait/drain/release，不保存 pending pipeline/cycles；visibility policy继续保留。 | `VX_wctl_unit.sv`、`VX_scheduler.sv`；`WarpDrainEffect`。 | pending与drained两种 view tests。 | T1 milestone `05-vortex-custom` |
 | U-BAR-01 / 单指令 request boundary | sync/async arrive/wait、expect-event、phase result与 LSU drain effect已闭合；expect_tx 强制 phase=1 并将零 count 解释为 32，barrier record、CTA namespace与release coordination继续保留。 | `VX_wctl_unit.sv`、`VX_bar_unit.sv`；`BarrierEffect`。 | sync/arrive/wait/expect_tx（含零值与偶数 count）及 phase/write-mask tests。 | T1 milestone `05-vortex-custom` |
 | T1 ISA / 最终 coverage-contract | 105 条 frozen-enabled catalog entry、decode、四类 functional evaluator 与独立登记 vector 一一对应；公开 API 保持无长期状态和单指令边界，未来 canonical owners 与执行协调未被伪装闭合。 | `isa/catalog.go`、`isa/coverage_test.go`、`isa/contract_test.go` 及四类 evaluator/effect 实现。 | 三项最终 gate、全部逐指令 functional tests、`scripts/verify.sh`；外部 RTL worktree 只读且 clean。 | T1 milestone `06-coverage-contract` |
+| T2 State/View / canonical ownership | Lane GPR/FPR、warp PC/mask/lifecycle、FCSR/trap CSR/saved mask 与三行 IPDOM stack 已由一个 `WarpState` 长期持有；四类 T1 input 来自 detached snapshot，非 T2 owner context 只按次复制。effect apply/route 另行闭合。 | `VX_gpu_pkg.sv:80-81`、`VX_ipdom_stack.sv`、`VX_scheduler.sv:53-64,245-255,311-398`、`VX_csr_data.sv:91-135`；`state/state.go`、`state/view.go`。 | `state/state_test.go` 覆盖初始化拒绝、namespace/x0/inactive lane、PC/mask/CSR/FCSR、divergence、snapshot/context alias isolation；`scripts/verify.sh`。 | T2 milestone `01-canonical-state-views` |
+| T2 effect apply / 本地原子边界 | T1 Lane/Warp bundle 在 detached candidate 上完整预校验；本地状态一次提交，FFLAGS/软件 FCSR 按 RTL 顺序仲裁；future owner effects 保真转交并在外部成功前门控本地 commit，stale stage 不可提交。异步 trap/reset priority 仍留在 U-CSR-01。 | `VX_csr_data.sv:107-120`、`VX_scheduler.sv:245-255,358-398`、`VX_ipdom_stack.sv:39-95`；`state/apply.go`。 | `state/apply_test.go` 覆盖 GPR/FPR+PC、CSR/flags、TMC/PRED、SPLIT/JOIN、trap、x0/inactive/WGATHER、失败回滚、全类 forwarding/external gate/stale stage；`scripts/verify.sh`。 | T2 milestone `02-atomic-effect-apply` |
+| U-CSR-01 / T2 synchronous State integration | canonical FCSR、T1 可写 warp CSR、saved mask 与 PC 已接入无状态 System/RV32F evaluator；CSR RMW、sticky FFLAGS、synchronous trap entry 与 xRET 可跨独立单指令调用持续并原子提交。异步 fault/RTU 仲裁及 reset/launch policy仍保留在 U-CSR-01。 | E-CSR-01；`state/state.go`、`state/view.go`、`state/apply.go`、`state/integration.go`。 | `TestExecuteSingleRV32FUpdatesFPRFlagsAndPC`、`TestExecuteSingleCSRRMWTrapEntryAndReturn`、fault completion rollback；`scripts/verify.sh`。 | T2 milestone `03-isa-state-integration-contract` |
+| U-LOWER-01 / T2 local SIMT State integration | TMC/PRED active mask 与 SPLIT/JOIN 三行 IPDOM state 已接入单指令 View/Evaluate/Apply；合法 SPLIT→JOIN mark→JOIN pop 跨调用保持 record、pointer、mask 与 PC。BAR/WSPAWN 只转交未来 owner，不虚构 runtime lowering 或 lifecycle coordination。 | E-SIMT-01、E-WSPAWN-01、E-BAR-01；`state/integration.go`。 | `TestExecuteSingleTMCAndPredicateMasks`、`TestExecuteSingleSplitAndTwoJoinCallsPersistDivergence`、`TestExecuteSinglePreservesFutureOwnerEffectsWithoutLocalMutation`；`scripts/verify.sh`。 | T2 milestone `03-isa-state-integration-contract` |
+| T2 ISA→State / 单指令连接边界 | caller-supplied word 经过 Decode/View/T1 Evaluate/atomic Apply；memory responses 经 T1 completion helper进入同一 apply。State 跨调用持久、ISA 无状态，illegal/fault 无 partial mutation，future owner effects 不执行或丢失；不建立 fetch loop、Warp.Step 或 scheduler。 | `state/integration.go`；既有 `isa` 单指令 API 与 T2 State/View/apply。 | `state/integration_test.go` 覆盖 ALU/FP/branch/jump/SIMT/CSR/trap/memory及 owner isolation/rollback/forwarding；`scripts/verify.sh`。 | T2 milestone `03-isa-state-integration-contract` |
 
 ## 12. T0 最终覆盖与范围审计
 
@@ -365,10 +396,10 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 | --- | --- | --- |
 | 1. 模拟器层级、模块与单向依赖 | 第 4.1 节 | Device → Core → CTA → Warp → Lane → ISA 主链及 Memory/CSR/Barrier 服务挂靠已定义，具体代码组织保持 `PROVISIONAL`。 |
 | 2. 跨指令长期状态与唯一 owner | 第 4.2 节 | GPR/FPR、PC/mask、lifecycle、SIMT、context、CSR、barrier、memory、completion 均已登记；证据不足者是 `UNRESOLVED owner candidate`。 |
-| 3. ISA decode/evaluate 边界 | 第 5.1、5.7 节 | ISA 只读最小 view、产生显式 effect，不持有长期状态或调度上层；最终自动门禁要求 105 条 catalog/decode/evaluator/vector 一一对应并审计公开 API。 |
+| 3. ISA decode/evaluate 边界 | 第 5.1、5.7、5.10 节 | ISA 只读最小 view、产生显式 effect，不持有长期状态或调度上层；最终自动门禁要求 105 条 catalog/decode/evaluator/vector 一一对应，T2 单指令连接证明真实 State 只经该边界调用 ISA。 |
 | 4. 指令类别、effect 与 control owner | 第 5.2 节 | 标准指令、System、全部冻结 custom SIMT/lane 指令、fetch 与 completion 已映射。 |
 | 5. 功能执行流程 | 第 6 节 | select runnable warp → fetch → decode → read view → evaluate → effect → owner update 已分责。 |
-| 6. 后续公共接口职责 | 第 7 节 | decoder 及 integer/memory、RV32F、CSR/System、custom/SIMT evaluator/effect 已由 T1 冻结；canonical owner apply 与上层 warp/barrier/kernel 集成接口仍保持 `PROVISIONAL`。 |
+| 6. 后续公共接口职责 | 第 7 节 | decoder/evaluator/effect 已由 T1 冻结，T2 已冻结 Lane/Warp State/View/apply 和 caller-supplied-word 单指令连接；fetch、scheduler、Barrier/CTA/Kernel 等上层接口仍保持 `PROVISIONAL`。 |
 | 7. RTL 调查、证据与待决问题 | 第 9、10、11 节 | 可确认事实有 path/module/signal/macro 依据，设计推导分栏；未知项有事实、缺口、影响边界和 deadline；T0 不伪造 `RESOLVED`。 |
 | 8. 功能范围与非目标 | 第 3、8 节 | 冻结配置/ISA 范围与 cycle/pipeline/cache timing/hazard/throughput/performance scheduling 等非目标明确分离。 |
 
@@ -378,7 +409,7 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 - 唯一 canonical owner 原则在第 4.2 节；control/effect 只能经第 5 节边界交给 owner，不允许反向依赖、全局后门或第二可写真值。
 - 维护协议在第 1、13 节；后续任务开始前读取、结束后与代码同步更新。
 - 第 5.1、8.2 节明确不预定 Go concrete types、transaction/rollback/commit 算法、调度策略或微架构行为，满足无过度设计要求。
-- 原始 T0 基线交付仅修改本文件；后续 T1 里程碑已按本 Contract 新增无长期状态的 ISA decoder/evaluators，并由第 5.7 节的自动门禁持续审计，但仍未新增 canonical State、Warp scheduler、CTA/Barrier coordinator 或 Kernel execution。外部 `Vortex_rtl` 始终作为只读输入，不属于交付内容。
+- 原始 T0 基线交付仅修改本文件；后续 T1 里程碑已按本 Contract 新增无长期状态的 ISA decoder/evaluators，T2/01 已新增 Lane/Warp canonical State 与 detached View，T2/02 已新增本地原子 effect stage 与 future-owner forwarding，T2/03 只新增 caller-supplied-word 单指令连接和 memory completion连接；仍未新增 instruction fetch/stream、Warp.Step、Warp scheduler、CoreState/CTAState、CTA/Barrier coordinator、WSPAWN 创建、全局 effect router、Kernel execution 或 cache/MMU/pipeline/timing model。外部 `Vortex_rtl` 始终作为只读输入，不属于交付内容。
 
 ## 13. 维护检查单
 
