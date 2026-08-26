@@ -146,15 +146,35 @@ func (w *Warp) Run(options RunOptions) RunResult {
 }
 
 func detachedTrace(step uint64, result Result) TraceRecord {
+	detached := DetachResult(result)
 	return TraceRecord{
-		Step: step, WarpID: result.WarpID, PC: result.PC,
-		ActiveMask: result.ActiveMask, Lifecycle: result.Lifecycle, DivergencePointer: result.DivergencePointer,
-		Raw: result.Raw, RawValid: result.RawValid,
-		Decoded: cloneDecoded(result.Decoded), IssuedEffects: cloneInstructionEffects(result.IssuedEffects),
-		Effects: cloneInstructionEffects(result.Effects), NextPC: result.NextPC,
-		NextActiveMask: result.NextActiveMask, NextLifecycle: result.NextLifecycle,
-		NextDivergencePointer: result.NextDivergencePointer, Outcome: result.Outcome,
+		Step: step, WarpID: detached.WarpID, PC: detached.PC,
+		ActiveMask: detached.ActiveMask, Lifecycle: detached.Lifecycle, DivergencePointer: detached.DivergencePointer,
+		Raw: detached.Raw, RawValid: detached.RawValid,
+		Decoded: detached.Decoded, IssuedEffects: detached.IssuedEffects,
+		Effects: detached.Effects, NextPC: detached.NextPC,
+		NextActiveMask: detached.NextActiveMask, NextLifecycle: detached.NextLifecycle,
+		NextDivergencePointer: detached.NextDivergencePointer, Outcome: detached.Outcome,
 	}
+}
+
+// DetachResult deep-copies every mutable observation reachable from Result.
+// It is shared by Warp and Core trace boundaries so a sink cannot mutate the
+// caller's result, an effect bundle, or canonical owners through aliases.
+func DetachResult(result Result) Result {
+	detached := result
+	detached.Decoded = cloneDecoded(result.Decoded)
+	detached.IssuedEffects = cloneInstructionEffects(result.IssuedEffects)
+	detached.Effects = cloneInstructionEffects(result.Effects)
+	if result.Fault != nil {
+		fault := *result.Fault
+		fault.Architectural = append([]isa.FaultEffect(nil), result.Fault.Architectural...)
+		detached.Fault = &fault
+		if result.Err == result.Fault {
+			detached.Err = detached.Fault
+		}
+	}
+	return detached
 }
 
 func cloneDecoded(decoded *isa.Decoded) *isa.Decoded {

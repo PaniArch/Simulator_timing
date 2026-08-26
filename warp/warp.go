@@ -171,6 +171,17 @@ func NewWithMemory(owner *state.WarpState, memory MemoryService) (*Warp, error) 
 	return w, nil
 }
 
+// CanonicalState returns the architectural owner referenced by this executor.
+// It exists so an upper-level Core can validate slot identity and lifecycle
+// without copying PC, registers, masks, CSRs, or divergence state. Callers
+// must continue to use Warp.Step for instruction execution.
+func (w *Warp) CanonicalState() *state.WarpState {
+	if w == nil {
+		return nil
+	}
+	return w.state
+}
+
 // Step executes one four-lane SIMT instruction through the existing
 // Decode -> State View -> T1 Evaluate -> T2 Stage/Commit chain. Effects owned
 // by a configured synchronous MemoryService are completed here; Core, CTA,
