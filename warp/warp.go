@@ -27,6 +27,16 @@ type MemoryService interface {
 	Write(address uint32, src []byte) error
 }
 
+// AtomicMemoryService is the optional multi-address extension used when one
+// SIMT store instruction issues more than one lane request. WriteBatch must
+// validate every range before changing any byte and must be all-or-error for
+// the complete batch. The parallel slices have equal length. A single-lane
+// store deliberately continues to use MemoryService.Write for compatibility.
+type AtomicMemoryService interface {
+	MemoryService
+	WriteBatch(addresses []uint32, sources [][]byte) error
+}
+
 // Outcome is the architectural disposition of one Step.
 type Outcome uint8
 
@@ -101,21 +111,29 @@ func (f *Fault) Unwrap() error {
 
 // Result contains only observations of this Step. Decoded and Effects are
 // present after their respective boundaries; RawValid distinguishes a fetched
-// zero word from a fetch failure. NextPC always reports the canonical owner.
+// zero word from a fetch failure. PC/mask/lifecycle/divergence fields report
+// the starting snapshot, while their Next counterparts report the canonical
+// owner at the return boundary.
 type Result struct {
-	Outcome  Outcome
-	WarpID   uint8
-	PC       uint32
-	Raw      uint32
-	RawValid bool
-	Decoded  *isa.Decoded
+	Outcome           Outcome
+	WarpID            uint8
+	PC                uint32
+	ActiveMask        isa.LaneMask
+	Lifecycle         state.WarpLifecycle
+	DivergencePointer uint8
+	Raw               uint32
+	RawValid          bool
+	Decoded           *isa.Decoded
 	// IssuedEffects retains the T1 evaluator output. Effects is the final
 	// completion bundle for memory operations and otherwise the same bundle.
-	IssuedEffects *isa.InstructionEffects
-	Effects       *isa.InstructionEffects
-	NextPC        uint32
-	Fault         *Fault
-	Err           error
+	IssuedEffects         *isa.InstructionEffects
+	Effects               *isa.InstructionEffects
+	NextPC                uint32
+	NextActiveMask        isa.LaneMask
+	NextLifecycle         state.WarpLifecycle
+	NextDivergencePointer uint8
+	Fault                 *Fault
+	Err                   error
 }
 
 // Warp references the real canonical owner and instruction source. It does
@@ -153,10 +171,10 @@ func NewWithMemory(owner *state.WarpState, memory MemoryService) (*Warp, error) 
 	return w, nil
 }
 
-// Step executes one single-lane instruction through the existing
+// Step executes one four-lane SIMT instruction through the existing
 // Decode -> State View -> T1 Evaluate -> T2 Stage/Commit chain. Effects owned
 // by a configured synchronous MemoryService are completed here; Core, CTA,
-// Barrier, or multi-lane SIMT effects are returned deferred.
+// or Barrier effects remain deferred.
 func (w *Warp) Step(context state.ReadContext) (result Result) {
 	if w == nil || w.state == nil {
 		return faultResult(0, FaultState, fmt.Errorf("warp: nil executor or canonical state"))
@@ -169,6 +187,9 @@ func (w *Warp) Step(context state.ReadContext) (result Result) {
 		canonical, snapshotErr := w.state.Snapshot()
 		if snapshotErr == nil {
 			result.NextPC = canonical.PC()
+			result.NextActiveMask = canonical.ActiveMask()
+			result.NextLifecycle = canonical.Lifecycle()
+			result.NextDivergencePointer = canonical.DivergenceWritePointer()
 		}
 	}()
 	snapshot, err := w.state.Snapshot()
@@ -176,14 +197,19 @@ func (w *Warp) Step(context state.ReadContext) (result Result) {
 		return faultResult(0, FaultState, err)
 	}
 	pc := snapshot.PC()
-	result = Result{WarpID: snapshot.WarpID(), PC: pc, NextPC: pc}
+	result = Result{
+		WarpID: snapshot.WarpID(), PC: pc, NextPC: pc,
+		ActiveMask: snapshot.ActiveMask(), NextActiveMask: snapshot.ActiveMask(),
+		Lifecycle: snapshot.Lifecycle(), NextLifecycle: snapshot.Lifecycle(),
+		DivergencePointer: snapshot.DivergenceWritePointer(), NextDivergencePointer: snapshot.DivergenceWritePointer(),
+	}
 	if snapshot.Lifecycle() == state.WarpInactive {
 		result.Outcome = OutcomeFinished
 		return result
 	}
 	mask := snapshot.ActiveMask()
-	if !exactlyOneLane(mask) {
-		return stepError(result, FaultExecutionMode, fmt.Errorf("warp: running single-lane executor requires exactly one active lane, got mask %#x", mask))
+	if !mask.Valid() || mask == 0 {
+		return stepError(result, FaultState, fmt.Errorf("warp: running warp has invalid active mask %#x", mask))
 	}
 	if pc&3 != 0 {
 		return stepError(result, FaultInstructionAlignment, fmt.Errorf("warp: instruction PC %#x is not four-byte aligned", pc))
@@ -261,7 +287,11 @@ func (w *Warp) Step(context state.ReadContext) (result Result) {
 		result.Outcome = OutcomeRetired
 		return result
 	}
-	if decoded.Category == isa.CategoryCustom || stage.RequiresExternalSuccess() {
+	// Custom is an ISA category, not an ownership boundary. Pure Warp/Lane
+	// effects (TMC/PRED, SPLIT/JOIN, VOTE/SHFL/WGATHER) commit here through the
+	// same validated stage as ordinary instructions. WSPAWN, WSYNC, and BAR
+	// remain deferred because their forwarded effects require a future owner.
+	if stage.RequiresExternalSuccess() {
 		result.Outcome = OutcomeDeferred
 		return result
 	}
@@ -287,22 +317,22 @@ func (w *Warp) Step(context state.ReadContext) (result Result) {
 func (w *Warp) completeMemory(result Result, snapshot state.WarpSnapshot, decoded isa.Decoded, requests []isa.MemoryRequest, expected isa.LaneMask) Result {
 	responses := make([]isa.MemoryResponse, 0, len(requests))
 	var serviceErr error
-	var store *storeTransaction
+	stores := make([]storeTransaction, 0, len(requests))
 	for _, request := range requests {
 		if request.Kind == isa.MemoryStore {
 			transaction, err := w.prepareStore(request)
 			if err != nil {
-				serviceErr = err
+				serviceErr = errors.Join(serviceErr, err)
 				responses = append(responses, memoryFaultResponse(request))
 				continue
 			}
-			store = transaction
+			stores = append(stores, transaction)
 			responses = append(responses, isa.MemoryResponse{Request: request})
 			continue
 		}
 		data, err := w.readMemory(request.Address, request.Width)
 		if err != nil {
-			serviceErr = err
+			serviceErr = errors.Join(serviceErr, err)
 			responses = append(responses, memoryFaultResponse(request))
 			continue
 		}
@@ -321,15 +351,20 @@ func (w *Warp) completeMemory(result Result, snapshot state.WarpSnapshot, decode
 	if len(completed.Faults) != 0 {
 		return architecturalFault(result, completed.Faults, serviceErr)
 	}
-	if store != nil {
+	if len(stores) != 0 {
 		writeCalled := false
 		err := stage.CommitWithExternal(func() error {
 			writeCalled = true
-			return w.memory.Write(store.address, store.after)
+			return w.writeStores(stores)
 		})
 		if err != nil && writeCalled {
-			faults := []isa.FaultEffect{{Kind: isa.FaultStoreAccess, Reason: isa.FaultReasonMemoryService, Lane: store.request.Lane, Address: store.request.Address, Width: store.request.Width}}
-			failed, completionErr := snapshot.CompleteMemory(decoded, expected, []isa.MemoryResponse{{Request: store.request, Fault: isa.FaultStoreAccess, Reason: isa.FaultReasonMemoryService}})
+			failedResponses := make([]isa.MemoryResponse, 0, len(requests))
+			faults := make([]isa.FaultEffect, 0, len(requests))
+			for _, request := range requests {
+				failedResponses = append(failedResponses, isa.MemoryResponse{Request: request, Fault: isa.FaultStoreAccess, Reason: isa.FaultReasonMemoryService})
+				faults = append(faults, isa.FaultEffect{Kind: isa.FaultStoreAccess, Reason: isa.FaultReasonMemoryService, Lane: request.Lane, Address: request.Address, Width: request.Width})
+			}
+			failed, completionErr := snapshot.CompleteMemory(decoded, expected, failedResponses)
 			if completionErr == nil {
 				result.Effects = &failed
 				faults = failed.Faults
@@ -386,25 +421,42 @@ type storeTransaction struct {
 	after   []byte
 }
 
-func (w *Warp) prepareStore(request isa.MemoryRequest) (*storeTransaction, error) {
+func (w *Warp) prepareStore(request isa.MemoryRequest) (storeTransaction, error) {
 	if request.Width != 1 && request.Width != 2 && request.Width != 4 {
-		return nil, fmt.Errorf("warp: unsupported store width %d", request.Width)
+		return storeTransaction{}, fmt.Errorf("warp: unsupported store width %d", request.Width)
 	}
 	offset := request.Address - request.AlignedAddress
 	wantMask := uint8((uint16(1)<<request.Width)-1) << offset
 	if offset+uint32(request.Width) > 4 || request.ByteMask != wantMask {
-		return nil, fmt.Errorf("warp: store byte mask %#x does not match address %#x width %d", request.ByteMask, request.Address, request.Width)
+		return storeTransaction{}, fmt.Errorf("warp: store byte mask %#x does not match address %#x width %d", request.ByteMask, request.Address, request.Width)
 	}
 	preflight := make([]byte, request.Width)
 	if err := w.memory.Read(request.Address, preflight); err != nil {
-		return nil, err
+		return storeTransaction{}, err
 	}
 	after := make([]byte, request.Width)
 	value := request.StoreData >> (8 * offset)
 	for index := range after {
 		after[index] = byte(value >> (8 * index))
 	}
-	return &storeTransaction{request: request, address: request.Address, after: after}, nil
+	return storeTransaction{request: request, address: request.Address, after: after}, nil
+}
+
+func (w *Warp) writeStores(stores []storeTransaction) error {
+	if len(stores) == 1 {
+		return w.memory.Write(stores[0].address, stores[0].after)
+	}
+	atomic, ok := w.memory.(AtomicMemoryService)
+	if !ok {
+		return fmt.Errorf("warp: memory service lacks atomic multi-address store support")
+	}
+	addresses := make([]uint32, len(stores))
+	sources := make([][]byte, len(stores))
+	for index := range stores {
+		addresses[index] = stores[index].address
+		sources[index] = stores[index].after
+	}
+	return atomic.WriteBatch(addresses, sources)
 }
 
 func (w *Warp) readMemory(address uint32, width uint8) (uint32, error) {
@@ -447,10 +499,6 @@ func stepError(result Result, kind FaultKind, cause error) Result {
 func hasUnresolvedExternal(effects isa.InstructionEffects) bool {
 	return len(effects.MemoryRequests) != 0 || len(effects.CSRWrites) != 0 || effects.WarpSpawn != nil ||
 		len(effects.WarpDrains) != 0 || len(effects.Barriers) != 0 || len(effects.PackedLoads) != 0 || len(effects.Faults) != 0
-}
-
-func exactlyOneLane(mask isa.LaneMask) bool {
-	return mask.Valid() && mask != 0 && mask&(mask-1) == 0
 }
 
 func faultResult(pc uint32, kind FaultKind, cause error) Result {

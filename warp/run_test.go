@@ -51,7 +51,7 @@ func TestRunBudgetBoundariesAndEarlyStops(t *testing.T) {
 	})
 	t.Run("deferred", func(t *testing.T) {
 		owner := newState(t, initialWarp())
-		result := executor(t, owner, &recordingSource{word: catalogWord(t, "tmc")}).Run(warp.RunOptions{StepBudget: 4})
+		result := executor(t, owner, &recordingSource{word: catalogWord(t, "wspawn")}).Run(warp.RunOptions{StepBudget: 4})
 		if result.Outcome != warp.RunDeferred || result.Attempts != 1 || result.Retired != 0 {
 			t.Fatalf("deferred result=%+v", result)
 		}

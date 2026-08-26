@@ -216,12 +216,11 @@ func TestStepFaultsAndFinishedNeverMutateCanonicalState(t *testing.T) {
 		initial := initialWarp()
 		initial.ActiveMask = 3
 		owner := newState(t, initial)
-		before, _ := owner.Snapshot()
 		result := executor(t, owner, &recordingSource{word: 0x00100093}).Step(state.ReadContext{})
-		requireOutcome(t, result, warp.OutcomeFault)
-		after, _ := owner.Snapshot()
-		if result.Fault.Kind != warp.FaultExecutionMode || before != after {
-			t.Fatalf("result=%+v state changed=%t", result, before != after)
+		requireOutcome(t, result, warp.OutcomeRetired)
+		x1, _ := owner.ReadRegister(isa.Register{File: isa.Integer, Index: 1})
+		if x1 != (isa.LaneValues{1, 1, 0, 0}) || result.NextPC != 0x104 {
+			t.Fatalf("multi-lane result=%+v x1=%#x", result, x1)
 		}
 	})
 	t.Run("inactive", func(t *testing.T) {
@@ -237,6 +236,121 @@ func TestStepFaultsAndFinishedNeverMutateCanonicalState(t *testing.T) {
 	})
 }
 
+func TestStepExecutesFullAndPartialMasksWithoutInactiveWrites(t *testing.T) {
+	t.Run("integer-full-mask", func(t *testing.T) {
+		initial := initialWarp()
+		initial.ActiveMask = isa.AllLanes
+		for lane := range initial.Lanes {
+			initial.Lanes[lane].GPR[1] = uint32(lane + 1)
+		}
+		owner := newState(t, initial)
+		result := executor(t, owner, &recordingSource{word: 0x00508193}).Step(state.ReadContext{}) // addi x3,x1,5
+		requireOutcome(t, result, warp.OutcomeRetired)
+		x3, _ := owner.ReadRegister(isa.Register{File: isa.Integer, Index: 3})
+		if x3 != (isa.LaneValues{6, 7, 8, 9}) || result.Effects.RegisterWrites[0].Mask != isa.AllLanes {
+			t.Fatalf("full-mask result=%+v x3=%#x", result, x3)
+		}
+	})
+
+	t.Run("integer-partial-mask", func(t *testing.T) {
+		initial := initialWarp()
+		initial.ActiveMask = 0b1010
+		for lane := range initial.Lanes {
+			initial.Lanes[lane].GPR[1] = uint32(10 + lane)
+			initial.Lanes[lane].GPR[3] = uint32(0xa0 + lane)
+		}
+		owner := newState(t, initial)
+		result := executor(t, owner, &recordingSource{word: 0x00508193}).Step(state.ReadContext{})
+		requireOutcome(t, result, warp.OutcomeRetired)
+		x3, _ := owner.ReadRegister(isa.Register{File: isa.Integer, Index: 3})
+		if x3 != (isa.LaneValues{0xa0, 16, 0xa2, 18}) || result.Effects.RegisterWrites[0].Mask != 0b1010 {
+			t.Fatalf("partial-mask result=%+v x3=%#x", result, x3)
+		}
+	})
+
+	t.Run("float-partial-mask-and-fflags", func(t *testing.T) {
+		initial := initialWarp()
+		initial.ActiveMask = 0b1010
+		for lane := range initial.Lanes {
+			initial.Lanes[lane].FPR[3] = uint32(0xdead0000 + lane)
+		}
+		// Inactive signaling NaNs would raise invalid if accidentally evaluated.
+		initial.Lanes[0].FPR[1], initial.Lanes[0].FPR[2] = 0x7f800001, 0x3f800000
+		initial.Lanes[2].FPR[1], initial.Lanes[2].FPR[2] = 0x7f800001, 0x3f800000
+		initial.Lanes[1].FPR[1], initial.Lanes[1].FPR[2] = 0x3f800000, 0x40000000
+		initial.Lanes[3].FPR[1], initial.Lanes[3].FPR[2] = 0x40000000, 0x40800000
+		owner := newState(t, initial)
+		result := executor(t, owner, &recordingSource{word: 0x002081d3}).Step(state.ReadContext{}) // fadd.s f3,f1,f2
+		requireOutcome(t, result, warp.OutcomeRetired)
+		f3, _ := owner.ReadRegister(isa.Register{File: isa.Float, Index: 3})
+		after, _ := owner.Snapshot()
+		if f3 != (isa.LaneValues{0xdead0000, 0x40400000, 0xdead0002, 0x40c00000}) || after.FCSR() != 0 {
+			t.Fatalf("partial FP result=%+v f3=%#x fcsr=%#x", result, f3, after.FCSR())
+		}
+	})
+}
+
+func TestStepWarpWideBranchUsesHighestActiveLane(t *testing.T) {
+	initial := initialWarp()
+	initial.ActiveMask = 0b1011
+	initial.Lanes[0].GPR[1], initial.Lanes[0].GPR[2] = 1, 2
+	initial.Lanes[1].GPR[1], initial.Lanes[1].GPR[2] = 3, 4
+	initial.Lanes[3].GPR[1], initial.Lanes[3].GPR[2] = 5, 5
+	owner := newState(t, initial)
+	result := executor(t, owner, &recordingSource{word: 0x00208463}).Step(state.ReadContext{}) // beq x1,x2,+8
+	requireOutcome(t, result, warp.OutcomeRetired)
+	if result.NextPC != 0x108 || result.Effects.Control == nil || !result.Effects.Control.Taken || result.Effects.Control.DecisionLane != 3 {
+		t.Fatalf("branch decision result=%+v", result)
+	}
+}
+
+func TestStepMultiLaneJALRCSRAndTrapRemainAtomic(t *testing.T) {
+	t.Run("jalr", func(t *testing.T) {
+		initial := initialWarp()
+		initial.ActiveMask = 0b0101
+		initial.Lanes[0].GPR[5], initial.Lanes[2].GPR[5] = 0x120, 0x140
+		for lane := range initial.Lanes {
+			initial.Lanes[lane].GPR[4] = uint32(0xa0 + lane)
+		}
+		owner := newState(t, initial)
+		result := executor(t, owner, &recordingSource{word: 0x00028267}).Step(state.ReadContext{}) // jalr x4,0(x5)
+		requireOutcome(t, result, warp.OutcomeRetired)
+		x4, _ := owner.ReadRegister(isa.Register{File: isa.Integer, Index: 4})
+		if result.NextPC != 0x140 || result.Effects.Control.DecisionLane != 2 ||
+			x4 != (isa.LaneValues{0x104, 0xa1, 0x104, 0xa3}) {
+			t.Fatalf("JALR result=%+v x4=%#x", result, x4)
+		}
+	})
+
+	t.Run("lane-valued-csr-read", func(t *testing.T) {
+		initial := initialWarp()
+		initial.ActiveMask = 0b1010
+		for lane := range initial.Lanes {
+			initial.Lanes[lane].GPR[5] = uint32(0xb0 + lane)
+		}
+		owner := newState(t, initial)
+		result := executor(t, owner, &recordingSource{word: 0xf14022f3}).Step(state.ReadContext{}) // csrrs x5,mhartid,x0
+		requireOutcome(t, result, warp.OutcomeRetired)
+		x5, _ := owner.ReadRegister(isa.Register{File: isa.Integer, Index: 5})
+		if x5 != (isa.LaneValues{0xb0, 5, 0xb2, 7}) || result.NextPC != 0x104 {
+			t.Fatalf("CSR result=%+v x5=%#x", result, x5)
+		}
+	})
+
+	t.Run("trap-saves-complete-mask", func(t *testing.T) {
+		initial := initialWarp()
+		initial.ActiveMask = 0b1101
+		owner := newState(t, initial)
+		result := executor(t, owner, &recordingSource{word: 0x00000073}).Step(state.ReadContext{}) // ecall
+		requireOutcome(t, result, warp.OutcomeTrap)
+		after, _ := owner.Snapshot()
+		if result.NextPC != 0x180 || after.SavedThreadMask() != 0b1101 || after.ActiveMask() != 0b1101 ||
+			after.TrapCSRs().MEPC != 0x100 {
+			t.Fatalf("trap result=%+v snapshot=%+v", result, after)
+		}
+	})
+}
+
 func catalogWord(t *testing.T, name string) uint32 {
 	t.Helper()
 	for _, entry := range isa.Catalog() {
@@ -248,13 +362,13 @@ func catalogWord(t *testing.T, name string) uint32 {
 	return 0
 }
 
-func TestStepDefersMemoryAndCustomEffectsWithoutPendingLocalCommit(t *testing.T) {
+func TestStepDefersUnownedEffectsWithoutPendingLocalCommit(t *testing.T) {
 	tests := []struct {
 		name string
 		word uint32
 	}{
 		{name: "data-memory", word: 0x00002083}, // lw x1,0(x0)
-		{name: "custom", word: catalogWord(t, "tmc")},
+		{name: "future-owner-custom", word: catalogWord(t, "wspawn")},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

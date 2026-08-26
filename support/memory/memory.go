@@ -14,6 +14,11 @@ var ErrOutOfBounds = errors.New("memory access out of bounds")
 // ErrInvalidSize identifies a memory size outside the 32-bit address space.
 var ErrInvalidSize = errors.New("invalid memory size")
 
+// ErrOverlappingWrites identifies an ambiguous atomic batch. The frozen RTL
+// evidence does not establish an ordering rule for overlapping lane stores,
+// so the functional owner rejects such a batch without changing memory.
+var ErrOverlappingWrites = errors.New("overlapping writes in atomic batch")
+
 const addressSpaceSize = uint64(1) << 32
 
 // BoundsError describes a rejected memory range.
@@ -97,6 +102,36 @@ func (m *Memory) Write(addr uint32, src []byte) error {
 		return err
 	}
 	copy(m.data[int(addr):int(uint64(addr)+uint64(len(src)))], src)
+	return nil
+}
+
+// WriteBatch atomically applies a set of non-overlapping writes. Every range
+// and pairwise overlap is checked while holding the owner lock before the
+// first byte changes. This is the multi-lane extension consumed by Warp; the
+// ordinary single-address Write contract remains unchanged.
+func (m *Memory) WriteBatch(addresses []uint32, sources [][]byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(addresses) != len(sources) {
+		return fmt.Errorf("memory: atomic batch has %d addresses and %d sources", len(addresses), len(sources))
+	}
+	for index, address := range addresses {
+		if err := m.checkRange(address, uint64(len(sources[index]))); err != nil {
+			return err
+		}
+		start, end := uint64(address), uint64(address)+uint64(len(sources[index]))
+		for previous := 0; previous < index; previous++ {
+			otherStart := uint64(addresses[previous])
+			otherEnd := otherStart + uint64(len(sources[previous]))
+			if start < otherEnd && otherStart < end {
+				return fmt.Errorf("%w: entries %d and %d", ErrOverlappingWrites, previous, index)
+			}
+		}
+	}
+	for index, address := range addresses {
+		start := int(address)
+		copy(m.data[start:start+len(sources[index])], sources[index])
+	}
 	return nil
 }
 

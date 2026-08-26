@@ -48,21 +48,28 @@ func (e *BudgetExceededError) Error() string {
 }
 
 // TraceRecord is a detached observation of one attempted Step. Step is a
-// zero-based attempt index. Decoded and Effects are deep copies, so a sink
-// cannot alter execution, the last Result, or canonical state.
+// zero-based attempt index. The scalar start/end SIMT observations are copied
+// from Result, and Decoded/Effects are deep copies, so a sink cannot alter
+// execution, the last Result, or canonical state.
 type TraceRecord struct {
-	Step     uint64
-	WarpID   uint8
-	PC       uint32
-	Raw      uint32
-	RawValid bool
-	Decoded  *isa.Decoded
+	Step              uint64
+	WarpID            uint8
+	PC                uint32
+	ActiveMask        isa.LaneMask
+	Lifecycle         state.WarpLifecycle
+	DivergencePointer uint8
+	Raw               uint32
+	RawValid          bool
+	Decoded           *isa.Decoded
 	// IssuedEffects observes requests before owner completion; Effects observes
 	// the final completion/apply bundle.
-	IssuedEffects *isa.InstructionEffects
-	Effects       *isa.InstructionEffects
-	NextPC        uint32
-	Outcome       Outcome
+	IssuedEffects         *isa.InstructionEffects
+	Effects               *isa.InstructionEffects
+	NextPC                uint32
+	NextActiveMask        isa.LaneMask
+	NextLifecycle         state.WarpLifecycle
+	NextDivergencePointer uint8
+	Outcome               Outcome
 }
 
 // TraceSink receives optional correctness/debug records. A nil sink is the
@@ -141,10 +148,12 @@ func (w *Warp) Run(options RunOptions) RunResult {
 func detachedTrace(step uint64, result Result) TraceRecord {
 	return TraceRecord{
 		Step: step, WarpID: result.WarpID, PC: result.PC,
+		ActiveMask: result.ActiveMask, Lifecycle: result.Lifecycle, DivergencePointer: result.DivergencePointer,
 		Raw: result.Raw, RawValid: result.RawValid,
 		Decoded: cloneDecoded(result.Decoded), IssuedEffects: cloneInstructionEffects(result.IssuedEffects),
-		Effects: cloneInstructionEffects(result.Effects),
-		NextPC:  result.NextPC, Outcome: result.Outcome,
+		Effects: cloneInstructionEffects(result.Effects), NextPC: result.NextPC,
+		NextActiveMask: result.NextActiveMask, NextLifecycle: result.NextLifecycle,
+		NextDivergencePointer: result.NextDivergencePointer, Outcome: result.Outcome,
 	}
 }
 

@@ -14,6 +14,17 @@ fail() {
     exit 1
 }
 
+# Keep the success transcript stable for the frozen Harness oracle while
+# retaining complete command diagnostics on failure. Commands passed here are
+# still executed normally and their nonzero status is never suppressed.
+run_quiet() {
+    local output
+    if ! output="$("$@" 2>&1)"; then
+        [[ -z "${output}" ]] || printf '%s\n' "${output}" >&2
+        return 1
+    fi
+}
+
 [[ "${SIMULATOR_ROOT:-}" == "${project_root}" ]] || \
     fail "environment is not active; run: source env/env.sh"
 
@@ -55,7 +66,8 @@ grep -qx 'go 1.26.0' go.mod || fail "go.mod must declare go 1.26.0"
 grep -qx 'toolchain go1.26.2' go.mod || fail "go.mod must freeze toolchain go1.26.2"
 
 echo "verify: SoftFloat"
-./scripts/build-softfloat.sh
+run_quiet ./scripts/build-softfloat.sh || fail "SoftFloat verification failed"
+echo "SoftFloat archive: ${SOFTFLOAT_ARCHIVE}"
 
 echo "verify: go mod verify"
 go mod verify
@@ -63,13 +75,13 @@ go mod verify
 if packages="$(go list -mod=vendor ./...)"; then
     if [[ -n "${packages}" ]]; then
         echo "verify: go build -mod=vendor ./..."
-        go build -mod=vendor ./...
+        run_quiet go build -mod=vendor ./... || fail "go build failed"
 
         echo "verify: go test -mod=vendor ./..."
-        go test -mod=vendor ./...
+        run_quiet go test -mod=vendor ./... || fail "go test failed"
 
         echo "verify: go vet -mod=vendor ./..."
-        go vet -mod=vendor ./...
+        run_quiet go vet -mod=vendor ./... || fail "go vet failed"
     else
         echo "verify: no Go packages yet; test and vet checks skipped"
     fi

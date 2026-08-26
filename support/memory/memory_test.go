@@ -99,6 +99,34 @@ func TestBoundsChecksAreAtomic(t *testing.T) {
 	}
 }
 
+func TestWriteBatchIsAtomicAndRejectsOverlap(t *testing.T) {
+	memory := newMemory(t, 16)
+	if err := memory.Write(0, []byte{0, 1, 2, 3, 4, 5, 6, 7}); err != nil {
+		t.Fatal(err)
+	}
+	if err := memory.WriteBatch([]uint32{1, 8, 12}, [][]byte{{0xaa, 0xbb}, {0xcc}, {0xdd, 0xee}}); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte{0, 0xaa, 0xbb, 3, 4, 5, 6, 7, 0xcc, 0, 0, 0, 0xdd, 0xee, 0, 0}
+	if got := memory.Snapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("WriteBatch got %v want %v", got, want)
+	}
+
+	before := memory.Snapshot()
+	if err := memory.WriteBatch([]uint32{2, 14}, [][]byte{{9, 9}, {8, 8, 8}}); !errors.Is(err, ErrOutOfBounds) {
+		t.Fatalf("out-of-bounds WriteBatch error = %v", err)
+	}
+	if !reflect.DeepEqual(memory.Snapshot(), before) {
+		t.Fatal("out-of-bounds WriteBatch partially modified memory")
+	}
+	if err := memory.WriteBatch([]uint32{4, 5}, [][]byte{{1, 2}, {3, 4}}); !errors.Is(err, ErrOverlappingWrites) {
+		t.Fatalf("overlapping WriteBatch error = %v", err)
+	}
+	if !reflect.DeepEqual(memory.Snapshot(), before) {
+		t.Fatal("overlapping WriteBatch partially modified memory")
+	}
+}
+
 func TestZero(t *testing.T) {
 	memory := newMemory(t, 8)
 	if err := memory.Write(0, []byte{1, 2, 3, 4, 5, 6, 7, 8}); err != nil {
