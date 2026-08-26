@@ -103,6 +103,35 @@ func (s *EffectStage) CommitAfterExternal() error {
 	return s.commit()
 }
 
+// CommitForwardedWithExternal atomically coordinates a forwarded-effect stage
+// with its synchronous external owner. Staleness is checked before apply, so
+// the callback is never invoked for an obsolete Warp candidate. The callback
+// must provide an all-or-error contract; after it succeeds the prevalidated
+// Warp replacement is infallible.
+func (s *EffectStage) CommitForwardedWithExternal(apply func() error) error {
+	if s == nil {
+		return fmt.Errorf("state: nil effect stage")
+	}
+	if apply == nil {
+		return fmt.Errorf("state: nil external apply callback")
+	}
+	if !s.requiresExternal {
+		return fmt.Errorf("state: coordinated forwarded commit requires an external prerequisite")
+	}
+	if s.committed {
+		return fmt.Errorf("state: effect stage was already committed")
+	}
+	if s.owner == nil || *s.owner != s.before {
+		return fmt.Errorf("state: effect stage is stale because canonical state changed")
+	}
+	if err := apply(); err != nil {
+		return err
+	}
+	*s.owner = s.after
+	s.committed = true
+	return nil
+}
+
 func (s *EffectStage) commit() error {
 	if s.committed {
 		return fmt.Errorf("state: effect stage was already committed")

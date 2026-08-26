@@ -16,9 +16,16 @@ type ReadContext struct {
 	Counters         isa.CounterView
 	Bounds           *isa.AddressBounds
 	BarrierPhase     bool
+	BarrierPhases    *BarrierPhaseView
 	PendingPriorWork bool
 	PendingLSU       bool
 }
+
+// BarrierPhaseView is a detached snapshot of the frozen physical barrier
+// address space for one CTA. The first index is AddressWarp and the second is
+// the three-bit barrier ID. A nil view preserves the direct Warp API's legacy
+// scalar BarrierPhase input; Core always supplies this canonical table.
+type BarrierPhaseView [isa.FrozenWarpCount][8]bool
 
 // DivergenceRecordSnapshot is an immutable-by-copy observation of one row.
 type DivergenceRecordSnapshot struct {
@@ -166,10 +173,18 @@ func (s WarpSnapshot) CustomInput(decoded isa.Decoded, context ReadContext) (isa
 			}
 		}
 	}
+	barrierPhase := context.BarrierPhase
+	if context.BarrierPhases != nil && decoded.Barrier != isa.BarrierNone {
+		phases := *context.BarrierPhases
+		lane := highestActive(s.activeMask)
+		addressWarp := uint8(sources[0][lane]) & (isa.FrozenWarpCount - 1)
+		barrierID := uint8(sources[0][lane]>>8) & 7
+		barrierPhase = phases[addressWarp][barrierID]
+	}
 	return isa.CustomInput{
 		PC: s.pc, ActiveMask: s.activeMask, RS1: sources[0], RS2: sources[1], RS3: sources[2],
 		WarpID: s.id, MScratch: s.trapCSRs.MScratch, Divergence: view,
-		BarrierPhase: context.BarrierPhase, PendingPriorWork: context.PendingPriorWork,
+		BarrierPhase: barrierPhase, PendingPriorWork: context.PendingPriorWork,
 		PendingLSU: context.PendingLSU, Bounds: bounds,
 	}, nil
 }

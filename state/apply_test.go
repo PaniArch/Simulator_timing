@@ -149,6 +149,50 @@ func TestCommitWithExternalCoordinatesOneInfallibleBoundary(t *testing.T) {
 	})
 }
 
+func TestCommitForwardedWithExternalChecksStalenessBeforeOwnerMutation(t *testing.T) {
+	w := newWarp(t)
+	makeStage := func() *state.EffectStage {
+		stage, err := w.StageEffects(isa.InstructionEffects{
+			Control:  &isa.ControlEffect{Reason: isa.PCSequential, CurrentPC: 0x100, NextPC: 0x104},
+			Barriers: []isa.BarrierEffect{{WarpID: 2, AddressWarp: 0, ID: 0, Kind: isa.BarrierSync}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return stage
+	}
+	t.Run("success", func(t *testing.T) {
+		stage := makeStage()
+		calls := 0
+		if err := stage.CommitForwardedWithExternal(func() error { calls++; return nil }); err != nil || calls != 1 {
+			t.Fatalf("forwarded commit calls=%d err=%v", calls, err)
+		}
+		if got := snapshot(t, w).PC(); got != 0x104 {
+			t.Fatalf("forwarded commit PC=%#x", got)
+		}
+	})
+	t.Run("stale", func(t *testing.T) {
+		fresh := newWarp(t)
+		stage, err := fresh.StageEffects(isa.InstructionEffects{
+			Control:  &isa.ControlEffect{Reason: isa.PCSequential, CurrentPC: 0x100, NextPC: 0x104},
+			Barriers: []isa.BarrierEffect{{WarpID: 2, AddressWarp: 0, ID: 0, Kind: isa.BarrierSync}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := fresh.SetFCSR(0x22); err != nil {
+			t.Fatal(err)
+		}
+		called := false
+		if err := stage.CommitForwardedWithExternal(func() error { called = true; return nil }); err == nil || called {
+			t.Fatalf("stale forwarded commit err=%v called=%t", err, called)
+		}
+		if got := snapshot(t, fresh); got.PC() != 0x100 || got.FCSR() != 0x22 {
+			t.Fatalf("stale forwarded state pc=%#x fcsr=%#x", got.PC(), got.FCSR())
+		}
+	})
+}
+
 func TestApplyRegisterMaskX0AndWGatherException(t *testing.T) {
 	t.Run("exact-mask-and-x0", func(t *testing.T) {
 		w := newWarp(t)

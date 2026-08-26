@@ -7,6 +7,7 @@ const (
 	FrozenCoreCount    = 1
 	FrozenBarrierCount = 8
 	FrozenLocalMemBase = uint32(0xffff0000)
+	FrozenLocalMemSize = uint32(1 << 14)
 	FrozenCounterBits  = 44
 	// RV32 MXL plus the frozen F/I/M/U/X standard-extension bits.
 	FrozenMISA = uint32(0x40901120)

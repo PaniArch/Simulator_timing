@@ -81,6 +81,10 @@ type TraceRecord struct {
 	NextLifecycle       WarpLifecycle
 	BlockReason         BlockReason
 	WarpResult          warp.Result
+	CTAValid            bool
+	CTAID               uint32
+	Barrier             *BarrierTransition
+	CTACompletion       *CTACompletionSnapshot
 }
 
 // TraceSink receives optional detached Core records.
@@ -109,11 +113,12 @@ type RunOptions struct {
 // Warp.Step calls; Retired counts only fully completed instructions. Last is
 // detached and nil if no Warp was selected.
 type RunResult struct {
-	Outcome  RunOutcome
-	Attempts uint64
-	Retired  uint64
-	Last     *StepResult
-	Err      error
+	Outcome        RunOutcome
+	Attempts       uint64
+	Retired        uint64
+	Last           *StepResult
+	Err            error
+	CTACompletions []CTACompletionSnapshot
 }
 
 // Run repeatedly invokes the existing Core.Step scheduler. Deferred, trap,
@@ -121,8 +126,12 @@ type RunResult struct {
 // call may resume a functional wait after its owner view changes. An idle step
 // is complete only when every participated slot is finished, otherwise it is
 // explicitly blocked. The budget counts instructions, never cycles.
-func (c *Core) Run(options RunOptions) RunResult {
-	result := RunResult{}
+func (c *Core) Run(options RunOptions) (result RunResult) {
+	defer func() {
+		if completions, err := c.CTACompletions(); err == nil {
+			result.CTACompletions = detachCTACompletions(completions)
+		}
+	}()
 	complete, err := c.Complete()
 	if err != nil {
 		result.Outcome, result.Err = RunFault, err
@@ -205,14 +214,37 @@ func (c *Core) Run(options RunOptions) RunResult {
 func detachStepResult(result StepResult) StepResult {
 	detached := result
 	detached.WarpResult = warp.DetachResult(result.WarpResult)
+	if result.Barrier != nil {
+		barrier := *result.Barrier
+		detached.Barrier = &barrier
+	}
+	if result.CTACompletion != nil {
+		completion := detachCTACompletion(*result.CTACompletion)
+		detached.CTACompletion = &completion
+	}
 	return detached
 }
 
 func detachedCoreTrace(step uint64, result StepResult) TraceRecord {
+	detached := detachStepResult(result)
 	return TraceRecord{
-		CoreStep: step, WarpID: result.WarpID,
-		Lifecycle: result.Lifecycle, PreviousBlockReason: result.PreviousBlockReason,
-		NextLifecycle: result.NextLifecycle, BlockReason: result.BlockReason,
-		WarpResult: warp.DetachResult(result.WarpResult),
+		CoreStep: step, WarpID: detached.WarpID,
+		Lifecycle: detached.Lifecycle, PreviousBlockReason: detached.PreviousBlockReason,
+		NextLifecycle: detached.NextLifecycle, BlockReason: detached.BlockReason,
+		WarpResult: detached.WarpResult, CTAValid: detached.CTAValid, CTAID: detached.CTAID,
+		Barrier: detached.Barrier, CTACompletion: detached.CTACompletion,
 	}
+}
+
+func detachCTACompletion(completion CTACompletionSnapshot) CTACompletionSnapshot {
+	completion.Members = append([]CTACompletionMember(nil), completion.Members...)
+	return completion
+}
+
+func detachCTACompletions(completions []CTACompletionSnapshot) []CTACompletionSnapshot {
+	result := make([]CTACompletionSnapshot, len(completions))
+	for index, completion := range completions {
+		result[index] = detachCTACompletion(completion)
+	}
+	return result
 }

@@ -85,6 +85,9 @@ type slot struct {
 	lifecycle    WarpLifecycle
 	blockReason  BlockReason
 	participated bool
+	barrierKey   BarrierKey
+	barrierWait  bool
+	barrierDrain bool
 }
 
 // SlotSnapshot is a detached scheduler observation. Architectural fields are
@@ -96,6 +99,8 @@ type SlotSnapshot struct {
 	Participated          bool
 	ArchitecturalState    state.WarpLifecycle
 	ArchitecturalLaneMask isa.LaneMask
+	BarrierKey            *BarrierKey
+	BarrierDraining       bool
 }
 
 // Core contains exactly the four slots required by the frozen configuration.
@@ -105,6 +110,8 @@ type Core struct {
 	slots       [isa.FrozenWarpCount]slot
 	next        uint8
 	pendingWork PendingWorkProvider
+	ctas        *CTAManager
+	barriers    *BarrierCoordinator
 }
 
 // PendingWorkProvider supplies the functional WSYNC predicate owned outside
@@ -175,6 +182,19 @@ func New(executors []*warp.Warp) (*Core, error) {
 	return result, nil
 }
 
+// NewWithCTAManager constructs the frozen Core and atomically attaches its
+// canonical CTA owner before execution begins.
+func NewWithCTAManager(executors []*warp.Warp, manager *CTAManager) (*Core, error) {
+	result, err := New(executors)
+	if err != nil {
+		return nil, err
+	}
+	if err := result.SetCTAManager(manager); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // SetPendingWorkProvider attaches the explicit WSYNC predicate owner. A nil
 // provider restores use of ReadContext.PendingPriorWork supplied to Step.
 func (c *Core) SetPendingWorkProvider(provider PendingWorkProvider) error {
@@ -183,6 +203,53 @@ func (c *Core) SetPendingWorkProvider(provider PendingWorkProvider) error {
 	}
 	c.pendingWork = provider
 	return nil
+}
+
+// SetCTAManager attaches the single canonical CTA owner used by this Core.
+// It may be attached once; replacing it would replace membership truth while
+// Warp executors and LMEM routes still refer to the old owner.
+func (c *Core) SetCTAManager(manager *CTAManager) error {
+	if err := c.validate(); err != nil {
+		return err
+	}
+	if manager == nil {
+		return fmt.Errorf("core: nil CTA manager")
+	}
+	if c.ctas != nil && c.ctas != manager {
+		return fmt.Errorf("core: cannot replace the canonical CTA manager")
+	}
+	if c.ctas == manager {
+		return c.validate()
+	}
+	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
+		if c.slots[id].participated && !manager.HasWarp(id) {
+			return fmt.Errorf("core: participated warp %d has no CTA membership", id)
+		}
+	}
+	if err := c.validateCTAMemoryRoutes(manager); err != nil {
+		return err
+	}
+	if err := manager.seal(); err != nil {
+		return err
+	}
+	barriers, err := NewBarrierCoordinator(manager)
+	if err != nil {
+		return err
+	}
+	if !barriers.empty() {
+		return fmt.Errorf("core: cannot attach CTA manager with preexisting barrier state")
+	}
+	c.ctas = manager
+	c.barriers = barriers
+	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
+		if c.slots[id].lifecycle == WarpFinished {
+			if err := manager.observeWarpFinished(id); err != nil {
+				c.ctas, c.barriers = nil, nil
+				return err
+			}
+		}
+	}
+	return c.validate()
 }
 
 // Slot returns one detached lifecycle observation.
@@ -213,10 +280,14 @@ func (c *Core) Slots() ([]SlotSnapshot, error) {
 }
 
 // Block removes a runnable warp from scheduling while leaving its canonical
-// running/mask state untouched. A typed nonzero reason is mandatory.
+// running/mask state untouched. A typed nonzero, non-barrier reason is
+// mandatory; barrier lifecycle is reserved for the coordinator.
 func (c *Core) Block(warpID uint8, reason BlockReason) error {
 	if !validBlockReason(reason) {
 		return fmt.Errorf("core: invalid block reason %s", reason)
+	}
+	if reason == BlockBarrier {
+		return fmt.Errorf("core: barrier blocks are owned by barrier coordination")
 	}
 	selected, err := c.slotFor(warpID)
 	if err != nil {
@@ -226,10 +297,12 @@ func (c *Core) Block(warpID uint8, reason BlockReason) error {
 		return fmt.Errorf("core: cannot block warp %d in %s state", warpID, selected.lifecycle)
 	}
 	selected.lifecycle, selected.blockReason = WarpBlocked, reason
+	selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, reason == BlockBarrier
 	return c.validateSlot(warpID)
 }
 
-// Resume makes a blocked, canonically running warp runnable again.
+// Resume makes a non-barrier blocked, canonically running warp runnable again.
+// Barrier waiters and LSU drainers resume only through their canonical paths.
 func (c *Core) Resume(warpID uint8) error {
 	selected, err := c.slotFor(warpID)
 	if err != nil {
@@ -238,7 +311,11 @@ func (c *Core) Resume(warpID uint8) error {
 	if selected.lifecycle != WarpBlocked {
 		return fmt.Errorf("core: cannot resume warp %d in %s state", warpID, selected.lifecycle)
 	}
+	if selected.blockReason == BlockBarrier {
+		return fmt.Errorf("core: barrier-blocked warp %d can only resume through barrier coordination", warpID)
+	}
 	selected.lifecycle, selected.blockReason = WarpRunnable, BlockNone
+	selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
 	return c.validateSlot(warpID)
 }
 
@@ -249,7 +326,13 @@ func (c *Core) Activate(warpID uint8) error {
 	if c == nil || warpID >= isa.FrozenWarpCount {
 		return fmt.Errorf("core: invalid warp id %d", warpID)
 	}
+	if err := c.validate(); err != nil {
+		return err
+	}
 	selected := &c.slots[warpID]
+	if c.ctas != nil && !c.ctas.HasWarp(warpID) {
+		return fmt.Errorf("core: cannot activate warp %d without CTA membership", warpID)
+	}
 	if selected.lifecycle != WarpInactive || selected.participated {
 		return fmt.Errorf("core: cannot activate warp %d in %s state", warpID, selected.lifecycle)
 	}
@@ -261,6 +344,7 @@ func (c *Core) Activate(warpID uint8) error {
 		return fmt.Errorf("core: warp %d canonical state is not active", warpID)
 	}
 	selected.lifecycle, selected.blockReason, selected.participated = WarpRunnable, BlockNone, true
+	selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
 	return c.validateSlot(warpID)
 }
 
@@ -282,6 +366,23 @@ type StepResult struct {
 	WarpResult          warp.Result
 	NextLifecycle       WarpLifecycle
 	BlockReason         BlockReason
+	CTAValid            bool
+	CTAID               uint32
+	Barrier             *BarrierTransition
+	CTACompletion       *CTACompletionSnapshot
+}
+
+// BarrierTransition is a detached observation of one Core-owned barrier
+// coordination boundary. Before/After are exact canonical record images.
+type BarrierTransition struct {
+	Draining bool
+	Accepted bool
+	Request  isa.BarrierEffect
+	Key      BarrierKey
+	Before   BarrierSnapshot
+	After    BarrierSnapshot
+	Blocked  bool
+	Released isa.WarpMask
 }
 
 // Step selects exactly one runnable warp in deterministic round-robin order
@@ -308,6 +409,18 @@ func (c *Core) Step(context state.ReadContext) (StepResult, error) {
 	}
 	context.CoreID = 0
 	context.ActiveWarps = uint8(active)
+	var issuedBarriers barrierView
+	if c.ctas != nil {
+		context.CTA, err = c.ctas.ViewForWarp(selectedID)
+		if err != nil {
+			return StepResult{}, fmt.Errorf("core: CTA context for warp %d: %w", selectedID, err)
+		}
+		issuedBarriers, err = c.barriers.view(context.CTA.ID)
+		if err != nil {
+			return StepResult{}, fmt.Errorf("core: barrier phase view for warp %d: %w", selectedID, err)
+		}
+		context.BarrierPhases = &issuedBarriers.phases
+	}
 	if c.pendingWork != nil {
 		context.PendingPriorWork, err = c.pendingWork.PendingPriorWork(selectedID)
 		if err != nil {
@@ -317,6 +430,8 @@ func (c *Core) Step(context state.ReadContext) (StepResult, error) {
 	c.next = (selectedID + 1) % isa.FrozenWarpCount
 	selected := &c.slots[selectedID]
 	beforeLifecycle, beforeBlockReason := selected.lifecycle, selected.blockReason
+	beforeBarrierKey, beforeBarrierWait, beforeBarrierDrain := selected.barrierKey, selected.barrierWait, selected.barrierDrain
+	var barrierTransition *BarrierTransition
 	warpResult := selected.executor.Step(context)
 
 	if warpResult.Outcome == warp.OutcomeDeferred && warpResult.Decoded != nil {
@@ -324,20 +439,36 @@ func (c *Core) Step(context state.ReadContext) (StepResult, error) {
 		case "wspawn":
 			if err := c.coordinateWarpSpawn(selectedID, active, ownerBefore, &warpResult); err != nil {
 				selected.lifecycle, selected.blockReason = WarpBlocked, BlockFault
-				return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult), err
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
+				return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult, barrierTransition), err
 			}
 		case "wsync":
 			if err := c.coordinateWarpSync(selectedID, context.PendingPriorWork, &warpResult); err != nil {
 				selected.lifecycle, selected.blockReason = WarpBlocked, BlockFault
-				return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult), err
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
+				return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult, barrierTransition), err
 			}
 		case "bar", "bar.arrive", "bar.wait":
-			selected.lifecycle, selected.blockReason = WarpBlocked, BlockBarrier
+			if c.barriers == nil {
+				selected.lifecycle, selected.blockReason = WarpBlocked, BlockBarrier
+			} else if err := c.coordinateBarrier(selectedID, ownerBefore[selectedID], issuedBarriers, context.PendingLSU, &warpResult, &barrierTransition); err != nil {
+				selected.lifecycle, selected.blockReason = beforeLifecycle, beforeBlockReason
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = beforeBarrierKey, beforeBarrierWait, beforeBarrierDrain
+				return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult, barrierTransition), err
+			}
 		}
 	}
 
 	if warpResult.NextLifecycle == state.WarpInactive {
 		selected.lifecycle, selected.blockReason = WarpFinished, BlockNone
+		selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
+		if c.ctas != nil {
+			if err := c.ctas.observeWarpFinished(selectedID); err != nil {
+				selected.lifecycle, selected.blockReason = WarpBlocked, BlockFault
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
+				return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult, barrierTransition), err
+			}
+		}
 	} else {
 		switch warpResult.Outcome {
 		case warp.OutcomeDeferred:
@@ -347,12 +478,13 @@ func (c *Core) Step(context state.ReadContext) (StepResult, error) {
 			}
 		case warp.OutcomeFault:
 			selected.lifecycle, selected.blockReason = WarpBlocked, BlockFault
+			selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
 		}
 	}
 	if err := c.validateSlot(selectedID); err != nil {
 		return StepResult{}, err
 	}
-	return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult), nil
+	return c.stepResult(selectedID, beforeLifecycle, beforeBlockReason, warpResult, barrierTransition), nil
 }
 
 // Complete reports Core-level completion for slots which participated in this
@@ -360,6 +492,21 @@ func (c *Core) Step(context state.ReadContext) (StepResult, error) {
 func (c *Core) Complete() (bool, error) {
 	if err := c.validate(); err != nil {
 		return false, err
+	}
+	if c.ctas != nil {
+		completions, err := c.CTACompletions()
+		if err != nil {
+			return false, err
+		}
+		if len(completions) == 0 {
+			return false, nil
+		}
+		for _, completion := range completions {
+			if !completion.Complete {
+				return false, nil
+			}
+		}
+		return true, nil
 	}
 	participated := false
 	for id := range c.slots {
@@ -373,6 +520,45 @@ func (c *Core) Complete() (bool, error) {
 		}
 	}
 	return participated, nil
+}
+
+// CTACompletion returns the CTA owner's detached aggregation over explicit
+// members, current scheduler lifecycle, and canonical barrier state.
+func (c *Core) CTACompletion(ctaID uint32) (CTACompletionSnapshot, error) {
+	if err := c.validate(); err != nil {
+		return CTACompletionSnapshot{}, err
+	}
+	if c.ctas == nil {
+		return CTACompletionSnapshot{}, fmt.Errorf("core: no CTA manager is attached")
+	}
+	var scheduler [isa.FrozenWarpCount]ctaSchedulerView
+	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
+		scheduler[id] = ctaSchedulerView{lifecycle: c.slots[id].lifecycle, blockReason: c.slots[id].blockReason}
+	}
+	return c.ctas.completion(ctaID, scheduler)
+}
+
+// CTACompletions returns all resident CTA observations in deterministic ID
+// order. Member slices are independently allocated by the CTA owner.
+func (c *Core) CTACompletions() ([]CTACompletionSnapshot, error) {
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+	if c.ctas == nil {
+		return nil, nil
+	}
+	ids, err := c.ctas.residentIDs()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]CTACompletionSnapshot, len(ids))
+	for index, id := range ids {
+		result[index], err = c.CTACompletion(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 func (c *Core) selectRunnable() (uint8, bool) {
@@ -425,6 +611,7 @@ func (c *Core) refreshFunctionalWaits(context state.ReadContext) error {
 		case BlockWarpSpawn:
 			if active == isa.WarpMask(1<<id) {
 				selected.lifecycle, selected.blockReason = WarpRunnable, BlockNone
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
 			}
 		case BlockPendingWork:
 			pending := context.PendingPriorWork
@@ -436,6 +623,12 @@ func (c *Core) refreshFunctionalWaits(context state.ReadContext) error {
 			}
 			if !pending {
 				selected.lifecycle, selected.blockReason = WarpRunnable, BlockNone
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
+			}
+		case BlockBarrier:
+			if selected.barrierDrain && !context.PendingLSU {
+				selected.lifecycle, selected.blockReason = WarpRunnable, BlockNone
+				selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
 			}
 		}
 	}
@@ -450,8 +643,14 @@ func (c *Core) coordinateWarpSpawn(sourceID uint8, active isa.WarpMask, ownerBef
 	if err := validateWarpSpawnEffect(sourceID, spawn); err != nil {
 		return err
 	}
+	if c.ctas != nil {
+		if err := c.ctas.ValidateSpawn(sourceID, spawn.Targets); err != nil {
+			return fmt.Errorf("core: WSPAWN CTA membership: %w", err)
+		}
+	}
 	if active != isa.WarpMask(1<<sourceID) {
 		c.slots[sourceID].lifecycle, c.slots[sourceID].blockReason = WarpBlocked, BlockWarpSpawn
+		c.slots[sourceID].barrierKey, c.slots[sourceID].barrierWait, c.slots[sourceID].barrierDrain = BarrierKey{}, false, false
 		return nil
 	}
 
@@ -490,8 +689,10 @@ func (c *Core) coordinateWarpSpawn(sourceID uint8, active isa.WarpMask, ownerBef
 	for _, target := range targets {
 		slot := &c.slots[target.WarpID]
 		slot.lifecycle, slot.blockReason, slot.participated = WarpRunnable, BlockNone, true
+		slot.barrierKey, slot.barrierWait, slot.barrierDrain = BarrierKey{}, false, false
 	}
 	c.slots[sourceID].lifecycle, c.slots[sourceID].blockReason = WarpRunnable, BlockNone
+	c.slots[sourceID].barrierKey, c.slots[sourceID].barrierWait, c.slots[sourceID].barrierDrain = BarrierKey{}, false, false
 	completeDeferredResult(c.slots[sourceID].owner, result)
 	return c.validate()
 }
@@ -513,6 +714,7 @@ func (c *Core) coordinateWarpSync(sourceID uint8, pending bool, result *warp.Res
 	}
 	if pending {
 		c.slots[sourceID].lifecycle, c.slots[sourceID].blockReason = WarpBlocked, BlockPendingWork
+		c.slots[sourceID].barrierKey, c.slots[sourceID].barrierWait, c.slots[sourceID].barrierDrain = BarrierKey{}, false, false
 		return nil
 	}
 	stage, err := c.slots[sourceID].owner.StageEffects(*result.Effects)
@@ -529,8 +731,158 @@ func (c *Core) coordinateWarpSync(sourceID uint8, pending bool, result *warp.Res
 		return fmt.Errorf("core: commit WSYNC: %w", err)
 	}
 	c.slots[sourceID].lifecycle, c.slots[sourceID].blockReason = WarpRunnable, BlockNone
+	c.slots[sourceID].barrierKey, c.slots[sourceID].barrierWait, c.slots[sourceID].barrierDrain = BarrierKey{}, false, false
 	completeDeferredResult(c.slots[sourceID].owner, result)
 	return nil
+}
+
+func (c *Core) coordinateBarrier(sourceID uint8, issued state.WarpSnapshot, issuedBarriers barrierView, pendingLSU bool, result *warp.Result, transition **BarrierTransition) error {
+	if result == nil || result.Decoded == nil || result.Effects == nil {
+		return fmt.Errorf("core: barrier deferred without decoded effects")
+	}
+	effects := result.Effects
+	if pendingLSU {
+		if len(effects.WarpDrains) != 1 || effects.WarpDrains[0] != (isa.WarpDrainEffect{WarpID: sourceID, Kind: isa.DrainLSU, Wait: true}) ||
+			effects.Control != nil || len(effects.Barriers) != 0 || len(effects.RegisterWrites) != 0 ||
+			effects.WarpSpawn != nil || len(effects.MemoryRequests) != 0 || effects.Ordering != nil ||
+			effects.FFlags != nil || len(effects.CSRReads) != 0 || len(effects.CSRWrites) != 0 ||
+			effects.Trap != nil || len(effects.WarpMasks) != 0 || effects.Divergence != nil ||
+			len(effects.PackedLoads) != 0 || len(effects.Faults) != 0 {
+			return fmt.Errorf("core: pending-LSU barrier effect violates the drain contract")
+		}
+		selected := &c.slots[sourceID]
+		selected.lifecycle, selected.blockReason = WarpBlocked, BlockBarrier
+		selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, true
+		if transition != nil {
+			*transition = &BarrierTransition{Draining: true}
+		}
+		return nil
+	}
+	if len(effects.WarpDrains) != 1 || effects.WarpDrains[0] != (isa.WarpDrainEffect{WarpID: sourceID, Kind: isa.DrainLSU}) ||
+		len(effects.Barriers) != 1 || effects.Control == nil || effects.WarpSpawn != nil ||
+		len(effects.MemoryRequests) != 0 || effects.Ordering != nil || effects.FFlags != nil ||
+		len(effects.CSRReads) != 0 || len(effects.CSRWrites) != 0 || effects.Trap != nil ||
+		len(effects.WarpMasks) != 0 || effects.Divergence != nil || len(effects.PackedLoads) != 0 ||
+		len(effects.Faults) != 0 {
+		return fmt.Errorf("core: accepted barrier effect violates the frozen contract")
+	}
+	effect := effects.Barriers[0]
+	wantKind := map[string]isa.BarrierKind{"bar": isa.BarrierSync, "bar.arrive": isa.BarrierArrive, "bar.wait": isa.BarrierWait}[result.Decoded.Name]
+	if effect.WarpID != sourceID || effect.Kind != wantKind {
+		return fmt.Errorf("core: barrier effect source/kind does not match issued instruction")
+	}
+	current, err := c.slots[sourceID].owner.Snapshot()
+	if err != nil {
+		return err
+	}
+	if current != issued {
+		return fmt.Errorf("core: barrier source warp %d changed since instruction issue", sourceID)
+	}
+	localStage, err := c.slots[sourceID].owner.StageEffects(*effects)
+	if err != nil {
+		return fmt.Errorf("core: restage barrier source: %w", err)
+	}
+	forwarded := localStage.ForwardedEffects()
+	if len(forwarded.WarpDrains) != 1 || len(forwarded.Barriers) != 1 || forwarded.WarpSpawn != nil ||
+		len(forwarded.MemoryRequests) != 0 || len(forwarded.PackedLoads) != 0 || len(forwarded.CSRWrites) != 0 ||
+		len(forwarded.CSRReads) != 0 || forwarded.Ordering != nil || len(forwarded.Faults) != 0 {
+		return fmt.Errorf("core: barrier has unexpected forwarded effects")
+	}
+	barrierStage, err := c.barriers.stageFromView(effect, issuedBarriers)
+	if err != nil {
+		return fmt.Errorf("core: stage barrier: %w", err)
+	}
+	barrierResult := barrierStage.Result()
+	if err := c.validateBarrierReleases(sourceID, barrierResult); err != nil {
+		return err
+	}
+	if err := localStage.CommitForwardedWithExternal(barrierStage.Commit); err != nil {
+		return fmt.Errorf("core: commit barrier transaction: %w", err)
+	}
+	if transition != nil {
+		before := issuedBarriers.records[effect.AddressWarp][effect.ID]
+		*transition = &BarrierTransition{Accepted: true, Request: effect, Key: barrierResult.Key,
+			Before: before, After: snapshotBarrier(barrierResult.Key, barrierStage.after),
+			Blocked: barrierResult.Block, Released: barrierResult.Releases}
+	}
+	c.applyBarrierReleases(sourceID, barrierResult)
+	selected := &c.slots[sourceID]
+	if barrierResult.Block {
+		selected.lifecycle, selected.blockReason = WarpBlocked, BlockBarrier
+		selected.barrierKey, selected.barrierWait, selected.barrierDrain = barrierResult.Key, true, false
+	} else {
+		selected.lifecycle, selected.blockReason = WarpRunnable, BlockNone
+		selected.barrierKey, selected.barrierWait, selected.barrierDrain = BarrierKey{}, false, false
+	}
+	completeDeferredResult(selected.owner, result)
+	// Every potentially failing check is complete before the coordinated
+	// owner commit. The remaining scheduler assignments are prevalidated and
+	// infallible, so an accepted request cannot surface a post-commit error.
+	return nil
+}
+
+func (c *Core) validateBarrierReleases(sourceID uint8, result BarrierResult) error {
+	if !result.Releases.Valid() {
+		return fmt.Errorf("core: barrier release mask exceeds frozen warps")
+	}
+	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
+		if !result.Releases.Active(id) || id == sourceID {
+			continue
+		}
+		slot := &c.slots[id]
+		if slot.lifecycle != WarpBlocked || slot.blockReason != BlockBarrier || !slot.barrierWait || slot.barrierKey != result.Key {
+			return fmt.Errorf("core: barrier release warp %d is not waiting on the matching key", id)
+		}
+	}
+	return nil
+}
+
+func (c *Core) applyBarrierReleases(sourceID uint8, result BarrierResult) {
+	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
+		if !result.Releases.Active(id) || id == sourceID {
+			continue
+		}
+		slot := &c.slots[id]
+		slot.lifecycle, slot.blockReason = WarpRunnable, BlockNone
+		slot.barrierKey, slot.barrierWait, slot.barrierDrain = BarrierKey{}, false, false
+	}
+}
+
+// CompleteBarrierEvent accepts one canonical txbar completion and releases
+// only scheduler waiters recorded under the matching CTA/address/id key.
+func (c *Core) CompleteBarrierEvent(key BarrierKey) error {
+	if err := c.validate(); err != nil {
+		return err
+	}
+	if c.barriers == nil {
+		return fmt.Errorf("core: no barrier coordinator is attached")
+	}
+	stage, err := c.barriers.StageEventCompletion(key)
+	if err != nil {
+		return err
+	}
+	result := stage.Result()
+	if err := c.validateBarrierReleases(isa.FrozenWarpCount, result); err != nil {
+		return err
+	}
+	if err := stage.Commit(); err != nil {
+		return err
+	}
+	c.applyBarrierReleases(isa.FrozenWarpCount, result)
+	// Release slots were validated before the all-or-error record commit; the
+	// remaining lifecycle assignments cannot fail.
+	return nil
+}
+
+// Barrier returns a detached canonical barrier observation.
+func (c *Core) Barrier(key BarrierKey) (BarrierSnapshot, error) {
+	if err := c.validate(); err != nil {
+		return BarrierSnapshot{}, err
+	}
+	if c.barriers == nil {
+		return BarrierSnapshot{}, fmt.Errorf("core: no barrier coordinator is attached")
+	}
+	return c.barriers.Snapshot(key)
 }
 
 func validateWarpSpawnEffect(sourceID uint8, spawn isa.WarpSpawnEffect) error {
@@ -564,13 +916,23 @@ func completeDeferredResult(owner *state.WarpState, result *warp.Result) {
 	result.NextDivergencePointer = snapshot.DivergenceWritePointer()
 }
 
-func (c *Core) stepResult(selectedID uint8, lifecycle WarpLifecycle, blockReason BlockReason, result warp.Result) StepResult {
+func (c *Core) stepResult(selectedID uint8, lifecycle WarpLifecycle, blockReason BlockReason, result warp.Result, barrier *BarrierTransition) StepResult {
 	selected := &c.slots[selectedID]
-	return StepResult{
+	step := StepResult{
 		Outcome: StepExecuted, WarpID: selectedID,
 		Lifecycle: lifecycle, PreviousBlockReason: blockReason, WarpResult: result,
 		NextLifecycle: selected.lifecycle, BlockReason: selected.blockReason,
+		Barrier: barrier,
 	}
+	if c.ctas != nil {
+		if view, err := c.ctas.ViewForWarp(selectedID); err == nil {
+			step.CTAValid, step.CTAID = true, view.ID
+			if completion, completionErr := c.CTACompletion(view.ID); completionErr == nil {
+				step.CTACompletion = &completion
+			}
+		}
+	}
+	return step
 }
 
 func (c *Core) slotFor(warpID uint8) (*slot, error) {
@@ -589,12 +951,18 @@ func (c *Core) snapshotSlot(warpID uint8) (SlotSnapshot, error) {
 	if err != nil {
 		return SlotSnapshot{}, err
 	}
-	return SlotSnapshot{
+	result := SlotSnapshot{
 		WarpID: warpID, Lifecycle: selected.lifecycle,
 		BlockReason: selected.blockReason, Participated: selected.participated,
 		ArchitecturalState:    architectural.Lifecycle(),
 		ArchitecturalLaneMask: architectural.ActiveMask(),
-	}, nil
+		BarrierDraining:       selected.barrierDrain,
+	}
+	if selected.barrierWait {
+		key := selected.barrierKey
+		result.BarrierKey = &key
+	}
+	return result, nil
 }
 
 func (c *Core) validate() error {
@@ -604,6 +972,32 @@ func (c *Core) validate() error {
 	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
 		if err := c.validateSlot(id); err != nil {
 			return err
+		}
+	}
+	if c.ctas != nil {
+		if err := c.validateCTAMemoryRoutes(c.ctas); err != nil {
+			return err
+		}
+		if c.barriers == nil || c.barriers.ctas != c.ctas {
+			return fmt.Errorf("core: CTA and barrier canonical owners are not bound")
+		}
+	} else if c.barriers != nil {
+		return fmt.Errorf("core: barrier coordinator has no CTA owner")
+	}
+	return nil
+}
+
+func (c *Core) validateCTAMemoryRoutes(manager *CTAManager) error {
+	for id := uint8(0); id < isa.FrozenWarpCount; id++ {
+		if !manager.HasWarp(id) {
+			continue
+		}
+		route, ok := c.slots[id].executor.DataMemoryService().(*CTAMemory)
+		if !ok || route == nil {
+			return fmt.Errorf("core: CTA member warp %d has no CTA memory route", id)
+		}
+		if route.warpID != id || route.manager != manager {
+			return fmt.Errorf("core: CTA member warp %d memory route references a different warp or CTA manager", id)
 		}
 	}
 	return nil
@@ -620,6 +1014,24 @@ func (c *Core) validateSlot(warpID uint8) error {
 	}
 	if snapshot.WarpID() != warpID {
 		return fmt.Errorf("core: slot %d references canonical warp %d", warpID, snapshot.WarpID())
+	}
+	if c.ctas != nil && selected.participated && !c.ctas.HasWarp(warpID) {
+		return fmt.Errorf("core: participated warp %d has no CTA membership", warpID)
+	}
+	if selected.blockReason != BlockBarrier && (selected.barrierWait || selected.barrierDrain || selected.barrierKey != (BarrierKey{})) {
+		return fmt.Errorf("core: warp %d retains barrier metadata outside a barrier block", warpID)
+	}
+	if selected.barrierWait && selected.barrierDrain {
+		return fmt.Errorf("core: warp %d cannot wait on a record while draining LSU", warpID)
+	}
+	if selected.barrierWait {
+		if c.barriers == nil {
+			return fmt.Errorf("core: warp %d waits without a barrier coordinator", warpID)
+		}
+		record, err := c.barriers.Snapshot(selected.barrierKey)
+		if err != nil || !record.Waiters.Active(warpID) {
+			return fmt.Errorf("core: warp %d scheduler wait is absent from canonical barrier record", warpID)
+		}
 	}
 	switch selected.lifecycle {
 	case WarpInactive:

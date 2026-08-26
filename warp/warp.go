@@ -153,6 +153,9 @@ func New(owner *state.WarpState, instructions InstructionSource) (*Warp, error) 
 	}
 	w := &Warp{state: owner, instructions: instructions}
 	if memory, ok := instructions.(MemoryService); ok {
+		if err := validateBoundMemory(owner, memory); err != nil {
+			return nil, err
+		}
 		w.memory = memory
 	}
 	return w, nil
@@ -171,6 +174,40 @@ func NewWithMemory(owner *state.WarpState, memory MemoryService) (*Warp, error) 
 	return w, nil
 }
 
+// NewWithServices keeps instruction fetch on its canonical source while data
+// accesses use a separately routed byte owner. This is required for CTA LMEM:
+// the fixed high-address data window is selected with warp/CTA membership,
+// while program bytes remain in the global instruction source.
+func NewWithServices(owner *state.WarpState, instructions InstructionSource, memory MemoryService) (*Warp, error) {
+	if memory == nil {
+		return nil, fmt.Errorf("warp: nil memory service")
+	}
+	w, err := New(owner, instructions)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateBoundMemory(owner, memory); err != nil {
+		return nil, err
+	}
+	w.memory = memory
+	return w, nil
+}
+
+func validateBoundMemory(owner *state.WarpState, memory MemoryService) error {
+	bound, ok := memory.(interface{ BoundWarpID() uint8 })
+	if !ok {
+		return nil
+	}
+	snapshot, err := owner.Snapshot()
+	if err != nil {
+		return err
+	}
+	if bound.BoundWarpID() != snapshot.WarpID() {
+		return fmt.Errorf("warp: memory is bound to warp %d, canonical owner is warp %d", bound.BoundWarpID(), snapshot.WarpID())
+	}
+	return nil
+}
+
 // CanonicalState returns the architectural owner referenced by this executor.
 // It exists so an upper-level Core can validate slot identity and lifecycle
 // without copying PC, registers, masks, CSRs, or divergence state. Callers
@@ -180,6 +217,16 @@ func (w *Warp) CanonicalState() *state.WarpState {
 		return nil
 	}
 	return w.state
+}
+
+// DataMemoryService returns the configured data-byte routing boundary so an
+// upper-level owner can validate stable scope association. The service remains
+// the byte owner/router itself; Warp exposes no memory bytes or mutable copy.
+func (w *Warp) DataMemoryService() MemoryService {
+	if w == nil {
+		return nil
+	}
+	return w.memory
 }
 
 // Step executes one four-lane SIMT instruction through the existing
