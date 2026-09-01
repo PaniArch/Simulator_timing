@@ -7,11 +7,12 @@ experiments. It is derived directly from T7 Finish commit
 - `isa/` and `support/` are shared functional layers.
 - `emu/` contains the unchanged T7 functional execution chain and its
   architecture contract.
+- `Vortex_rtl/` contains the bundled frozen RTL reference snapshot.
 - `timing/` is an empty development boundary for future Harness work.
 - Akita v5.0.0-beta.10 is pinned in `vendor/` for offline use.
 
-No Vortex timing model, MGPUSim dependency, SimX reference, or native Vortex
-runtime integration is included in this baseline.
+The baseline contains no Vortex timing model, cycle parameters, or later host
+integration code.
 
 Run `./scripts/verify-all.sh` for the complete functional and empty-cache
 offline gate.

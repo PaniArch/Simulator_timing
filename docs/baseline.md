@@ -7,8 +7,8 @@
 - Parent message: `feat(t7): finish kernel functional execution`
 - Branch: `cycle-baseline`
 
-The parent is the T7 functional finish before native Vortex runtime
-integration. The baseline does not use later `main` implementation changes.
+The parent is the standalone T7 functional finish. The baseline does not use
+later `main` implementation changes.
 
 ## Pre-migration reference
 
@@ -42,6 +42,13 @@ The migration only moves `state/`, `warp/`, `core/`, and `device/` under
 contract under `emu/docs/`, and reorganizes validation/documentation paths.
 It does not change ISA, State, Warp, Core, CTA, Barrier, memory, or Kernel
 behavior.
+
+The frozen RTL reference is bundled under the repository-root `Vortex_rtl/`
+directory. It is derived from source commit
+`85a88fe250b0da483cb33ed34126d675ecb93c1c`; all RTL, configuration, and helper
+source contents remain unchanged. Only its README is localized for this
+repository and the corresponding manifest entry is updated. Nested Git metadata
+is excluded so the parent repository tracks the actual snapshot contents.
 
 Akita v5.0.0-beta.10 is the only new direct framework dependency. It is used by
 an isolated dependency availability test and does not define Vortex timing

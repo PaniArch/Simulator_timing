@@ -29,7 +29,7 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 
 ### 3.1 唯一语义参考范围
 
-`FROZEN`：模拟器语义分析的唯一外部参考是只读目录 `Vortex_rtl` 内的配置、生成头文件和 RTL。具体基线为：
+`FROZEN`：模拟器语义分析的唯一 RTL reference 是仓库内只读目录 `Vortex_rtl` 中的配置、生成头文件和 RTL。具体基线为：
 
 - `Vortex_rtl/README.md` 声明该输入包来自上游快照 `e2b9745b637ce8ac462be2f0e01b5d76542dc6c0`，并明确冻结配置使用 `XLEN=32`。
 - 配置源为 `Vortex_rtl/VX_config.toml` 与 `Vortex_rtl/VX_types.toml`；生成结果以 `Vortex_rtl/hw/VX_config.vh` 和 `Vortex_rtl/hw/VX_types.vh` 交叉核对。
@@ -255,7 +255,7 @@ T0 只建立契约和证据基线，不实现 ISA、State、Warp、SIMT、schedu
 
 `FROZEN` 公开 API 审计解析所有非测试 `isa/*.go`，要求生产 package 只暴露 catalog/CSR catalog、严格 decode、四类单指令 evaluator 及 integer/float/packed-memory completion；不允许 `init` side effect、额外 orchestration operation 或 ISA 外依赖。package-level variables 只能存在于 `catalog.go`/`csr_catalog.go` 的不可导出 manifests；不得定义 canonical `State`/`Machine`/`Device`/`Core`/`Warp`/`Scheduler`/`Executor`/`Kernel`/`Cache`/`MMU` owner，也不得出现 fetch loop、`Warp.Step`、schedule/dispatch/launch/tick API。因此 ISA package 只消费调用方提供的 immutable views，不跨指令拥有 PC、GPR/FPR、CSR、memory、warp、barrier 或 CTA 状态。
 
-最终离线证据为 `TestCatalogDecodeEvaluatorVectorCoverageGate`、`TestFinalIllegalEncodingClassGate`、`TestISAPublicSurfaceIsStatelessAndSingleInstruction` 与所有既有 functional tests，并统一由 `scripts/verify-emu.sh` 执行 build/test/vet/gofmt/diff 门禁。外部 `Vortex_rtl` 仅经只读审计，最终检查时 worktree clean，HEAD 为 `85a88fe250b0da483cb33ed34126d675ecb93c1c`；交付从未向该路径写入。上述结论只闭合 T1 ISA 单指令层，canonical owner apply、Warp/Barrier/CTA 协调、memory scope、counter progression 与 checker/ABI 仍按第 10 节保持 `UNRESOLVED`。
+最终离线证据为 `TestCatalogDecodeEvaluatorVectorCoverageGate`、`TestFinalIllegalEncodingClassGate`、`TestISAPublicSurfaceIsStatelessAndSingleInstruction` 与所有既有 functional tests，并统一由 `scripts/verify-emu.sh` 执行 build/test/vet/gofmt/diff 门禁。仓库内 `Vortex_rtl` snapshot 仅作只读审计，来源提交为 `85a88fe250b0da483cb33ed34126d675ecb93c1c`。上述结论只闭合 T1 ISA 单指令层，canonical owner apply、Warp/Barrier/CTA 协调、memory scope、counter progression 与 checker/ABI 仍按第 10 节保持 `UNRESOLVED`。
 
 ### 5.8 T2 canonical State 与只读 ISA View 实证
 
@@ -553,7 +553,7 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 | U-WSPAWN-01 / target 与 copy boundary | 冻结 target=`i<count && i!=wid`、PC、lane0 mask、single-active-warp apply条件及仅 mscratch copy；不创建/schedule warp且不猜 GPR/FPR/CTA context。 | `VX_wctl_unit.sv`、`VX_scheduler.sv`；`WarpSpawnEffect`。 | count 0/1/4/7、current-warp suppression、PC与 mscratch tests。 | T1 milestone `05-vortex-custom` |
 | U-WSYNC-01 / 单指令 drain boundary | WSYNC消费显式 pending predicate并返回 typed wait/drain/release，不保存 pending pipeline/cycles；visibility policy继续保留。 | `VX_wctl_unit.sv`、`VX_scheduler.sv`；`WarpDrainEffect`。 | pending与drained两种 view tests。 | T1 milestone `05-vortex-custom` |
 | U-BAR-01 / 单指令 request boundary | sync/async arrive/wait、expect-event、phase result与 LSU drain effect已闭合；expect_tx 强制 phase=1 并将零 count 解释为 32，barrier record、CTA namespace与release coordination继续保留。 | `VX_wctl_unit.sv`、`VX_bar_unit.sv`；`BarrierEffect`。 | sync/arrive/wait/expect_tx（含零值与偶数 count）及 phase/write-mask tests。 | T1 milestone `05-vortex-custom` |
-| T1 ISA / 最终 coverage-contract | 105 条 frozen-enabled catalog entry、decode、四类 functional evaluator 与独立登记 vector 一一对应；公开 API 保持无长期状态和单指令边界，未来 canonical owners 与执行协调未被伪装闭合。 | `isa/catalog.go`、`isa/coverage_test.go`、`isa/contract_test.go` 及四类 evaluator/effect 实现。 | 三项最终 gate、全部逐指令 functional tests、`scripts/verify-emu.sh`；外部 RTL worktree 只读且 clean。 | T1 milestone `06-coverage-contract` |
+| T1 ISA / 最终 coverage-contract | 105 条 frozen-enabled catalog entry、decode、四类 functional evaluator 与独立登记 vector 一一对应；公开 API 保持无长期状态和单指令边界，未来 canonical owners 与执行协调未被伪装闭合。 | `isa/catalog.go`、`isa/coverage_test.go`、`isa/contract_test.go` 及四类 evaluator/effect 实现。 | 三项最终 gate、全部逐指令 functional tests、`scripts/verify-emu.sh`；仓库内 RTL snapshot 只读。 | T1 milestone `06-coverage-contract` |
 | T2 State/View / canonical ownership | Lane GPR/FPR、warp PC/mask/lifecycle、FCSR/trap CSR/saved mask 与三行 IPDOM stack 已由一个 `WarpState` 长期持有；四类 T1 input 来自 detached snapshot，非 T2 owner context 只按次复制。effect apply/route 另行闭合。 | `VX_gpu_pkg.sv:80-81`、`VX_ipdom_stack.sv`、`VX_scheduler.sv:53-64,245-255,311-398`、`VX_csr_data.sv:91-135`；`emu/state/state.go`、`emu/state/view.go`。 | `emu/state/state_test.go` 覆盖初始化拒绝、namespace/x0/inactive lane、PC/mask/CSR/FCSR、divergence、snapshot/context alias isolation；`scripts/verify-emu.sh`。 | T2 milestone `01-canonical-state-views` |
 | T2 effect apply / 本地原子边界 | T1 Lane/Warp bundle 在 detached candidate 上完整预校验；本地状态一次提交，FFLAGS/软件 FCSR 按 RTL 顺序仲裁；future owner effects 保真转交并在外部成功前门控本地 commit，stale stage 不可提交。异步 trap/reset priority 仍留在 U-CSR-01。 | `VX_csr_data.sv:107-120`、`VX_scheduler.sv:245-255,358-398`、`VX_ipdom_stack.sv:39-95`；`emu/state/apply.go`。 | `emu/state/apply_test.go` 覆盖 GPR/FPR+PC、CSR/flags、TMC/PRED、SPLIT/JOIN、trap、x0/inactive/WGATHER、失败回滚、全类 forwarding/external gate/stale stage；`scripts/verify-emu.sh`。 | T2 milestone `02-atomic-effect-apply` |
 | U-CSR-01 / T2 synchronous State integration | canonical FCSR、T1 可写 warp CSR、saved mask 与 PC 已接入无状态 System/RV32F evaluator；CSR RMW、sticky FFLAGS、synchronous trap entry 与 xRET 可跨独立单指令调用持续并原子提交。异步 fault/RTU 仲裁及 reset/launch policy仍保留在 U-CSR-01。 | E-CSR-01；`emu/state/state.go`、`emu/state/view.go`、`emu/state/apply.go`、`emu/state/integration.go`。 | `TestExecuteSingleRV32FUpdatesFPRFlagsAndPC`、`TestExecuteSingleCSRRMWTrapEntryAndReturn`、fault completion rollback；`scripts/verify-emu.sh`。 | T2 milestone `03-isa-state-integration-contract` |
@@ -599,7 +599,7 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 - 唯一 canonical owner 原则在第 4.2 节；control/effect 只能经第 5 节边界交给 owner，不允许反向依赖、全局后门或第二可写真值。
 - 维护协议在第 1、13 节；后续任务开始前读取、结束后与代码同步更新。
 - 第 5.1、8.2 节明确不预定 Go concrete types、transaction/rollback/commit 算法、调度策略或微架构行为，满足无过度设计要求。
-- 原始 T0 基线交付仅修改本文件；T1–T5依次新增无状态ISA、canonical Warp State/apply、fetch/memory Run、四lane SIMT与Multi-Warp Core。T6新增canonical CTA/LMEM/barrier/completion；T7当前新增runtime-independent LaunchState、KMU walker、dynamic cluster admission/reclaim、Warp/LMEM reuse、同一caller backing上的完整Kernel functional Run/result/trace、可续跑session及真实startup/entry E2E。仍未冻结任意未初始化ABI、host runtime/CP/`vx_*`/vxbin与command/completion handshake、multi-Core/global barrier、fault teardown、冲突memory ordering及cache/DRAM/MMU/scoreboard/pipeline/cycle/timing/performance model。外部`Vortex_rtl`始终作为只读输入，不属于交付内容。
+- 原始 T0 基线交付仅修改本文件；T1–T5依次新增无状态ISA、canonical Warp State/apply、fetch/memory Run、四lane SIMT与Multi-Warp Core。T6新增canonical CTA/LMEM/barrier/completion；T7当前新增runtime-independent LaunchState、KMU walker、dynamic cluster admission/reclaim、Warp/LMEM reuse、同一caller backing上的完整Kernel functional Run/result/trace、可续跑session及真实startup/entry E2E。仍未冻结任意未初始化ABI、host runtime/CP/`vx_*`/vxbin与command/completion handshake、multi-Core/global barrier、fault teardown、冲突memory ordering及cache/DRAM/MMU/scoreboard/pipeline/cycle/timing/performance model。仓库内`Vortex_rtl`始终作为只读证据输入。
 
 ## 13. 维护检查单
 

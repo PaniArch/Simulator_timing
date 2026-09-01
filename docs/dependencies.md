@@ -41,7 +41,6 @@ needed.
 | --- | --- | --- | --- | --- |
 | `github.com/pelletier/go-toml/v2` | v2.4.3 | config | APPROVED / NOT YET REQUIRED | Parse Vortex TOML without a custom parser |
 | `github.com/google/go-cmp/cmp` | v0.7.0 | test only | APPROVED / NOT YET REQUIRED | Deterministic comparison of complex state |
-| MGPUSim v5 | future v5 adapter version | adapter only | NOT INSTALLED | Optional future integration |
 
 Akita v5 is required only by `internal/dependencycheck`, which compiles and runs
 an empty serial engine as an availability smoke test. `go mod tidy` and
@@ -52,9 +51,8 @@ by `isa/`, `support/`, or `emu/`.
 - go.mod sum: `h1:lpv/tSeBBx1W80ihELOsinlVKnYNrdPBisHG66SAuZI=`
 - vendored packages: `hooking`, `internal/codec`, and `timing`
 
-MGPUSim is not present in `go.mod`, `go.sum`, or `vendor/`. It may be consulted
-only as an architecture-organization reference in later separately scoped
-work; it is not a baseline code dependency.
+No additional GPU simulation framework is present in `go.mod`, `go.sum`, or
+`vendor/`. Later dependency changes require a separately scoped support update.
 
 ## Policy
 
@@ -69,5 +67,5 @@ work; it is not a baseline code dependency.
   `encoding/binary`, `log/slog`, `math/big`, and `testing`.
 - Do not add another floating-point library unless a later architecture task
   proves a capability gap in the pinned SoftFloat interface.
-- Functional `isa/`, `support/`, and `emu/` packages must not depend on Akita or
-  MGPUSim. Future Akita use belongs under the separately developed timing layer.
+- Functional `isa/`, `support/`, and `emu/` packages must not depend on Akita.
+  Future Akita use belongs under the separately developed timing layer.
