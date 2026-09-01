@@ -35,7 +35,7 @@ read-only archive in place; they do not copy, extract, or rebuild it.
 Every development shell starts with:
 
 ```bash
-cd /absolute/path/to/Simulator_v0
+cd /absolute/path/to/Simulator_dev1
 source env/env.sh
 ```
 
@@ -60,15 +60,15 @@ gcc --version
 g++ --version
 ```
 
-Then run the only complete validation entry point:
+Validate the functional emulator with:
 
 ```bash
-./scripts/verify.sh
+./scripts/verify-emu.sh
 ```
 
-It validates toolchain paths and versions, checks the frozen SoftFloat archive,
-then runs module verification, build, tests, vet, gofmt, and Git whitespace
-checks.
+Use `./scripts/verify-all.sh` for the complete functional and empty-cache
+offline baseline gate. Both entry points validate the frozen environment before
+building.
 
 ## Cache, vendor, and recovery
 
@@ -78,7 +78,8 @@ library in the read-only pinned environment capsule without network access or
 writes to another Vortex source tree. Go dependencies remain offline with `GOPROXY=off`,
 `GOTOOLCHAIN=local`, and `-mod=vendor`.
 
-There is currently no third-party Go module import, so `go.sum` is empty and
-`vendor/README.md` records the empty Go vendor set. The SoftFloat archive is
-part of the ignored, repository-local environment capsule rather than a
-per-turn cache. Dependency versions are never reselected during recovery.
+Akita v5.0.0-beta.10 and every package required by the baseline smoke test are
+committed under `vendor/`; `vendor/modules.txt` records the exact module. The
+SoftFloat archive remains part of the ignored, repository-local environment
+capsule rather than the Go vendor tree. Dependency versions are never
+reselected during recovery.

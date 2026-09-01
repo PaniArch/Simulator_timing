@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This file is the single supported environment entry point for Simulator_v0.
+# This file is the single supported environment entry point for Simulator_dev1.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     echo "error: source this file: source env/env.sh" >&2
     exit 1

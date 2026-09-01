@@ -4,9 +4,10 @@
 
 | Dependency | Version | Scope | Status | Reason |
 | --- | --- | --- | --- | --- |
-| Go | 1.26.2 | toolchain | FROZEN | Simulator and future Akita/MGPUSim compatibility |
+| Go | 1.26.2 | toolchain | FROZEN | Functional emulator and cycle-support baseline |
 | GCC/G++ | 9.4.0 | cgo/build | FROZEN ON HOST | Compile the cgo bridge against the pinned SoftFloat archive |
 | Berkeley SoftFloat | Release 3e, commit `b51ef8f3201669b2288104c28546fc72532a1ea4` | floating-point mathematics | USED | Deterministic F32 operations, rounding modes, and exception flags |
+| Akita | v5.0.0-beta.10 | future timing framework | FROZEN / VENDORED | Offline framework baseline; no Vortex timing behavior yet |
 
 SoftFloat is deployed once in the repository-owned, ignored environment capsule
 `.harness-environment/v1/softfloat` and mounted read-only by Harness at
@@ -40,18 +41,20 @@ needed.
 | --- | --- | --- | --- | --- |
 | `github.com/pelletier/go-toml/v2` | v2.4.3 | config | APPROVED / NOT YET REQUIRED | Parse Vortex TOML without a custom parser |
 | `github.com/google/go-cmp/cmp` | v0.7.0 | test only | APPROVED / NOT YET REQUIRED | Deterministic comparison of complex state |
-| Akita v5 | v5.0.0-beta.10 | adapter only | NOT INSTALLED | Optional future integration |
 | MGPUSim v5 | future v5 adapter version | adapter only | NOT INSTALLED | Optional future integration |
 
-There is no fake import or unused `require` directive for approved packages.
-When a real import appears, add only the approved exact version and regenerate
-`go.mod`, `go.sum`, and `vendor/`.
+Akita v5 is required only by `internal/dependencycheck`, which compiles and runs
+an empty serial engine as an availability smoke test. `go mod tidy` and
+`go mod vendor` selected and copied its required packages; no Akita API is used
+by `isa/`, `support/`, or `emu/`.
 
-MGPUSim v5 uses module `github.com/sarchlab/mgpusim/v5` and requires Go 1.26.0
-or newer. Akita v5 uses `github.com/sarchlab/akita/v5`; the compatible baseline
-is v5.0.0-beta.10, requiring Go 1.26.0 or newer and preferring Go 1.26.2. Neither
-module nor its transitive graph belongs in the simulator core. A future adapter
-must remain a separate integration layer.
+- module sum: `h1:eaVg8DYN0LDrCeh5WkLRcXP2UjGRJarl09N+xgTmARA=`
+- go.mod sum: `h1:lpv/tSeBBx1W80ihELOsinlVKnYNrdPBisHG66SAuZI=`
+- vendored packages: `hooking`, `internal/codec`, and `timing`
+
+MGPUSim is not present in `go.mod`, `go.sum`, or `vendor/`. It may be consulted
+only as an architecture-organization reference in later separately scoped
+work; it is not a baseline code dependency.
 
 ## Policy
 
@@ -66,5 +69,5 @@ must remain a separate integration layer.
   `encoding/binary`, `log/slog`, `math/big`, and `testing`.
 - Do not add another floating-point library unless a later architecture task
   proves a capability gap in the pinned SoftFloat interface.
-- Core support and future core simulator packages must not depend on Akita or
-  MGPUSim merely in anticipation of integration.
+- Functional `isa/`, `support/`, and `emu/` packages must not depend on Akita or
+  MGPUSim. Future Akita use belongs under the separately developed timing layer.
