@@ -31,9 +31,7 @@ does not decode or implement a RISC-V instruction. Berkeley SoftFloat stores its
 control and flag state globally in this build, so the Go wrapper serializes calls
 to keep concurrent users deterministic.
 
-The functional memory, ELF32 loader, and logging packages use only the Go
-standard library. The ELF loader uses `debug/elf`; no external ELF package is
-needed.
+The functional memory package uses only the Go standard library.
 
 ## Approved but not currently required
 

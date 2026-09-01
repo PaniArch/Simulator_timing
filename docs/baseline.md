@@ -5,7 +5,7 @@
 - Repository: `PaniArch/Simulator_dev`
 - Parent: `9f578ecb9079920cc810bd7cbc15c008ac5f4f58`
 - Parent message: `feat(t7): finish kernel functional execution`
-- Branch: `cycle-baseline`
+- Branch: `main` (baseline preparation branch originally named `cycle-baseline`)
 
 The parent is the standalone T7 functional finish. The baseline does not use
 later `main` implementation changes.

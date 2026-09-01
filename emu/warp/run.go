@@ -78,8 +78,8 @@ type TraceSink interface {
 	Trace(record TraceRecord)
 }
 
-// TraceFunc adapts a function to TraceSink and is convenient for slog or the
-// repository's support/logging package at an application boundary.
+// TraceFunc adapts a function to TraceSink and is convenient for an application
+// logger at the integration boundary.
 type TraceFunc func(record TraceRecord)
 
 func (f TraceFunc) Trace(record TraceRecord) {
