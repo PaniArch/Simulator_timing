@@ -1,0 +1,5120 @@
+schema_version: 1
+id: timing-baseline
+status: PROVISIONAL
+scope: Static frozen-source structure; no executable cycle model
+units:
+  capacity: entries at the named scope; not added across aliases
+  data_bytes: bytes of data per physical transfer, excluding metadata
+  width_bits: bits
+  latency_cycles: rising core-clock edges between explicitly named boundaries
+  interval_cycles: minimum acceptance interval only under stated conditions
+  rtl_parameters: verbatim or evaluated instance parameters, not end-to-end timing
+  null: unknown or intentionally unassigned; never zero
+sources:
+  bundle:
+    path: Vortex_rtl/README.md
+    locator: frozen XLEN and revisions; excluded backends
+  config:
+    path: Vortex_rtl/VX_config.toml
+    locator: platform/isa/pipeline/alu/sfu/lsu/fpu/l1cache/lmem/toolchain
+  header:
+    path: Vortex_rtl/hw/VX_config.vh
+    locator: VX_CFG macros and conditional guards
+  types:
+    path: Vortex_rtl/VX_types.toml
+    locator: memmap/dcr_kmu and XLEN builtin
+  types-header:
+    path: Vortex_rtl/hw/VX_types.vh
+    locator: VX_MEM_LMEM_BASE_ADDR; VX_DCR_KMU_*
+  define:
+    path: Vortex_rtl/hw/rtl/VX_define.vh
+    locator: L1_ENABLE; EXT_GFX_ANY_ENABLED; includes
+  platform:
+    path: Vortex_rtl/hw/rtl/VX_platform.vh
+    locator: TO_OUT_BUF_SIZE/REG; LATENCY_IMUL; BUFFER
+  pkg:
+    path: Vortex_rtl/hw/rtl/VX_gpu_pkg.sv
+    locator: NUM_EX_UNITS; UOP_MAX; DCACHE_NUM_REQS; LSU_QUEUE_OUT_SIZE; REG_TYPES
+  top:
+    path: Vortex_rtl/hw/rtl/Vortex.sv
+    locator: VX_cluster; l3cache; kmu; busy
+  cluster:
+    path: Vortex_rtl/hw/rtl/VX_cluster.sv
+    locator: VX_socket; l2cache PASSTHRU
+  socket:
+    path: Vortex_rtl/hw/rtl/VX_socket.sv
+    locator: icache/dcache; g_mem_bus_if; VX_core
+  core:
+    path: Vortex_rtl/hw/rtl/core/VX_core.sv
+    locator: scheduler/fetch/decode/issue/execute/commit; lsu_scheduler; mem_unit; icache_flush
+  schedule:
+    path: Vortex_rtl/hw/rtl/core/VX_scheduler.sv
+    locator: out_buf; wid_select; warp_pcs; ibuf_full; warp_pending; cta_dispatcher
+  fetch:
+    path: Vortex_rtl/hw/rtl/core/VX_fetch.sv
+    locator: tag_store; req_buf; !VX_CFG_EXT_C_ENABLE
+  decode:
+    path: Vortex_rtl/hw/rtl/core/VX_decode.sv
+    locator: req_buf SIZE=0; decode_sched_valid_r; is_wstall
+  issue:
+    path: Vortex_rtl/hw/rtl/core/VX_issue.sv
+    locator: issue_slice; issue_sched_if; dispatch transpose
+  issue-slice:
+    path: Vortex_rtl/hw/rtl/core/VX_issue_slice.sv
+    locator: ibuffer; scoreboard; operands; dispatcher
+  ibuffer:
+    path: Vortex_rtl/hw/rtl/core/VX_ibuffer.sv
+    locator: g_bufs.instr_buf; g_uop; ibuf_pop
+  uop:
+    path: Vortex_rtl/hw/rtl/core/VX_uop_sequencer.sv
+    locator: uop_active/uop_ctr/uop_data; uop_packld
+  packld:
+    path: Vortex_rtl/hw/rtl/core/VX_uop_packld.sv
+    locator: uop_count; bytesel; op_args.lsu.offset
+  scoreboard:
+    path: Vortex_rtl/hw/rtl/core/VX_scoreboard.sv
+    locator: stanging_buf; out_buf; out_arb; inuse_regs_n; fu_pending
+  operands:
+    path: Vortex_rtl/hw/rtl/core/VX_operands.sv
+    locator: opc_unit; output_arb
+  opc:
+    path: Vortex_rtl/hw/rtl/core/VX_opc_unit.sv
+    locator: req_xbar; pipe_reg1/pipe_reg2; gpr_ram; out_buf
+  dispatch:
+    path: Vortex_rtl/hw/rtl/core/VX_dispatcher.sv
+    locator: g_buffers.buffer; fu_release
+  execute:
+    path: Vortex_rtl/hw/rtl/core/VX_execute.sv
+    locator: alu_unit/lsu_unit/sfu_unit/fpu_unit enabled instances
+  alu:
+    path: Vortex_rtl/hw/rtl/core/VX_alu_unit.sv
+    locator: lane_dispatch; pe_switch; alu_int; muldiv_unit; lane_gather
+  integer:
+    path: Vortex_rtl/hw/rtl/core/VX_alu_int.sv
+    locator: rsp_buf; branch_ctl_if; br_enable
+  muldiv:
+    path: Vortex_rtl/hw/rtl/core/VX_alu_muldiv.sv
+    locator: VX_multiplier/VX_serial_mul; VX_serial_div; OUT_BUF
+  lsu:
+    path: Vortex_rtl/hw/rtl/core/VX_lsu_unit.sv
+    locator: lane_dispatch; lsu_slice; lane_gather
+  lsu-slice:
+    path: Vortex_rtl/hw/rtl/core/VX_lsu_slice.sv
+    locator: client_if; load/store buffers; arbiter; is_addr_local
+  lsu-scheduler:
+    path: Vortex_rtl/hw/rtl/core/VX_lsu_scheduler.sv
+    locator: NUM_CLIENTS; VX_mem_scheduler; empty=sched_req_queue_empty
+  mem-scheduler:
+    path: Vortex_rtl/hw/rtl/libs/VX_mem_scheduler.sv
+    locator: CORE_QUEUE_SIZE; tag pool; req_queue_empty; COALESCE_ENABLE
+  mem:
+    path: Vortex_rtl/hw/rtl/core/VX_mem_unit.sv
+    locator: VX_lmem_switch; VX_lsu_adapter; VX_local_mem; g_coalescing; VX_dcr_flush
+  lmem-switch:
+    path: Vortex_rtl/hw/rtl/mem/VX_lmem_switch.sv
+    locator: local_mask/global_mask; output buffers
+  local:
+    path: Vortex_rtl/hw/rtl/mem/VX_local_mem.sv
+    locator: NUM_BANKS; OUT_BUF; bank arbitration
+  coalescer:
+    path: Vortex_rtl/hw/rtl/libs/VX_mem_coalescer.sv
+    locator: QUEUE_SIZE; req/rsp masks; empty
+  adapter:
+    path: Vortex_rtl/hw/rtl/mem/VX_lsu_adapter.sv
+    locator: REQ_OUT_BUF/RSP_OUT_BUF; lane bus conversion
+  flush:
+    path: Vortex_rtl/hw/rtl/core/VX_dcr_flush.sv
+    locator: REQ_OUT_BUF; dcr_flush_if; injected request arbitration
+  fpu:
+    path: Vortex_rtl/hw/rtl/fpu/VX_fpu_unit.sv
+    locator: tag_store; backend ifdefs; fpu_csr_reg; rsp_buf
+  sfu:
+    path: Vortex_rtl/hw/rtl/core/VX_sfu_unit.sv
+    locator: PE_COUNT; lane_dispatch; pe_switch; wctl_unit; csr_unit; lane_gather
+  wctl:
+    path: Vortex_rtl/hw/rtl/core/VX_wctl_unit.sv
+    locator: wctl_reg; wsync_drain; bar_drain; result buffer
+  csr:
+    path: Vortex_rtl/hw/rtl/core/VX_csr_unit.sv
+    locator: csr_data; sched_csr_if; result buffer
+  csr-data:
+    path: Vortex_rtl/hw/rtl/core/VX_csr_data.sv
+    locator: fcsr_n; fpu_csr_if; sched_csr_if
+  commit:
+    path: Vortex_rtl/hw/rtl/core/VX_commit.sv
+    locator: commit_arb; writeback_if; committed_warp_mask_r
+  cta:
+    path: Vortex_rtl/hw/rtl/core/VX_cta_dispatch.sv
+    locator: cta_ctx_ram; cta_warp_ram; cta_fire; warp_done/cta_done
+  simt:
+    path: Vortex_rtl/hw/rtl/core/VX_split_join.sv
+    locator: VX_ipdom_stack; join_valid/join_pc/join_tmask
+  barrier:
+    path: Vortex_rtl/hw/rtl/core/VX_bar_unit.sv
+    locator: USE_GBAR; barrier_state_store; barrier_phase_store; unlock
+  kmu:
+    path: Vortex_rtl/hw/rtl/VX_kmu.sv
+    locator: running; kmu_bus_if; startup_addr; kernel_entry
+  elastic:
+    path: Vortex_rtl/hw/rtl/libs/VX_elastic_buffer.sv
+    locator: g_passthru/g_eb1/g_eb2/g_ebN
+  priority:
+    path: Vortex_rtl/hw/rtl/libs/VX_priority_encoder.sv
+    locator: REVERSE=0 LSB default
+  cache-wrap:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_wrap.sv
+    locator: PASSTHRU; cache_bypass; LATENCY
+  functional:
+    path: emu/docs/architecture.md
+    locator: sections 2/4/5/10/11; state/effect ownership and audits
+  lane-dispatch:
+    path: Vortex_rtl/hw/rtl/core/VX_lane_dispatch.sv
+    locator: OUT_BUF; NUM_PACKETS; out_buf
+  lane-gather:
+    path: Vortex_rtl/hw/rtl/core/VX_lane_gather.sv
+    locator: OUT_BUF; NUM_PACKETS; out_buf
+  stream-buffer:
+    path: Vortex_rtl/hw/rtl/libs/VX_stream_buffer.sv
+    locator: g_buffer; valid_out_r/valid_in_r; g_out_reg/g_no_out_reg
+  serial-div:
+    path: Vortex_rtl/hw/rtl/libs/VX_serial_div.sv
+    locator: cntr/busy_r/strobe
+  elastic-adapter:
+    path: Vortex_rtl/hw/rtl/libs/VX_elastic_adapter.sv
+    locator: loaded/push/pop
+  serializer:
+    path: Vortex_rtl/hw/rtl/libs/VX_pe_serializer.sv
+    locator: shift_reg; g_passthru; out_buf
+  fpu-std:
+    path: Vortex_rtl/hw/rtl/fpu/VX_fpu_std.sv
+    locator: g_fma/g_fdivsqrt/g_cvt/g_ncp; rsp_arb
+  fdivsqrt:
+    path: Vortex_rtl/hw/rtl/fpu/VX_fdivsqrt_unit.sv
+    locator: LATENCY; pipeline
+  fma-rtl:
+    path: Vortex_rtl/hw/rtl/fpu/VX_fma_unit_rtl.sv
+    locator: INI/MUL/ALN/ACC/NRM/RND_LATENCY
+  fcvt:
+    path: Vortex_rtl/hw/rtl/fpu/VX_fcvt_unit.sv
+    locator: LATENCY/OUT_REG/mask_pipe
+  fncp:
+    path: Vortex_rtl/hw/rtl/fpu/VX_fncp_unit.sv
+    locator: LATENCY/OUT_REG/mask_pipe
+  fifo:
+    path: Vortex_rtl/hw/rtl/libs/VX_fifo_queue.sv
+    locator: pending_size; head bypass; rd_ptr_n
+  pending:
+    path: Vortex_rtl/hw/rtl/libs/VX_pending_size.sv
+    locator: incr/decr/full/alm_full/alm_empty
+  pipe-buffer:
+    path: Vortex_rtl/hw/rtl/libs/VX_pipe_buffer.sv
+    locator: valid/ready registers
+  cache:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache.sv
+    locator: REQ_XBAR_BUF; MRSQ; bank instantiation; response xbar
+  cache-bank:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_bank.sv
+    locator: MREQ_QUEUE_SIZE; CRSQ_QUEUE_SIZE; input arbitration; core_rsp_queue
+  cache-mshr:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_mshr.sv
+    locator: allocate/finalize/dequeue
+  cache-cluster:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_cluster.sv
+    locator: cache_wrap instance; actual parameters
+  cache-bypass:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_bypass.sv
+    locator: NC selection and request/response buffering
+config:
+- id: cfg-baseline
+  status: FROZEN
+  evidence:
+  - bundle::revisions
+  - config::platform/isa/pipeline
+  - header::VX_CFG_*
+  - types-header::RV32
+  - core::instances
+  - execute::instances
+  condition: Bundled XLEN=32 dataset; no configuration-changing overrides. External build identity is u-build.
+  bundle_revision: 85a88fe250b0da483cb33ed34126d675ecb93c1c
+  vortex_revision: e2b9745b637ce8ac462be2f0e01b5d76542dc6c0
+  values:
+    xlen_bits: 32
+    flen_bits: 32
+    address_bits: 32
+    clusters: 1
+    cores_per_cluster: 1
+    socket_size: 1
+    sockets_per_cluster: 1
+    warps_per_core: 4
+    threads_per_warp: 4
+    simd_lanes: 4
+    issue_width: 1
+    operand_collectors_per_issue: 1
+    execution_class_indices:
+      ALU: 0
+      LSU: 1
+      SFU: 2
+      FPU: 3
+    enabled:
+    - I
+    - M
+    - F
+    - Zicond
+    - ICACHE
+    - DCACHE
+    - LMEM
+    disabled:
+    - D
+    - C
+    - A
+    - VM
+    - TCU
+    - DMA
+    - DXA
+    - TEX
+    - RASTER
+    - OM
+    - RTU
+    - L2
+    - L3
+  derivation: ISSUE_WIDTH=up(4/16)=1; NUM_OPCS=up(4/(4*1))=1; SIMD_COUNT=1; NUM_EX_UNITS=4. Integer division before
+    up.
+- id: cfg-memory
+  status: FROZEN
+  evidence:
+  - config::memory/l1cache/lmem
+  - header::VX_CFG_DCACHE_WORD_SIZE
+  - pkg::DCACHE_CHANNELS/DCACHE_NUM_REQS/LSU_QUEUE_OUT_SIZE
+  - socket::icache/dcache
+  - mem::g_coalescing
+  - types::memmap
+  - types-header::VX_MEM_LMEM_BASE_ADDR
+  values:
+    memory_block_bytes: 64
+    lsu_word_bytes: 4
+    lsu_line_bytes: 16
+    dcache_word_bytes: 8
+    dcache_channels: 2
+    l1_memory_ports: 2
+    local_base_address: '0xffff0000'
+    local_size_bytes: 16384
+    local_banks: 4
+    icache_instances: 1
+    dcache_instances: 1
+    icache_banks: 1
+    dcache_banks: 2
+    icache_size_bytes: 16384
+    dcache_size_bytes: 16384
+    icache_ways: 4
+    dcache_ways: 4
+    line_and_sector_bytes: 64
+    dcache_writeback: 1
+    replacement_enum_fifo: 1
+    lsu_queue_out_size: 8
+  derivation: DCACHE_WORD_SIZE=4*2^((clog2(4)+1)/2)=8; CHANNELS=16/8=2; banks=2; L1 ports=min(2,2); LSU_QUEUE_OUT_SIZE=max(8,16/4)=8.
+    Single core and disabled L2/L3 make D-cache write-back LLC.
+- id: cfg-fpu-conditional
+  status: FROZEN
+  evidence:
+  - config::fpu/toolchain
+  - header::VX_CFG_FPU_TYPE_*/VX_CFG_FMA_LATENCY
+  - fpu::backend_ifdefs
+  interpretation: Conditional source facts only; do not choose the external build backend from these defaults.
+  branches:
+  - condition: no backend override and no SYNTHESIS and no SV_DPI
+    backend: STD
+    fma_parameter_cycles: 8
+    fdiv_parameter_cycles: 17
+    fsqrt_parameter_cycles: 17
+  - condition: no backend override and no SYNTHESIS and SV_DPI
+    backend: DPI
+    fma_parameter_cycles: 8
+    fdiv_parameter_cycles: 15
+    fsqrt_parameter_cycles: 10
+  - condition: no backend override and SYNTHESIS and ASIC
+    backend: STD
+  - condition: no backend override and SYNTHESIS and not ASIC
+    backend: DSP
+    vendor_axes:
+    - VIVADO
+    - QUARTUS
+  - condition: explicit VX_CFG_FPU_TYPE_FPNEW
+    backend: FPNEW
+  selected_external_backend: null
+  unknown_ref: u-build
+nodes:
+- id: n-schedule
+  status: FROZEN
+  scope: core
+  role: Warp PC/mask/stall, fetch selection and pending accounting
+  evidence:
+  - schedule::out_buf; wid_select; warp_pcs; ibuf_full; warp_pending; cta_dispatcher
+- id: n-fetch
+  status: FROZEN
+  scope: core
+  role: Request buffering and per-warp response context
+  evidence:
+  - fetch::tag_store; req_buf; !VX_CFG_EXT_C_ENABLE
+- id: n-iflush
+  status: FROZEN
+  scope: core
+  role: Instruction cache flush injection; no-VM passthrough after wrapper
+  evidence:
+  - core::scheduler/fetch/decode/issue/execute/commit; lsu_scheduler; mem_unit; icache_flush
+- id: n-decode
+  status: FROZEN
+  scope: core
+  role: Combinational instruction decode and registered scheduler notification
+  evidence:
+  - decode::req_buf SIZE=0; decode_sched_valid_r; is_wstall
+- id: n-ibuffer
+  status: FROZEN
+  scope: issue slice 0
+  role: Per-warp architectural instruction FIFO
+  evidence:
+  - ibuffer::g_bufs.instr_buf; g_uop; ibuf_pop
+- id: n-uop
+  status: FROZEN
+  scope: per warp
+  role: Packed-load sequencer; ordinary instruction passthrough
+  evidence:
+  - uop::uop_active/uop_ctr/uop_data; uop_packld
+- id: n-scoreboard
+  status: FROZEN
+  scope: issue slice 0
+  role: Per-warp staging, GPR/FPR and xreg hazards, issue arbitration and FU credits
+  evidence:
+  - scoreboard::stanging_buf; out_buf; out_arb; inuse_regs_n; fu_pending
+- id: n-operands
+  status: FROZEN
+  scope: issue slice 0
+  role: One collector with bank arbitration, read pipeline and assembly
+  evidence:
+  - opc::req_xbar; pipe_reg1/pipe_reg2; gpr_ram; out_buf
+- id: n-dispatch
+  status: FROZEN
+  scope: issue slice 0
+  role: One queue per enabled execution class
+  evidence:
+  - dispatch::g_buffers.buffer; fu_release
+- id: n-alu
+  status: FROZEN
+  scope: execute
+  role: INT and MULDIV PEs, response merge, branch feedback
+  evidence:
+  - alu::lane_dispatch; pe_switch; alu_int; muldiv_unit; lane_gather
+- id: n-lsu
+  status: FROZEN
+  scope: execute
+  role: LSU lane dispatch/slice/gather, address and load/store completion
+  evidence:
+  - lsu::lane_dispatch; lsu_slice; lane_gather
+- id: n-sfu
+  status: FROZEN
+  scope: execute
+  role: WCTL and CSR PEs with shared result merge
+  evidence:
+  - sfu::PE_COUNT; lane_dispatch; pe_switch; wctl_unit; csr_unit; lane_gather
+- id: n-fpu
+  status: FROZEN
+  scope: execute
+  role: Header tag pool, conditional backend, FCSR feedback
+  evidence:
+  - fpu::tag_store; backend ifdefs; fpu_csr_reg; rsp_buf
+- id: n-commit
+  status: FROZEN
+  scope: core
+  role: Execution-result arbitration; ack-free writeback and registered scheduler notification
+  evidence:
+  - commit::commit_arb; writeback_if; committed_warp_mask_r
+- id: n-lsu-scheduler
+  status: FROZEN
+  scope: core, block 0
+  role: One LSU client; memory request queue and outstanding load response correlation
+  evidence:
+  - lsu-scheduler::NUM_CLIENTS; VX_mem_scheduler; empty=sched_req_queue_empty
+- id: n-lmem-switch
+  status: FROZEN
+  scope: mem unit
+  role: Split local/global lane masks, merge responses
+  evidence:
+  - lmem-switch::local_mask/global_mask; output buffers
+- id: n-local-adapter
+  status: FROZEN
+  scope: mem unit
+  role: Local vector-to-lane bus adapter
+  evidence:
+  - mem::VX_lmem_switch; VX_lsu_adapter; VX_local_mem; g_coalescing; VX_dcr_flush
+- id: n-local-memory
+  status: FROZEN
+  scope: mem unit
+  role: Banked shared local-memory storage
+  evidence:
+  - local::NUM_BANKS; OUT_BUF; bank arbitration
+- id: n-coalescer
+  status: FROZEN
+  scope: mem unit
+  role: Active word coalescing path; retains tags/masks for response expansion
+  evidence:
+  - mem::VX_lmem_switch; VX_lsu_adapter; VX_local_mem; g_coalescing; VX_dcr_flush
+- id: n-global-adapter
+  status: FROZEN
+  scope: mem unit
+  role: Coalesced vector to D-cache lane ports
+  evidence:
+  - mem::VX_lmem_switch; VX_lsu_adapter; VX_local_mem; g_coalescing; VX_dcr_flush
+- id: n-dflush
+  status: FROZEN
+  scope: mem unit
+  role: Per D-cache channel DCR flush injection
+  evidence:
+  - mem::VX_lmem_switch; VX_lsu_adapter; VX_local_mem; g_coalescing; VX_dcr_flush
+- id: n-icache
+  status: FROZEN
+  scope: socket 0
+  role: Read-only L1 cache instance
+  evidence:
+  - socket::icache/dcache; g_mem_bus_if; VX_core
+- id: n-dcache
+  status: FROZEN
+  scope: socket 0
+  role: Write-back L1 with non-cacheable bypass
+  evidence:
+  - socket::icache/dcache; g_mem_bus_if; VX_core
+- id: n-memory-fabric
+  status: FROZEN
+  scope: socket/cluster/top
+  role: I/D arbitration and disabled L2/L3 direct-passthrough wrappers; buffering only where actual inner parameters
+    retain it
+  evidence:
+  - cache-wrap::PASSTHRU; cache_bypass; LATENCY
+- id: n-cta
+  status: FROZEN
+  scope: scheduler
+  role: CTA context, warp allocation, dispatch and done aggregation
+  evidence:
+  - cta::cta_ctx_ram; cta_warp_ram; cta_fire; warp_done/cta_done
+- id: n-simt
+  status: FROZEN
+  scope: scheduler
+  role: Split/join and per-warp IPDOM storage
+  evidence:
+  - simt::VX_ipdom_stack; join_valid/join_pc/join_tmask
+- id: n-barrier
+  status: FROZEN
+  scope: scheduler
+  role: Local barrier state/phase and unlock feedback; USE_GBAR=false
+  evidence:
+  - barrier::USE_GBAR; barrier_state_store; barrier_phase_store; unlock
+  - schedule::bar_unit
+- id: n-kmu
+  status: FROZEN
+  scope: top
+  role: Hardware-visible launch fields and CTA requests
+  evidence:
+  - kmu::running; kmu_bus_if; startup_addr; kernel_entry
+- id: n-dcr
+  status: FROZEN
+  scope: core
+  role: DCR configuration and combined I/D flush control
+  evidence:
+  - core::scheduler/fetch/decode/issue/execute/commit; lsu_scheduler; mem_unit; icache_flush
+- id: n-external-memory
+  status: UNRESOLVED
+  scope: outside Vortex
+  role: External request/response service boundary
+  latency_cycles: null
+  unknown_ref: u-memory
+  evidence:
+  - top::mem_bus_if
+  - bundle::excluded platform inputs
+resources:
+- id: res-fetch-tags
+  node: n-fetch
+  status: FROZEN
+  evidence:
+  - fetch::tag_store
+  capacity: 4
+  capacity_unit: per-warp context entries
+  key: wid
+  note: Not a free-list allowing multiple contexts for one warp
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: per-warp context entries
+    start: icache_req_fire stores context for wid
+    end: context consumed on matching fetch response; overwritten only by next same-wid request, no allocator
+- id: res-ibuffer
+  node: n-ibuffer
+  status: FROZEN
+  evidence:
+  - ibuffer::g_bufs.instr_buf
+  instances: 4
+  capacity: 4
+  capacity_unit: instructions per warp
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: instructions per warp
+    start: decode_if.valid && decode_if.ready for this wid
+    end: ibuffer_tmp_if.valid && ibuffer_tmp_if.ready
+- id: res-uop
+  node: n-uop
+  status: FROZEN
+  evidence:
+  - uop::uop_active/uop_data
+  instances: 4
+  capacity: 1
+  capacity_unit: active burst per warp
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: active burst per warp
+    start: uop_start captures burst
+    end: uop_next && uop_done
+- id: res-hazards
+  node: n-scoreboard
+  status: FROZEN
+  evidence:
+  - scoreboard::inuse_regs/inuse_xregs; pkg::NUM_REGS/NUM_XREGS
+  instances: 4
+  register_busy_bits: 64
+  special_busy_bits: 2
+  note: Timing reservation bits, not a second architectural register file
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static state elements/ports as named
+    start: elaboration/reset or owner initialization
+    end: same instance lifetime; not a delay metric
+- id: res-credits
+  node: n-scoreboard
+  status: FROZEN
+  evidence:
+  - scoreboard::fu_pending; pkg::DISPATCH_QSIZE
+  instances: 4
+  capacity: 4
+  capacity_unit: outstanding issue credits per FU
+  note: Credits include operand collection; guard-band alm_full suppresses issue; not another queue
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: outstanding issue credits per FU
+    start: scoreboard.issue_fire selecting FU
+    end: dispatch_if[FU].valid && ready
+- id: res-register-banks
+  node: n-operands
+  status: FROZEN
+  evidence:
+  - opc::BANK_SIZE/BANK_DATA_WIDTH/gpr_ram
+  banks: 4
+  entries_per_bank: 64
+  data_width_bits: 128
+  read_ports_per_bank: 1
+  write_ports_per_bank: 1
+  source_requests: 3
+  bank_selector: low 2 bits of register ID
+  note: 64 registers * 4 warps / 4 banks; four lane values per row; NUM_VGPR_BANKS is not consumed by this instance
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static state elements/ports as named
+    start: elaboration/reset or owner initialization
+    end: same instance lifetime; not a delay metric
+- id: res-dispatch
+  node: n-dispatch
+  status: FROZEN
+  evidence:
+  - dispatch::g_buffers.buffer
+  instances: 4
+  capacity: 4
+  capacity_unit: payloads per execution class
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: payloads per execution class
+    start: operands_if fire selecting FU
+    end: dispatch_if[FU] fire
+- id: res-alu
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - alu::lane_dispatch/lane_gather
+  blocks: 1
+  lanes: 4
+  processing_elements:
+  - INT
+  - MULDIV
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static layout/ports as named; not cycles
+    start: allocation or queue input fire at this resource
+    end: release or queue output fire at this resource
+- id: res-sfu
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - sfu::lane_dispatch/lane_gather
+  blocks: 1
+  lanes: 4
+  processing_elements:
+  - WCTL
+  - CSR
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static layout/ports as named; not cycles
+    start: allocation or queue input fire at this resource
+    end: release or queue output fire at this resource
+- id: res-lsu
+  node: n-lsu
+  status: FROZEN
+  evidence:
+  - lsu::lane_dispatch/lane_gather
+  blocks: 1
+  lanes: 4
+  processing_elements:
+  - LSU slice
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static layout/ports as named; not cycles
+    start: allocation or queue input fire at this resource
+    end: release or queue output fire at this resource
+- id: res-fpu
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::lane_dispatch/lane_gather
+  blocks: 1
+  lanes: 4
+  processing_elements:
+  - conditional backend
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static layout/ports as named; not cycles
+    start: allocation or queue input fire at this resource
+    end: release or queue output fire at this resource
+- id: res-fpu-tags
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::tag_store
+  capacity: 2
+  capacity_unit: inflight header entries
+  allocate: execute_fire
+  release: fpu_rsp_fire
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: inflight header entries
+    start: execute_fire
+    end: fpu_rsp_fire
+- id: res-lsu-request
+  node: n-lsu-scheduler
+  status: FROZEN
+  evidence:
+  - core::lsu_scheduler; mem-scheduler::request buffer
+  capacity: 4
+  capacity_unit: queued vector requests
+  clients: 1
+  rtl_parameters:
+    CORE_QUEUE_SIZE: 4
+    MEM_QUEUE_SIZE: 8
+    PENDING_SIZE: 8
+    COALESCE_ENABLE: false
+    MEM_OUT_BUF: 0
+    CORE_OUT_BUF: 0
+  note: LINE_SIZE=WORD_SIZE disables internal coalescer; MEM_QUEUE_SIZE is not a second physical FIFO here
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: queued vector requests
+    start: mem_scheduler.core_req_fire
+    end: reqq_valid && reqq_ready
+- id: res-lsu-load-tags
+  node: n-lsu-scheduler
+  status: FROZEN
+  evidence:
+  - mem-scheduler::pending tag pool
+  capacity: 8
+  capacity_unit: outstanding load contexts
+  note: Response lane masks can complete partially; distinct from request queue
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: outstanding load contexts
+    start: core_req_fire && !core_req_rw
+    end: crsp_fire && crsp_eop
+- id: res-coalescer-tags
+  node: n-coalescer
+  status: FROZEN
+  evidence:
+  - mem::g_coalescing.VX_mem_coalescer
+  capacity: 8
+  capacity_unit: coalescer slots
+  input_lanes: 4
+  input_data_bytes: 4
+  output_channels: 2
+  output_data_bytes: 8
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: coalescer slots
+    start: req_sent && !in_req_rw per batch
+    end: out_rsp_fire && out_rsp_eop
+- id: res-local-storage
+  node: n-local-memory
+  status: FROZEN
+  evidence:
+  - mem::VX_local_mem
+  config_ref: cfg-memory
+  rtl_parameters:
+    NUM_BANKS: 4
+    WORD_SIZE: 4
+    OUT_BUF: 3
+  note: Same local storage as cfg-memory; not an additional allocation
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static state elements/ports as named
+    start: elaboration/reset or owner initialization
+    end: same instance lifetime; not a delay metric
+- id: res-icache
+  node: n-icache
+  status: FROZEN
+  evidence:
+  - socket::icache
+  config_ref: cfg-memory
+  rtl_parameters:
+    MSHR_SIZE: 16
+    MREQ_SIZE: 0
+    MRSQ_SIZE: 0
+    CRSQ_SIZE: 0
+    LATENCY: 2
+    CORE_OUT_BUF: 3
+    MEM_OUT_BUF: 2
+  note: 'Knobs only: zero queue override can mean derived minimum, not no queue. LATENCY is bank pipeline depth.'
+  unknown_ref: u-memory
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static layout/ports as named; not cycles
+    start: allocation or queue input fire at this resource
+    end: release or queue output fire at this resource
+- id: res-dcache
+  node: n-dcache
+  status: FROZEN
+  evidence:
+  - socket::dcache
+  config_ref: cfg-memory
+  rtl_parameters:
+    MSHR_SIZE: 16
+    MREQ_SIZE: 0
+    MRSQ_SIZE: 4
+    CRSQ_SIZE: 0
+    LATENCY: 2
+    CORE_OUT_BUF: 3
+    MEM_OUT_BUF: 2
+  note: 'Knobs only: zero queue override can mean derived minimum, not no queue. LATENCY is bank pipeline depth.'
+  unknown_ref: u-memory
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static layout/ports as named; not cycles
+    start: allocation or queue input fire at this resource
+    end: release or queue output fire at this resource
+- id: res-cta
+  node: n-cta
+  status: FROZEN
+  evidence:
+  - pkg::NUM_CTA_MAX; cta::slot_valid_r
+  capacity: 4
+  capacity_unit: CTA slots; simultaneous residency also limited by warps and LMEM
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static state elements/ports as named
+    start: elaboration/reset or owner initialization
+    end: same instance lifetime; not a delay metric
+- id: res-ipdom
+  node: n-simt
+  status: FROZEN
+  evidence:
+  - pkg::DV_STACK_SIZE; simt::VX_ipdom_stack
+  instances: 4
+  capacity: 3
+  capacity_unit: records per warp
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static state elements/ports as named
+    start: elaboration/reset or owner initialization
+    end: same instance lifetime; not a delay metric
+- id: res-barriers
+  node: n-barrier
+  status: FROZEN
+  evidence:
+  - barrier::barrier_state_store/barrier_phase_store; pkg::BAR_ADDR_BITS
+  address_warps: 4
+  barrier_ids_per_address_warp: 8
+  max_events: 32
+  note: Physical key AddressWarp + barrier ID; functional CTA key is not another physical dimension
+  condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
+  measurement:
+    unit: static state elements/ports as named
+    start: elaboration/reset or owner initialization
+    end: same instance lifetime; not a delay metric
+buffer_encoding:
+  id: b-encoding
+  status: FROZEN
+  evidence:
+  - platform::TO_OUT_BUF_SIZE/REG
+  - elastic::g_passthru/g_eb1/g_eb2
+  - stream-buffer::g_no_out_reg/valid_out_r
+  values:
+    0:
+      SIZE: 0
+      OUT_REG: 0
+    1:
+      SIZE: 1
+      OUT_REG: 1
+    2:
+      SIZE: 2
+      OUT_REG: 0
+    3:
+      SIZE: 2
+      OUT_REG: 1
+  note: Encoding is not latency. SIZE=2 with OUT_REG=0 or 1 uses registered valid and stored data in VX_stream_buffer.
+    OUT_REG controls data mux placement, not complete register bypass.
+boundaries:
+- id: b-schedule
+  node: n-schedule
+  status: FROZEN
+  evidence:
+  - schedule::out_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: elastic
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 1
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fetch-request
+  node: n-fetch
+  status: FROZEN
+  evidence:
+  - fetch::req_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: elastic
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 1
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-decode
+  node: n-decode
+  status: FROZEN
+  evidence:
+  - decode::req_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: elastic
+  rtl_parameters:
+    SIZE: 0
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-ibuffer
+  node: n-ibuffer
+  status: FROZEN
+  evidence:
+  - ibuffer::instr_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: elastic
+  rtl_parameters:
+    SIZE: 4
+    OUT_REG: 1
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-scoreboard-staging
+  node: n-scoreboard
+  status: FROZEN
+  evidence:
+  - scoreboard::stanging_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: pipe_buffer
+  instances: 4
+  rtl_parameters:
+    DEPTH: 1
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-scoreboard-out
+  node: n-scoreboard
+  status: FROZEN
+  evidence:
+  - scoreboard::out_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-opc-read
+  node: n-operands
+  status: FROZEN
+  evidence:
+  - opc::pipe_reg1/pipe_reg2/gpr_ram
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_read_pipeline
+  registers:
+  - pipe_reg1
+  - pipe_reg2
+  rtl_parameters:
+    gpr_ram.OUT_REG: 1
+    gpr_ram.RDW_MODE: R
+  note: RAM output aligned with pipe_reg2; do not sum these as three independent stages
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-opc-out
+  node: n-operands
+  status: FROZEN
+  evidence:
+  - operands::opc_unit.OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-opc-merge
+  node: n-operands
+  status: FROZEN
+  evidence:
+  - operands::output_arb
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-dispatch
+  node: n-dispatch
+  status: FROZEN
+  evidence:
+  - dispatch::buffer
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: elastic
+  rtl_parameters:
+    SIZE: 4
+    OUT_REG: 1
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-alu-dispatch
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - alu::lane_dispatch
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-dispatch::out_buf
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-alu-gather
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - alu::lane_gather
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-gather::out_buf
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fpu-dispatch
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::lane_dispatch
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-dispatch::out_buf
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fpu-gather
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::lane_gather
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-gather::out_buf
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-lsu-dispatch
+  node: n-lsu
+  status: FROZEN
+  evidence:
+  - lsu::lane_dispatch
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-dispatch::out_buf
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-lsu-gather
+  node: n-lsu
+  status: FROZEN
+  evidence:
+  - lsu::lane_gather
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-gather::out_buf
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-sfu-dispatch
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - sfu::lane_dispatch
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-dispatch::out_buf
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-sfu-gather
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - sfu::lane_gather
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - lane-gather::out_buf
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-alu-merge
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - alu::pe_switch.RSP_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-sfu-merge
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - sfu::pe_switch.RSP_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-alu-int-result
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - integer::rsp_buf uses elastic defaults
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: elastic
+  rtl_parameters:
+    SIZE: 1
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-alu-muldiv-merge
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - muldiv::VX_stream_arb.OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 2
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-sfu-wctl-result
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - wctl::result buffer
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: elastic
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-sfu-csr-result
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - csr::result buffer
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: elastic
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-lsu-load-result
+  node: n-lsu
+  status: FROZEN
+  evidence:
+  - lsu-slice::rsp_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: elastic
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-lsu-store-result
+  node: n-lsu
+  status: FROZEN
+  evidence:
+  - lsu-slice::no_rsp_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: elastic
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-lsu-result-merge
+  node: n-lsu
+  status: FROZEN
+  evidence:
+  - lsu-slice::VX_stream_arb
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fpu-backend-out
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::all backend OUT_BUF actuals with PARTIAL_BW=false
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fpu-response
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::rsp_buf
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: elastic
+  rtl_parameters:
+    SIZE: 0
+    OUT_REG: 0
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-decode-feedback
+  node: n-decode
+  status: FROZEN
+  evidence:
+  - decode::decode_sched_*_r
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_sideband
+  latency_cycles: 1
+  latency_boundary: producer event to registered sideband output; receiver state update is separate
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-issue-feedback
+  node: n-scoreboard
+  status: FROZEN
+  evidence:
+  - issue::issued_r/issued_wis_r
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_sideband
+  latency_cycles: 1
+  latency_boundary: producer event to registered sideband output; receiver state update is separate
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-commit-feedback
+  node: n-commit
+  status: FROZEN
+  evidence:
+  - commit::committed_warp_mask_r
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_sideband
+  latency_cycles: 1
+  latency_boundary: producer event to registered sideband output; receiver state update is separate
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-branch-feedback
+  node: n-alu
+  status: FROZEN
+  evidence:
+  - integer::VX_pipe_register
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_sideband
+  latency_cycles: 1
+  latency_boundary: producer event to registered sideband output; receiver state update is separate
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-wctl-feedback
+  node: n-sfu
+  status: FROZEN
+  evidence:
+  - wctl::wctl_reg
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_sideband
+  latency_cycles: 1
+  latency_boundary: producer event to registered sideband output; receiver state update is separate
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fpu-csr-feedback
+  node: n-fpu
+  status: FROZEN
+  evidence:
+  - fpu::fpu_csr_reg
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: registered_sideband
+  latency_cycles: 1
+  latency_boundary: producer event to registered sideband output; receiver state update is separate
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-lsu-req
+  node: n-lsu-scheduler
+  status: FROZEN
+  evidence:
+  - mem-scheduler::CORE_QUEUE_SIZE buffer
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: elastic
+  rtl_parameters:
+    SIZE: 4
+    OUT_REG: 1
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-split-global_out_buf
+  node: n-lmem-switch
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.GLOBAL_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 1
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-split-local_out_buf
+  node: n-lmem-switch
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.LOCAL_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 1
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-split-rsp_out_buf
+  node: n-lmem-switch
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.RSP_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 1
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-local-adapter-request
+  node: n-local-adapter
+  status: FROZEN
+  evidence:
+  - mem::local VX_lsu_adapter.REQ_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-local-adapter-response
+  node: n-local-adapter
+  status: FROZEN
+  evidence:
+  - mem::local VX_lsu_adapter.RSP_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-local-result
+  node: n-local-memory
+  status: FROZEN
+  evidence:
+  - mem::VX_local_mem.OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-global-adapter-request
+  node: n-global-adapter
+  status: FROZEN
+  evidence:
+  - mem::global VX_lsu_adapter.REQ_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-global-adapter-response
+  node: n-global-adapter
+  status: FROZEN
+  evidence:
+  - mem::global VX_lsu_adapter.RSP_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-iflush
+  node: n-iflush
+  status: FROZEN
+  evidence:
+  - core::VX_dcr_flush.REQ_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-dflush
+  node: n-dflush
+  status: FROZEN
+  evidence:
+  - mem::VX_dcr_flush.REQ_OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-commit
+  node: n-commit
+  status: FROZEN
+  evidence:
+  - commit::commit_arb.OUT_BUF
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 1
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fabric-port0-request
+  node: n-memory-fabric
+  status: FROZEN
+  evidence:
+  - socket::g_i0.mem_arb
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fabric-port0-response
+  node: n-memory-fabric
+  status: FROZEN
+  evidence:
+  - socket::g_i0.mem_arb
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 3
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-fabric-l2-request
+  node: n-memory-fabric
+  status: FROZEN
+  evidence:
+  - cluster::l2cache
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  - cache-bypass::DIRECT_PASSTHRU/core_bus_nc_switch/mem_bus_out_arb
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+  wrapper_parameters:
+    CORE_OUT_BUF: 3
+    MEM_OUT_BUF: 3
+  note: 'Refines baseline wrapper-level observation: cache disabled, word=sector and NUM_REQS=MEM_PORTS; DIRECT_PASSTHRU
+    forces actual buffers to zero.'
+- id: b-fabric-l2-response
+  node: n-memory-fabric
+  status: FROZEN
+  evidence:
+  - cluster::l2cache
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  - cache-bypass::DIRECT_PASSTHRU/core_bus_nc_switch/mem_bus_out_arb
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+  wrapper_parameters:
+    CORE_OUT_BUF: 3
+    MEM_OUT_BUF: 3
+  note: 'Refines baseline wrapper-level observation: cache disabled, word=sector and NUM_REQS=MEM_PORTS; DIRECT_PASSTHRU
+    forces actual buffers to zero.'
+- id: b-fabric-l3-request
+  node: n-memory-fabric
+  status: FROZEN
+  evidence:
+  - top::l3cache
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  - cache-bypass::DIRECT_PASSTHRU/core_bus_nc_switch/mem_bus_out_arb
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+  wrapper_parameters:
+    CORE_OUT_BUF: 3
+    MEM_OUT_BUF: 3
+  note: 'Refines baseline wrapper-level observation: cache disabled, word=sector and NUM_REQS=MEM_PORTS; DIRECT_PASSTHRU
+    forces actual buffers to zero.'
+- id: b-fabric-l3-response
+  node: n-memory-fabric
+  status: FROZEN
+  evidence:
+  - top::l3cache
+  - elastic::SIZE branches
+  - platform::TO_OUT_BUF_SIZE/REG
+  - stream-buffer::valid_out_r/ready_in
+  - cache-bypass::DIRECT_PASSTHRU/core_bus_nc_switch/mem_bus_out_arb
+  kind: output_buffer_encoding
+  rtl_parameters:
+    OUT_BUF: 0
+  encoding_ref: b-encoding
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+  wrapper_parameters:
+    CORE_OUT_BUF: 3
+    MEM_OUT_BUF: 3
+  note: 'Refines baseline wrapper-level observation: cache disabled, word=sector and NUM_REQS=MEM_PORTS; DIRECT_PASSTHRU
+    forces actual buffers to zero.'
+- id: b-simt-feedback
+  node: n-simt
+  status: FROZEN
+  kind: registered_control_output
+  rtl_parameters:
+    OUT_REG: 1
+  evidence:
+  - schedule::split_join.OUT_REG
+  - simt::OUT_REG
+  condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
+  measurement:
+    unit: RTL parameter encoding/stage count as named
+    start: input captured at named instance
+    end: output of named instance; no implied end-to-end delay
+- id: b-local-request-xbar
+  node: n-local-memory
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 3
+    instances: 4
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - local::req_xbar
+- id: b-local-sram-tag
+  node: n-local-memory
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    SRAM_OUT_REG: 1
+    TAG_PIPE_DEPTH: 1
+    instances: 4
+  condition: cfg-baseline; SRAM output and tag pipe align, not serial additive stages
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - local::lmem_store/bram_buf
+- id: b-icache-bank-crsq
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 0
+    instances: 1
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::cache_bank.CORE_OUT_BUF
+  - cache-bank::core_rsp_queue
+- id: b-icache-bank-mreq
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    DEPTH: 4
+    OUT_REG: 0
+    instances: 1
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::cache_bank.MEM_OUT_BUF
+  - cache-bank::mem_req_queue
+- id: b-icache-memory-response-queue
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    SIZE: 0
+    OUT_REG: 0
+    instances: 1
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::mem_rsp_queue
+- id: b-icache-memory-response-xbar
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 3
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::mem_rsp_xbar
+- id: b-icache-outer-core-response
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 3
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::core_rsp_xbar
+  - cache-wrap::cache.CORE_OUT_BUF
+- id: b-icache-outer-memory-request
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 2
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::mem_req_xbar
+  - cache-wrap::cache.MEM_OUT_BUF
+- id: b-dcache-bank-crsq
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    SIZE: 2
+    OUT_REG: 1
+    instances: 2
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::cache_bank.CORE_OUT_BUF
+  - cache-bank::core_rsp_queue
+- id: b-dcache-bank-mreq
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    DEPTH: 16
+    OUT_REG: 1
+    instances: 2
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::cache_bank.MEM_OUT_BUF
+  - cache-bank::mem_req_queue
+- id: b-dcache-memory-response-queue
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    SIZE: 4
+    OUT_REG: 1
+    instances: 2
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::mem_rsp_queue
+- id: b-dcache-memory-response-xbar
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 3
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::mem_rsp_xbar
+- id: b-dcache-outer-core-response
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 1
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::core_rsp_xbar
+  - cache-wrap::cache.CORE_OUT_BUF
+- id: b-dcache-outer-memory-request
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 1
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache::mem_req_xbar
+  - cache-wrap::cache.MEM_OUT_BUF
+- id: b-dcache-nc-response
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 3
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache-bypass::core_bus_nc_switch.RSP_OUT_BUF
+- id: b-dcache-nc-memory-request
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 2
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - cache-bypass::mem_bus_out_arb.REQ_OUT_BUF
+- id: b-std-fma-serializer
+  node: n-fpu
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 2
+    PE_REG: 0
+  condition: cfg-baseline; explicit STD with PE ratios=1; stage latency in tm-fp-*
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - fpu-std::g_fma.pe_ser
+  - serializer::out_buf
+- id: b-std-fdivsqrt-serializer
+  node: n-fpu
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 2
+    PE_REG: 0
+  condition: cfg-baseline; explicit STD with PE ratios=1; stage latency in tm-fp-*
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - fpu-std::g_fdivsqrt.pe_ser
+  - serializer::out_buf
+- id: b-std-cvt-serializer
+  node: n-fpu
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 2
+    PE_REG: 0
+  condition: cfg-baseline; explicit STD with PE ratios=1; stage latency in tm-fp-*
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - fpu-std::g_cvt.pe_ser
+  - serializer::out_buf
+- id: b-std-ncp-serializer
+  node: n-fpu
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 2
+    PE_REG: 0
+  condition: cfg-baseline; explicit STD with PE ratios=1; stage latency in tm-fp-*
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - fpu-std::g_ncp.pe_ser
+  - serializer::out_buf
+- id: b-barrier-unlock
+  node: n-barrier
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    REGISTER_STAGES: 1
+  condition: cfg-baseline
+  measurement:
+    unit: RTL encoding and entries as named; local buffer only
+    start: named buffer input fire
+    end: named buffer output fire
+  evidence:
+  - barrier::unlock_valid_r/unlock_mask_r
+ports:
+- id: p-schedule-out
+  node: n-schedule
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::schedule_if
+- id: p-schedule-in
+  node: n-fetch
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::schedule_if
+- id: p-fetch-request-out
+  node: n-fetch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::fetch_icache_if
+  data_bytes: 4
+- id: p-fetch-request-in
+  node: n-iflush
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::fetch_icache_if
+  data_bytes: 4
+- id: p-iflush-request-out
+  node: n-iflush
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::mmu_icache_if no-VM -> icache_bus_if; socket::per_core_icache_bus_if
+  data_bytes: 4
+- id: p-iflush-request-in
+  node: n-icache
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::mmu_icache_if no-VM -> icache_bus_if; socket::per_core_icache_bus_if
+  data_bytes: 4
+- id: p-iflush-response-out
+  node: n-icache
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::icache_bus_if no-VM -> mmu_icache_if
+  data_bytes: 4
+- id: p-iflush-response-in
+  node: n-iflush
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::icache_bus_if no-VM -> mmu_icache_if
+  data_bytes: 4
+- id: p-fetch-response-out
+  node: n-iflush
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::fetch_icache_if response
+  data_bytes: 4
+- id: p-fetch-response-in
+  node: n-fetch
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::fetch_icache_if response
+  data_bytes: 4
+- id: p-fetch-decode-out
+  node: n-fetch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::fetch_if
+  data_bytes: 4
+- id: p-fetch-decode-in
+  node: n-decode
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::fetch_if
+  data_bytes: 4
+- id: p-decode-ibuffer-out
+  node: n-decode
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::decode_if; issue::slice_decode_if
+- id: p-decode-ibuffer-in
+  node: n-ibuffer
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::decode_if; issue::slice_decode_if
+- id: p-ibuffer-uop-out
+  node: n-ibuffer
+  direction: out
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - ibuffer::ibuffer_tmp_if
+- id: p-ibuffer-uop-in
+  node: n-uop
+  direction: in
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - ibuffer::ibuffer_tmp_if
+- id: p-uop-scoreboard-out
+  node: n-uop
+  direction: out
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - ibuffer::ibuffer_if; scoreboard::staging_if
+- id: p-uop-scoreboard-in
+  node: n-scoreboard
+  direction: in
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - ibuffer::ibuffer_if; scoreboard::staging_if
+- id: p-scoreboard-operands-out
+  node: n-scoreboard
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - issue-slice::scoreboard_if
+- id: p-scoreboard-operands-in
+  node: n-operands
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - issue-slice::scoreboard_if
+- id: p-operands-dispatch-out
+  node: n-operands
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - issue-slice::operands_if
+- id: p-operands-dispatch-in
+  node: n-dispatch
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - issue-slice::operands_if
+- id: p-dispatch-alu-out
+  node: n-dispatch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_ALU]
+- id: p-dispatch-alu-in
+  node: n-alu
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_ALU]
+- id: p-alu-commit-out
+  node: n-alu
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_ALU]
+- id: p-alu-commit-in
+  node: n-commit
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_ALU]
+- id: p-dispatch-lsu-out
+  node: n-dispatch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_LSU]
+- id: p-dispatch-lsu-in
+  node: n-lsu
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_LSU]
+- id: p-lsu-commit-out
+  node: n-lsu
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_LSU]
+- id: p-lsu-commit-in
+  node: n-commit
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_LSU]
+- id: p-dispatch-sfu-out
+  node: n-dispatch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_SFU]
+- id: p-dispatch-sfu-in
+  node: n-sfu
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_SFU]
+- id: p-sfu-commit-out
+  node: n-sfu
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_SFU]
+- id: p-sfu-commit-in
+  node: n-commit
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_SFU]
+- id: p-dispatch-fpu-out
+  node: n-dispatch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_FPU]
+- id: p-dispatch-fpu-in
+  node: n-fpu
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::dispatch_if[EX_FPU]
+- id: p-fpu-commit-out
+  node: n-fpu
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_FPU]
+- id: p-fpu-commit-in
+  node: n-commit
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - execute::commit_if[EX_FPU]
+- id: p-writeback-scoreboard-out
+  node: n-commit
+  direction: out
+  count: 1
+  protocol: valid_only
+  status: FROZEN
+  evidence:
+  - commit::writeback_if; issue-slice::writeback_if
+- id: p-writeback-scoreboard-in
+  node: n-scoreboard
+  direction: in
+  count: 1
+  protocol: valid_only
+  status: FROZEN
+  evidence:
+  - commit::writeback_if; issue-slice::writeback_if
+- id: p-writeback-operands-out
+  node: n-commit
+  direction: out
+  count: 1
+  protocol: valid_only
+  status: FROZEN
+  evidence:
+  - commit::writeback_if; operands::opc_writeback_if
+  data_bytes: 16
+- id: p-writeback-operands-in
+  node: n-operands
+  direction: in
+  count: 1
+  protocol: valid_only
+  status: FROZEN
+  evidence:
+  - commit::writeback_if; operands::opc_writeback_if
+  data_bytes: 16
+- id: p-lsu-request-out
+  node: n-lsu
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_client_if
+  data_bytes: 16
+- id: p-lsu-request-in
+  node: n-lsu-scheduler
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_client_if
+  data_bytes: 16
+- id: p-lsu-response-out
+  node: n-lsu-scheduler
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_client_if
+  data_bytes: 16
+- id: p-lsu-response-in
+  node: n-lsu
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_client_if
+  data_bytes: 16
+- id: p-lsu-memory-request-out
+  node: n-lsu-scheduler
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_mem_if; mem::VX_lmem_switch
+  data_bytes: 16
+- id: p-lsu-memory-request-in
+  node: n-lmem-switch
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_mem_if; mem::VX_lmem_switch
+  data_bytes: 16
+- id: p-lsu-memory-response-out
+  node: n-lmem-switch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_mem_if
+  data_bytes: 16
+- id: p-lsu-memory-response-in
+  node: n-lsu-scheduler
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - core::lsu_mem_if
+  data_bytes: 16
+- id: p-local-split-out
+  node: n-lmem-switch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.local_out_if
+  data_bytes: 16
+- id: p-local-split-in
+  node: n-local-adapter
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.local_out_if
+  data_bytes: 16
+- id: p-local-merge-out
+  node: n-local-adapter
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.local_out_if response
+  data_bytes: 16
+- id: p-local-merge-in
+  node: n-lmem-switch
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.local_out_if response
+  data_bytes: 16
+- id: p-global-split-out
+  node: n-lmem-switch
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.global_out_if
+  data_bytes: 16
+- id: p-global-split-in
+  node: n-coalescer
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.global_out_if
+  data_bytes: 16
+- id: p-global-merge-out
+  node: n-coalescer
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.global_out_if response
+  data_bytes: 16
+- id: p-global-merge-in
+  node: n-lmem-switch
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lmem_switch.global_out_if response
+  data_bytes: 16
+- id: p-local-bank-request-out
+  node: n-local-adapter
+  direction: out
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::lmem bus
+  data_bytes: 4
+- id: p-local-bank-request-in
+  node: n-local-memory
+  direction: in
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::lmem bus
+  data_bytes: 4
+- id: p-local-bank-response-out
+  node: n-local-memory
+  direction: out
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::lmem bus response
+  data_bytes: 4
+- id: p-local-bank-response-in
+  node: n-local-adapter
+  direction: in
+  count: 4
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::lmem bus response
+  data_bytes: 4
+- id: p-coalesced-request-out
+  node: n-coalescer
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::dcache_coalesced_if
+  data_bytes: 16
+- id: p-coalesced-request-in
+  node: n-global-adapter
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::dcache_coalesced_if
+  data_bytes: 16
+- id: p-coalesced-response-out
+  node: n-global-adapter
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::dcache_coalesced_if response
+  data_bytes: 16
+- id: p-coalesced-response-in
+  node: n-coalescer
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::dcache_coalesced_if response
+  data_bytes: 16
+- id: p-global-flush-request-out
+  node: n-global-adapter
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lsu_adapter to VX_dcr_flush
+  data_bytes: 8
+- id: p-global-flush-request-in
+  node: n-dflush
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lsu_adapter to VX_dcr_flush
+  data_bytes: 8
+- id: p-global-flush-response-out
+  node: n-dflush
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lsu_adapter response
+  data_bytes: 8
+- id: p-global-flush-response-in
+  node: n-global-adapter
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::VX_lsu_adapter response
+  data_bytes: 8
+- id: p-dcache-request-out
+  node: n-dflush
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::dcache_bus_if; core::no-VM; socket::per_core_dcache_bus_if
+  data_bytes: 8
+- id: p-dcache-request-in
+  node: n-dcache
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - mem::dcache_bus_if; core::no-VM; socket::per_core_dcache_bus_if
+  data_bytes: 8
+- id: p-dcache-response-out
+  node: n-dcache
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::per_core_dcache_bus_if response
+  data_bytes: 8
+- id: p-dcache-response-in
+  node: n-dflush
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::per_core_dcache_bus_if response
+  data_bytes: 8
+- id: p-icache-miss-request-out
+  node: n-icache
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::icache_mem_bus_if
+  data_bytes: 64
+- id: p-icache-miss-request-in
+  node: n-memory-fabric
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::icache_mem_bus_if
+  data_bytes: 64
+- id: p-icache-fill-response-out
+  node: n-memory-fabric
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::icache_mem_bus_if response
+  data_bytes: 64
+- id: p-icache-fill-response-in
+  node: n-icache
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::icache_mem_bus_if response
+  data_bytes: 64
+- id: p-dcache-miss-request-out
+  node: n-dcache
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::dcache_mem_bus_if
+  data_bytes: 64
+- id: p-dcache-miss-request-in
+  node: n-memory-fabric
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::dcache_mem_bus_if
+  data_bytes: 64
+- id: p-dcache-fill-response-out
+  node: n-memory-fabric
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::dcache_mem_bus_if response
+  data_bytes: 64
+- id: p-dcache-fill-response-in
+  node: n-dcache
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - socket::dcache_mem_bus_if response
+  data_bytes: 64
+- id: p-external-request-out
+  node: n-memory-fabric
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - top::mem_bus_if request
+  data_bytes: 64
+- id: p-external-request-in
+  node: n-external-memory
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - top::mem_bus_if request
+  data_bytes: 64
+- id: p-external-response-out
+  node: n-external-memory
+  direction: out
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - top::mem_bus_if response
+  data_bytes: 64
+- id: p-external-response-in
+  node: n-memory-fabric
+  direction: in
+  count: 2
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - top::mem_bus_if response
+  data_bytes: 64
+- id: p-decode-feedback-out
+  node: n-decode
+  direction: out
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - decode::decode_sched_if
+- id: p-decode-feedback-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - decode::decode_sched_if
+- id: p-issue-feedback-out
+  node: n-scoreboard
+  direction: out
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - issue::issue_sched_if
+- id: p-issue-feedback-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - issue::issue_sched_if
+- id: p-commit-feedback-out
+  node: n-commit
+  direction: out
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - commit::commit_sched_if
+- id: p-commit-feedback-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - commit::commit_sched_if
+- id: p-branch-feedback-out
+  node: n-alu
+  direction: out
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - integer::branch_ctl_if
+- id: p-branch-feedback-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - integer::branch_ctl_if
+- id: p-wctl-feedback-out
+  node: n-sfu
+  direction: out
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - wctl::warp_ctl_if
+- id: p-wctl-feedback-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - wctl::warp_ctl_if
+- id: p-ibuf-pop-out
+  node: n-ibuffer
+  direction: out
+  count: 4
+  protocol: pulse_vector
+  status: FROZEN
+  evidence:
+  - ibuffer::decode_if.ibuf_pop; decode::fetch_if.ibuf_pop; fetch::schedule_if.ibuf_pop
+- id: p-ibuf-pop-in
+  node: n-schedule
+  direction: in
+  count: 4
+  protocol: pulse_vector
+  status: FROZEN
+  evidence:
+  - ibuffer::decode_if.ibuf_pop; decode::fetch_if.ibuf_pop; fetch::schedule_if.ibuf_pop
+- id: p-fu-credit-out
+  node: n-dispatch
+  direction: out
+  count: 4
+  protocol: pulse_vector
+  status: FROZEN
+  evidence:
+  - dispatch::fu_release
+- id: p-fu-credit-in
+  node: n-scoreboard
+  direction: in
+  count: 4
+  protocol: pulse_vector
+  status: FROZEN
+  evidence:
+  - dispatch::fu_release
+- id: p-warp-pending-out
+  node: n-schedule
+  direction: out
+  count: 4
+  protocol: level_vector
+  status: FROZEN
+  evidence:
+  - schedule::warp_pending_alm_empty; wctl::wsync_drain
+- id: p-warp-pending-in
+  node: n-sfu
+  direction: in
+  count: 4
+  protocol: level_vector
+  status: FROZEN
+  evidence:
+  - schedule::warp_pending_alm_empty; wctl::wsync_drain
+- id: p-lsu-pending-out
+  node: n-lsu-scheduler
+  direction: out
+  count: 1
+  protocol: level
+  status: FROZEN
+  evidence:
+  - core::warp_ctl_if.lsu_sched_drained
+- id: p-lsu-pending-in
+  node: n-sfu
+  direction: in
+  count: 1
+  protocol: level
+  status: FROZEN
+  evidence:
+  - core::warp_ctl_if.lsu_sched_drained
+- id: p-fpu-csr-feedback-out
+  node: n-fpu
+  direction: out
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - fpu::fpu_csr_if write
+- id: p-fpu-csr-feedback-in
+  node: n-sfu
+  direction: in
+  count: 1
+  protocol: registered_sideband
+  status: FROZEN
+  evidence:
+  - fpu::fpu_csr_if write
+- id: p-fpu-frm-out
+  node: n-sfu
+  direction: out
+  count: 1
+  protocol: context_read
+  status: FROZEN
+  evidence:
+  - fpu::fpu_csr_if read_wid/read_frm; csr-data::fcsr
+- id: p-fpu-frm-in
+  node: n-fpu
+  direction: in
+  count: 1
+  protocol: context_read
+  status: FROZEN
+  evidence:
+  - fpu::fpu_csr_if read_wid/read_frm; csr-data::fcsr
+- id: p-sched-csr-request-out
+  node: n-sfu
+  direction: out
+  count: 1
+  protocol: context_and_write_sideband
+  status: FROZEN
+  evidence:
+  - csr::sched_csr_if
+- id: p-sched-csr-request-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: context_and_write_sideband
+  status: FROZEN
+  evidence:
+  - csr::sched_csr_if
+- id: p-sched-csr-response-out
+  node: n-schedule
+  direction: out
+  count: 1
+  protocol: context_read
+  status: FROZEN
+  evidence:
+  - schedule::sched_csr_if
+- id: p-sched-csr-response-in
+  node: n-sfu
+  direction: in
+  count: 1
+  protocol: context_read
+  status: FROZEN
+  evidence:
+  - schedule::sched_csr_if
+- id: p-split-join-request-out
+  node: n-schedule
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::split_join
+- id: p-split-join-request-in
+  node: n-simt
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::split_join
+- id: p-split-join-feedback-out
+  node: n-simt
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::join_valid/join_pc/join_tmask
+- id: p-split-join-feedback-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::join_valid/join_pc/join_tmask
+- id: p-barrier-request-out
+  node: n-sfu
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::bar_unit via warp_ctl_if
+- id: p-barrier-request-in
+  node: n-barrier
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::bar_unit via warp_ctl_if
+- id: p-barrier-feedback-out
+  node: n-barrier
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::bar_unit.read_phase -> warp_ctl_if.bar_phase
+- id: p-barrier-feedback-in
+  node: n-sfu
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::bar_unit.read_phase -> warp_ctl_if.bar_phase
+- id: p-barrier-unlock-out
+  node: n-barrier
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::bar_unlock_valid/bar_unlock_mask
+- id: p-barrier-unlock-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - wctl::warp_ctl_if.bar
+- id: p-kmu-launch-out
+  node: n-kmu
+  direction: out
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - schedule::cta_dispatcher.kmu_bus_if
+- id: p-kmu-launch-in
+  node: n-cta
+  direction: in
+  count: 1
+  protocol: valid_ready
+  status: FROZEN
+  evidence:
+  - schedule::cta_dispatcher.kmu_bus_if
+- id: p-cta-dispatch-out
+  node: n-cta
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::cta_fire/cta_PC/cta_tmask
+- id: p-cta-dispatch-in
+  node: n-schedule
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::cta_fire/cta_PC/cta_tmask
+- id: p-warp-done-out
+  node: n-schedule
+  direction: out
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::cta_warp_done -> cta_dispatcher.warp_done
+- id: p-warp-done-in
+  node: n-cta
+  direction: in
+  count: 1
+  protocol: control_sideband
+  status: FROZEN
+  evidence:
+  - schedule::cta_warp_done -> cta_dispatcher.warp_done
+- id: p-dcr-iflush-out
+  node: n-dcr
+  direction: out
+  count: 1
+  protocol: request_done
+  status: FROZEN
+  evidence:
+  - core::dcr_flush_icache_if
+- id: p-dcr-iflush-in
+  node: n-iflush
+  direction: in
+  count: 1
+  protocol: request_done
+  status: FROZEN
+  evidence:
+  - core::dcr_flush_icache_if
+- id: p-dcr-dflush-out
+  node: n-dcr
+  direction: out
+  count: 1
+  protocol: request_done
+  status: FROZEN
+  evidence:
+  - core::dcr_flush_dcache_if
+- id: p-dcr-dflush-in
+  node: n-dflush
+  direction: in
+  count: 1
+  protocol: request_done
+  status: FROZEN
+  evidence:
+  - core::dcr_flush_dcache_if
+- id: p-simt-stack-out
+  node: n-simt
+  direction: out
+  count: 1
+  protocol: context_read
+  status: FROZEN
+  evidence:
+  - schedule::split_join.stack_wid/stack_ptr via warp_ctl_if
+- id: p-simt-stack-in
+  node: n-sfu
+  direction: in
+  count: 1
+  protocol: context_read
+  status: FROZEN
+  evidence:
+  - schedule::split_join.stack_wid/stack_ptr via warp_ctl_if
+channels:
+- id: ch-schedule
+  status: FROZEN
+  from: p-schedule-out
+  to: p-schedule-in
+  evidence:
+  - core::schedule_if
+  boundary_refs:
+  - b-schedule
+  rule_refs:
+  - r-transfer
+  - r-schedule
+- id: ch-fetch-request
+  status: FROZEN
+  from: p-fetch-request-out
+  to: p-fetch-request-in
+  evidence:
+  - core::fetch_icache_if
+  boundary_refs:
+  - b-fetch-request
+  rule_refs:
+  - r-transfer
+- id: ch-iflush-request
+  status: FROZEN
+  from: p-iflush-request-out
+  to: p-iflush-request-in
+  evidence:
+  - core::mmu_icache_if no-VM -> icache_bus_if; socket::per_core_icache_bus_if
+  boundary_refs:
+  - b-iflush
+  rule_refs:
+  - r-transfer
+  - r-flush
+- id: ch-iflush-response
+  status: FROZEN
+  from: p-iflush-response-out
+  to: p-iflush-response-in
+  evidence:
+  - core::icache_bus_if no-VM -> mmu_icache_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-flush
+- id: ch-fetch-response
+  status: FROZEN
+  from: p-fetch-response-out
+  to: p-fetch-response-in
+  evidence:
+  - core::fetch_icache_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-fetch-decode
+  status: FROZEN
+  from: p-fetch-decode-out
+  to: p-fetch-decode-in
+  evidence:
+  - core::fetch_if
+  boundary_refs: []
+  note: Direct C-disabled response path, with saved tag context
+  rule_refs:
+  - r-transfer
+- id: ch-decode-ibuffer
+  status: FROZEN
+  from: p-decode-ibuffer-out
+  to: p-decode-ibuffer-in
+  evidence:
+  - core::decode_if; issue::slice_decode_if
+  boundary_refs:
+  - b-decode
+  rule_refs:
+  - r-transfer
+- id: ch-ibuffer-uop
+  status: FROZEN
+  from: p-ibuffer-uop-out
+  to: p-ibuffer-uop-in
+  evidence:
+  - ibuffer::ibuffer_tmp_if
+  boundary_refs:
+  - b-ibuffer
+  rule_refs:
+  - r-transfer
+- id: ch-uop-scoreboard
+  status: FROZEN
+  from: p-uop-scoreboard-out
+  to: p-uop-scoreboard-in
+  evidence:
+  - ibuffer::ibuffer_if; scoreboard::staging_if
+  boundary_refs:
+  - b-scoreboard-staging
+  rule_refs:
+  - r-transfer
+  - r-scoreboard
+- id: ch-scoreboard-operands
+  status: FROZEN
+  from: p-scoreboard-operands-out
+  to: p-scoreboard-operands-in
+  evidence:
+  - issue-slice::scoreboard_if
+  boundary_refs:
+  - b-scoreboard-out
+  rule_refs:
+  - r-transfer
+  - r-scoreboard
+  - r-operands
+- id: ch-operands-dispatch
+  status: FROZEN
+  from: p-operands-dispatch-out
+  to: p-operands-dispatch-in
+  evidence:
+  - issue-slice::operands_if
+  boundary_refs:
+  - b-opc-read
+  - b-opc-out
+  - b-opc-merge
+  rule_refs:
+  - r-transfer
+  - r-operands
+- id: ch-dispatch-alu
+  status: FROZEN
+  from: p-dispatch-alu-out
+  to: p-dispatch-alu-in
+  evidence:
+  - execute::dispatch_if[EX_ALU]
+  boundary_refs:
+  - b-dispatch
+  - b-alu-dispatch
+  rule_refs:
+  - r-transfer
+- id: ch-alu-commit
+  status: FROZEN
+  from: p-alu-commit-out
+  to: p-alu-commit-in
+  evidence:
+  - execute::commit_if[EX_ALU]
+  boundary_refs:
+  - b-alu-gather
+  note: Internal PE/result buffers are independently registered in boundaries
+  rule_refs:
+  - r-transfer
+  - r-commit
+- id: ch-dispatch-lsu
+  status: FROZEN
+  from: p-dispatch-lsu-out
+  to: p-dispatch-lsu-in
+  evidence:
+  - execute::dispatch_if[EX_LSU]
+  boundary_refs:
+  - b-dispatch
+  - b-lsu-dispatch
+  rule_refs:
+  - r-transfer
+- id: ch-lsu-commit
+  status: FROZEN
+  from: p-lsu-commit-out
+  to: p-lsu-commit-in
+  evidence:
+  - execute::commit_if[EX_LSU]
+  boundary_refs:
+  - b-lsu-gather
+  note: Internal PE/result buffers are independently registered in boundaries
+  rule_refs:
+  - r-transfer
+  - r-commit
+- id: ch-dispatch-sfu
+  status: FROZEN
+  from: p-dispatch-sfu-out
+  to: p-dispatch-sfu-in
+  evidence:
+  - execute::dispatch_if[EX_SFU]
+  boundary_refs:
+  - b-dispatch
+  - b-sfu-dispatch
+  rule_refs:
+  - r-transfer
+- id: ch-sfu-commit
+  status: FROZEN
+  from: p-sfu-commit-out
+  to: p-sfu-commit-in
+  evidence:
+  - execute::commit_if[EX_SFU]
+  boundary_refs:
+  - b-sfu-gather
+  note: Internal PE/result buffers are independently registered in boundaries
+  rule_refs:
+  - r-transfer
+  - r-commit
+- id: ch-dispatch-fpu
+  status: FROZEN
+  from: p-dispatch-fpu-out
+  to: p-dispatch-fpu-in
+  evidence:
+  - execute::dispatch_if[EX_FPU]
+  boundary_refs:
+  - b-dispatch
+  - b-fpu-dispatch
+  rule_refs:
+  - r-transfer
+- id: ch-fpu-commit
+  status: FROZEN
+  from: p-fpu-commit-out
+  to: p-fpu-commit-in
+  evidence:
+  - execute::commit_if[EX_FPU]
+  boundary_refs:
+  - b-fpu-gather
+  note: Internal PE/result buffers are independently registered in boundaries
+  rule_refs:
+  - r-transfer
+  - r-commit
+- id: ch-writeback-scoreboard
+  status: FROZEN
+  from: p-writeback-scoreboard-out
+  to: p-writeback-scoreboard-in
+  evidence:
+  - commit::writeback_if; issue-slice::writeback_if
+  boundary_refs:
+  - b-commit
+  rule_refs:
+  - r-transfer
+  - r-scoreboard
+- id: ch-writeback-operands
+  status: FROZEN
+  from: p-writeback-operands-out
+  to: p-writeback-operands-in
+  evidence:
+  - commit::writeback_if; operands::opc_writeback_if
+  boundary_refs:
+  - b-commit
+  rule_refs:
+  - r-transfer
+  - r-operands
+- id: ch-lsu-request
+  status: FROZEN
+  from: p-lsu-request-out
+  to: p-lsu-request-in
+  evidence:
+  - core::lsu_client_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-lsu-request
+- id: ch-lsu-response
+  status: FROZEN
+  from: p-lsu-response-out
+  to: p-lsu-response-in
+  evidence:
+  - core::lsu_client_if
+  boundary_refs: []
+  note: Response lane mask may be partial
+  rule_refs:
+  - r-transfer
+  - r-lsu-response
+- id: ch-lsu-memory-request
+  status: FROZEN
+  from: p-lsu-memory-request-out
+  to: p-lsu-memory-request-in
+  evidence:
+  - core::lsu_mem_if; mem::VX_lmem_switch
+  boundary_refs:
+  - b-lsu-req
+  rule_refs:
+  - r-transfer
+- id: ch-lsu-memory-response
+  status: FROZEN
+  from: p-lsu-memory-response-out
+  to: p-lsu-memory-response-in
+  evidence:
+  - core::lsu_mem_if
+  boundary_refs:
+  - b-split-rsp_out_buf
+  rule_refs:
+  - r-transfer
+- id: ch-local-split
+  status: FROZEN
+  from: p-local-split-out
+  to: p-local-split-in
+  evidence:
+  - mem::VX_lmem_switch.local_out_if
+  boundary_refs:
+  - b-split-local_out_buf
+  rule_refs:
+  - r-transfer
+- id: ch-local-merge
+  status: FROZEN
+  from: p-local-merge-out
+  to: p-local-merge-in
+  evidence:
+  - mem::VX_lmem_switch.local_out_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-global-split
+  status: FROZEN
+  from: p-global-split-out
+  to: p-global-split-in
+  evidence:
+  - mem::VX_lmem_switch.global_out_if
+  boundary_refs:
+  - b-split-global_out_buf
+  rule_refs:
+  - r-transfer
+- id: ch-global-merge
+  status: FROZEN
+  from: p-global-merge-out
+  to: p-global-merge-in
+  evidence:
+  - mem::VX_lmem_switch.global_out_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-local-bank-request
+  status: FROZEN
+  from: p-local-bank-request-out
+  to: p-local-bank-request-in
+  evidence:
+  - mem::lmem bus
+  boundary_refs:
+  - b-local-adapter-request
+  rule_refs:
+  - r-transfer
+  - r-local-detail
+- id: ch-local-bank-response
+  status: FROZEN
+  from: p-local-bank-response-out
+  to: p-local-bank-response-in
+  evidence:
+  - mem::lmem bus response
+  boundary_refs:
+  - b-local-result
+  - b-local-adapter-response
+  rule_refs:
+  - r-transfer
+  - r-local-detail
+- id: ch-coalesced-request
+  status: FROZEN
+  from: p-coalesced-request-out
+  to: p-coalesced-request-in
+  evidence:
+  - mem::dcache_coalesced_if
+  boundary_refs: []
+  note: Two coalesced 8-byte channels with lane masks
+  rule_refs:
+  - r-transfer
+  - r-coalescer-detail
+- id: ch-coalesced-response
+  status: FROZEN
+  from: p-coalesced-response-out
+  to: p-coalesced-response-in
+  evidence:
+  - mem::dcache_coalesced_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-coalescer-detail
+- id: ch-global-flush-request
+  status: FROZEN
+  from: p-global-flush-request-out
+  to: p-global-flush-request-in
+  evidence:
+  - mem::VX_lsu_adapter to VX_dcr_flush
+  boundary_refs:
+  - b-global-adapter-request
+  rule_refs:
+  - r-transfer
+  - r-flush
+- id: ch-global-flush-response
+  status: FROZEN
+  from: p-global-flush-response-out
+  to: p-global-flush-response-in
+  evidence:
+  - mem::VX_lsu_adapter response
+  boundary_refs:
+  - b-global-adapter-response
+  rule_refs:
+  - r-transfer
+  - r-flush
+- id: ch-dcache-request
+  status: FROZEN
+  from: p-dcache-request-out
+  to: p-dcache-request-in
+  evidence:
+  - mem::dcache_bus_if; core::no-VM; socket::per_core_dcache_bus_if
+  boundary_refs:
+  - b-dflush
+  rule_refs:
+  - r-transfer
+- id: ch-dcache-response
+  status: FROZEN
+  from: p-dcache-response-out
+  to: p-dcache-response-in
+  evidence:
+  - socket::per_core_dcache_bus_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-icache-miss-request
+  status: FROZEN
+  from: p-icache-miss-request-out
+  to: p-icache-miss-request-in
+  evidence:
+  - socket::icache_mem_bus_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-icache-fill-response
+  status: FROZEN
+  from: p-icache-fill-response-out
+  to: p-icache-fill-response-in
+  evidence:
+  - socket::icache_mem_bus_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-dcache-miss-request
+  status: FROZEN
+  from: p-dcache-miss-request-out
+  to: p-dcache-miss-request-in
+  evidence:
+  - socket::dcache_mem_bus_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-dcache-fill-response
+  status: FROZEN
+  from: p-dcache-fill-response-out
+  to: p-dcache-fill-response-in
+  evidence:
+  - socket::dcache_mem_bus_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-external-request
+  status: FROZEN
+  from: p-external-request-out
+  to: p-external-request-in
+  evidence:
+  - top::mem_bus_if request
+  boundary_refs: []
+  note: L2/L3 disabled but wrappers remain; no external service latency assigned
+  rule_refs:
+  - r-transfer
+- id: ch-external-response
+  status: FROZEN
+  from: p-external-response-out
+  to: p-external-response-in
+  evidence:
+  - top::mem_bus_if response
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-decode-feedback
+  status: FROZEN
+  from: p-decode-feedback-out
+  to: p-decode-feedback-in
+  evidence:
+  - decode::decode_sched_if
+  boundary_refs:
+  - b-decode-feedback
+  rule_refs:
+  - r-transfer
+  - r-decode-feedback
+- id: ch-issue-feedback
+  status: FROZEN
+  from: p-issue-feedback-out
+  to: p-issue-feedback-in
+  evidence:
+  - issue::issue_sched_if
+  boundary_refs:
+  - b-issue-feedback
+  rule_refs:
+  - r-transfer
+- id: ch-commit-feedback
+  status: FROZEN
+  from: p-commit-feedback-out
+  to: p-commit-feedback-in
+  evidence:
+  - commit::commit_sched_if
+  boundary_refs:
+  - b-commit-feedback
+  rule_refs:
+  - r-transfer
+  - r-commit
+- id: ch-branch-feedback
+  status: FROZEN
+  from: p-branch-feedback-out
+  to: p-branch-feedback-in
+  evidence:
+  - integer::branch_ctl_if
+  boundary_refs:
+  - b-branch-feedback
+  rule_refs:
+  - r-transfer
+  - r-feedback
+- id: ch-wctl-feedback
+  status: FROZEN
+  from: p-wctl-feedback-out
+  to: p-wctl-feedback-in
+  evidence:
+  - wctl::warp_ctl_if
+  boundary_refs:
+  - b-wctl-feedback
+  rule_refs:
+  - r-transfer
+  - r-feedback
+- id: ch-ibuf-pop
+  status: FROZEN
+  from: p-ibuf-pop-out
+  to: p-ibuf-pop-in
+  evidence:
+  - ibuffer::decode_if.ibuf_pop; decode::fetch_if.ibuf_pop; fetch::schedule_if.ibuf_pop
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-fu-credit
+  status: FROZEN
+  from: p-fu-credit-out
+  to: p-fu-credit-in
+  evidence:
+  - dispatch::fu_release
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-warp-pending
+  status: FROZEN
+  from: p-warp-pending-out
+  to: p-warp-pending-in
+  evidence:
+  - schedule::warp_pending_alm_empty; wctl::wsync_drain
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-lsu-drain
+- id: ch-lsu-pending
+  status: FROZEN
+  from: p-lsu-pending-out
+  to: p-lsu-pending-in
+  evidence:
+  - core::warp_ctl_if.lsu_sched_drained
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-lsu-drain
+- id: ch-fpu-csr-feedback
+  status: FROZEN
+  from: p-fpu-csr-feedback-out
+  to: p-fpu-csr-feedback-in
+  evidence:
+  - fpu::fpu_csr_if write
+  boundary_refs:
+  - b-fpu-csr-feedback
+  rule_refs:
+  - r-transfer
+  - r-feedback
+- id: ch-fpu-frm
+  status: FROZEN
+  from: p-fpu-frm-out
+  to: p-fpu-frm-in
+  evidence:
+  - fpu::fpu_csr_if read_wid/read_frm; csr-data::fcsr
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-sched-csr-request
+  status: FROZEN
+  from: p-sched-csr-request-out
+  to: p-sched-csr-request-in
+  evidence:
+  - csr::sched_csr_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-csr-detail
+- id: ch-sched-csr-response
+  status: FROZEN
+  from: p-sched-csr-response-out
+  to: p-sched-csr-response-in
+  evidence:
+  - schedule::sched_csr_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-csr-detail
+- id: ch-split-join-request
+  status: FROZEN
+  from: p-split-join-request-out
+  to: p-split-join-request-in
+  evidence:
+  - schedule::split_join
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-split-join-feedback
+  status: FROZEN
+  from: p-split-join-feedback-out
+  to: p-split-join-feedback-in
+  evidence:
+  - schedule::join_valid/join_pc/join_tmask
+  boundary_refs:
+  - b-simt-feedback
+  rule_refs:
+  - r-transfer
+- id: ch-barrier-request
+  status: FROZEN
+  from: p-barrier-request-out
+  to: p-barrier-request-in
+  evidence:
+  - schedule::bar_unit.req_valid/req_wid/req_data via warp_ctl_if
+  boundary_refs:
+  - b-wctl-feedback
+  rule_refs:
+  - r-transfer
+  - r-simt-barrier-detail
+- id: ch-barrier-feedback
+  status: FROZEN
+  from: p-barrier-feedback-out
+  to: p-barrier-feedback-in
+  evidence:
+  - schedule::bar_unit.read_phase -> warp_ctl_if.bar_phase
+  boundary_refs: []
+  note: Phase read context only; unlock goes directly to scheduler.
+  rule_refs:
+  - r-transfer
+  - r-simt-barrier-detail
+- id: ch-barrier-unlock
+  status: FROZEN
+  from: p-barrier-unlock-out
+  to: p-barrier-unlock-in
+  evidence:
+  - schedule::bar_unlock_valid/bar_unlock_mask
+  boundary_refs: []
+  note: Scheduler-owned barrier unlock, not another WCTL result.
+  rule_refs:
+  - r-transfer
+  - r-simt-barrier-detail
+- id: ch-kmu-launch
+  status: FROZEN
+  from: p-kmu-launch-out
+  to: p-kmu-launch-in
+  evidence:
+  - schedule::cta_dispatcher.kmu_bus_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-cta-dispatch
+  status: FROZEN
+  from: p-cta-dispatch-out
+  to: p-cta-dispatch-in
+  evidence:
+  - schedule::cta_fire/cta_PC/cta_tmask
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-warp-done
+  status: FROZEN
+  from: p-warp-done-out
+  to: p-warp-done-in
+  evidence:
+  - schedule::cta_warp_done -> cta_dispatcher.warp_done
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+- id: ch-dcr-iflush
+  status: FROZEN
+  from: p-dcr-iflush-out
+  to: p-dcr-iflush-in
+  evidence:
+  - core::dcr_flush_icache_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-flush
+- id: ch-dcr-dflush
+  status: FROZEN
+  from: p-dcr-dflush-out
+  to: p-dcr-dflush-in
+  evidence:
+  - core::dcr_flush_dcache_if
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  - r-flush
+- id: ch-simt-stack
+  status: FROZEN
+  from: p-simt-stack-out
+  to: p-simt-stack-in
+  boundary_refs: []
+  rule_refs:
+  - r-transfer
+  evidence:
+  - schedule::split_join.stack_wid/stack_ptr via warp_ctl_if
+rules:
+- id: r-transfer
+  status: FROZEN
+  nodes:
+  - n-schedule
+  - n-fetch
+  - n-decode
+  - n-dispatch
+  - n-commit
+  evidence:
+  - elastic::valid_in/ready_in
+  - commit::writeback_if
+  statement: Valid-ready channels transfer at valid AND ready. Ack-free WB and sidebands have no invented ready.
+    Elastic payload is retained under stall; combinational passthrough has no storage.
+- id: r-schedule
+  status: FROZEN
+  nodes:
+  - n-schedule
+  - n-fetch
+  evidence:
+  - schedule::schedule_fire/ready_warps/preferred_warps/all_ibuf_full/wid_select
+  - priority::REVERSE
+  statement: Select lowest eligible wid using priority encoder. Active AND not stalled feeds ready_warps. With L1
+    enabled, all_ibuf_full chooses ready_warps, otherwise preferred_warps excludes ibuf_full. Internal schedule_fire
+    consumes output-buffer input; this is distinct from schedule_if fire and cache bus request fire.
+- id: r-decode-feedback
+  status: FROZEN
+  nodes:
+  - n-decode
+  - n-schedule
+  evidence:
+  - decode::fetch_fire/decode_sched_valid_r/decode_sched_unlock_r
+  - schedule::decode_sched_if
+  statement: Decode feedback valid follows fetch acceptance through a register; unlock is not is_wstall. With C
+    disabled, PC+4 is assigned on schedule_if_fire (scheduler output accepted by fetch), not internal schedule_fire
+    and not functional Step commit.
+- id: r-packed
+  status: FROZEN
+  nodes:
+  - n-ibuffer
+  - n-uop
+  - n-lsu
+  - n-commit
+  evidence:
+  - pkg::UOP_MAX
+  - ibuffer::g_uop
+  - uop::uop_start/uop_next
+  - packld::uop_count/bytesel/op_args.lsu.offset
+  statement: UOP_MAX=1 enables pack-load sequencer. PACKLB produces four uops and PACKLH two; offset and bytesel
+    identify elements. Ordinary instructions pass through; active burst advances only when output accepted. Physical
+    uop completion is distinct from atomic functional packed-load completion.
+- id: r-scoreboard
+  status: FROZEN
+  nodes:
+  - n-scoreboard
+  - n-dispatch
+  - n-commit
+  evidence:
+  - scoreboard::wb_inuse_regs/inuse_regs_n/operands_ready_r/out_arb/fu_pending
+  - dispatch::fu_release
+  statement: WB eop releases destination and wr_xregs first, staging acceptance then reserves destination and wr_xregs.
+    Readiness uses dependency masks including rd and special registers, is registered, and is suppressed by FU going-full/lock.
+    Four-request sticky R arbitration selects eligible staging; credits return on dispatch acceptance, not execution
+    completion.
+- id: r-operands
+  status: FROZEN
+  nodes:
+  - n-operands
+  evidence:
+  - opc::req_bank_idx/req_xbar/opd_fetched_st1/pipe_reg1/pipe_reg2/gpr_ram
+  statement: Three source requests arbitrate per bank with P selection; used sources not yet fetched remain pending
+    on collisions. Register zero is suppressed. RAM read output and metadata are aligned; collection can take multiple
+    accept opportunities.
+- id: r-commit
+  status: FROZEN
+  nodes:
+  - n-commit
+  - n-scoreboard
+  - n-operands
+  - n-schedule
+  evidence:
+  - commit::commit_arb/committed_warps/committed_warp_mask_r/writeback_if
+  - pkg::EX_ALU/EX_LSU/EX_SFU/EX_FPU
+  statement: One P arbiter merges the four execution-class result ports into a registered output; downstream ready
+    is tied high. WB remains valid even when wb=false; operands gate register writes by wb. eop qualifies scheduler
+    committed mask and scoreboard release. Byte-select shifts data and generates per-lane byte enables. No reorder
+    buffer is instantiated.
+- id: r-lsu-drain
+  status: FROZEN
+  nodes:
+  - n-lsu-scheduler
+  - n-lmem-switch
+  - n-coalescer
+  - n-sfu
+  evidence:
+  - lsu-scheduler::empty
+  - mem-scheduler::req_queue_empty/ibuf_push/ibuf_pop
+  - core::lsu_sched_drained/busy
+  - mem::empty
+  - wctl::bar_drain/wsync_drain
+  statement: LSU empty is req_queue_empty = !reqq_valid AND ibuf_empty AND coalescer_empty. This includes outstanding
+    load tags; the internal coalescer is disabled here. It does not prove that a store already handed to downstream
+    mem_unit/cache is globally visible. BAR consumes AND of LSU empty. WSYNC separately tests per-warp pending_alm_empty.
+    Core busy also includes mem_unit_empty and DCR busy.
+- id: r-feedback
+  status: FROZEN
+  nodes:
+  - n-alu
+  - n-sfu
+  - n-fpu
+  - n-schedule
+  evidence:
+  - integer::result_fire/br_enable/branch_ctl_if
+  - wctl::execute_fire/wctl_reg
+  - fpu::fpu_rsp_fire/fpu_csr_reg
+  statement: Branch feedback is registered after ALU result acceptance with branch and eop qualification. WCTL feedback
+    is registered after execute fire/eop. FPU flags write is registered after response fire/eop/has_fflags. These
+    are separate from commit arbitration and cannot all be deferred to a single retirement event.
+- id: r-flush
+  status: FROZEN
+  nodes:
+  - n-dcr
+  - n-iflush
+  - n-dflush
+  - n-icache
+  - n-dcache
+  evidence:
+  - core::dcr_flush_dcache_if/dcr_flush_icache_if/dcr_flush_if.done
+  - mem::VX_dcr_flush
+  statement: D-cache flush request follows DCR request; I-cache flush request is gated by D-cache done. Combined
+    done is AND of both. VM-disabled wiring bypasses MMUs but retains both flush wrappers.
+- id: r-memory-fabric
+  status: FROZEN
+  nodes:
+  - n-icache
+  - n-dcache
+  - n-memory-fabric
+  - n-external-memory
+  evidence:
+  - socket::g_mem_bus_if.g_i0.mem_arb/g_i
+  - cluster::l2cache.PASSTHRU
+  - top::l3cache.PASSTHRU
+  - cache-wrap::g_bypass
+  - cache-bypass::DIRECT_PASSTHRU
+  statement: Port zero merges I-cache and D-cache port zero with I-cache priority; other port carries D-cache directly
+    with tag adaptation. Disabled L2/L3 retain wrappers, but WORD_SIZE=SECTOR_SIZE=64 and NUM_REQS=MEM_PORTS=2 select
+    DIRECT_PASSTHRU; their actual request/response OUT_BUF are zero despite wrapper knobs=3. External response time
+    is unspecified.
+- id: r-buffer-detail
+  status: FROZEN
+  nodes:
+  - n-schedule
+  - n-ibuffer
+  - n-dispatch
+  evidence:
+  - elastic::SIZE branches
+  - stream-buffer::valid_in_r/valid_out_r
+  - fifo::bypass/pending_size
+  - pipe-buffer::ready_in
+  statement: SIZE=0 is combinational. SIZE=1 uses pipe_buffer. SIZE=2 uses registered ready/valid stream_buffer
+    even with OUT_REG=0. SIZE>2 uses FIFO occupancy; ready_in=!full so a full FIFO cannot accept a new input merely
+    because a pop is occurring. Simultaneous accepted push/pop preserves occupancy. FIFO head bypass on empty push
+    is registered, not combinational fall-through.
+- id: r-scheduler-edge
+  status: FROZEN
+  nodes:
+  - n-schedule
+  - n-fetch
+  - n-decode
+  evidence:
+  - schedule::always_comb stalled_warps_n/warp_pcs_n; schedule_fire/schedule_if_fire
+  statement: 'Source assignment order: start old state; CTA dispatch; decode unlock; pending wspawn activation;
+    TMC; split; join; barrier unlock; WSYNC; branch; internal schedule_fire sets stall; C-disabled schedule_if_fire
+    assigns PC from payload+4 last. Later assignments override overlapping fields only. Reset overrides sequential
+    state updates. Eligibility uses registered active_warps/stalled_warps, not newly calculated next-state. This
+    precedence does not assert all conflicting events are reachable.'
+- id: r-scoreboard-edge
+  status: FROZEN
+  nodes:
+  - n-scoreboard
+  - n-commit
+  - n-dispatch
+  evidence:
+  - scoreboard::writeback_fire/staging_fire/operands_ready_r/fu_pending
+  - pending::ALM_FULL
+  statement: WB valid+matching wis+eop releases rd (when wb) and wr_xregs. New staging fire reserves after release.
+    Dependency readiness uses resulting inuse next-state and registers operands_ready_r; earliest already-staged
+    dependent departure is next edge after WB, if FU credit/lock and arbiter permit. Credit counter increments at
+    issue_fire before scoreboard output buffering and decrements at dispatch_if fire. ALM_FULL=DISPATCH_QSIZE-1
+    is a guard, not effective queue capacity.
+- id: r-opc-detail
+  status: FROZEN
+  nodes:
+  - n-operands
+  evidence:
+  - opc::req_xbar/has_collision/opd_fetched_st1/pipe_reg1/pipe_reg2/out_buf
+  statement: P bank arbitration selects among used nonzero unfetched sources; collisions retain fetched mask and
+    hold request acceptance until complete. Two pipe registers align bank address/control and synchronous RAM result;
+    assembled operands then enter separate output skid. No timing register bypass is inferred from functional snapshot
+    reads.
+- id: r-muldiv-detail
+  status: FROZEN
+  nodes:
+  - n-alu
+  evidence:
+  - muldiv::IMUL_DPI/IDIV_DPI/RV32 multiplier/serial_div
+  - serial-div::cntr/busy_r
+  - elastic-adapter::loaded
+  - define::!SYNTHESIS && SV_DPI -> IMUL_DPI/IDIV_DPI
+  statement: RV32 non-IMUL_DPI multiply uses LATENCY_IMUL shifts and per-lane multiplier, stalls all shifts when
+    output valid and not ready. Non-IDIV_DPI division starts with cntr=WIDTHN-1 and busy=1; each subsequent busy
+    edge iterates through zero then clears busy. Adapter accepts only !loaded, exposes loaded&&!busy, clears loaded
+    on response pop. It cannot accept on the same edge that pops an existing result. IDIV_DPI instead uses LATENCY_IMUL
+    shift pipeline; it is conditional, not the default serial divider behavior.
+- id: r-fpu-std
+  status: FROZEN
+  nodes:
+  - n-fpu
+  evidence:
+  - fpu-std::NUM_PES_*/pe_ser/rsp_arb
+  - serializer::g_passthru/shift_reg/out_buf
+  - fpu::tag_store/mdata_full
+  statement: Conditional STD RV32 profile with PE ratios=1 has four parallel PEs in each FMA/DIVSQRT/CVT/NCP subcore;
+    no lane batching. Metadata shifts LATENCY enabled steps, each serializer has its own OUT_BUF=2, and four subcore
+    responses merge with R arbitration and backend OUT_BUF=3. FPU header pool allocation on execute_fire and release
+    on fpu_rsp_fire independently limit concurrency. Local II=1 cannot be promoted to sustained whole-FPU II=1.
+- id: r-csr-detail
+  status: FROZEN
+  nodes:
+  - n-sfu
+  - n-schedule
+  - n-fpu
+  evidence:
+  - csr::CTA_READ_LATENCY/cta_read_wait_r/csr_req_valid/write_enable
+  - csr-data::fcsr_n
+  - schedule::CSR writes and branch trap updates
+  statement: Every CSR request first waits for cta_read_done; execute.ready=csr_req_ready&&cta_read_done, and wait
+    resets on execute fire. Source write_enable=csr_req_valid&&csr_wr_enable, without ready qualification; preserve
+    this observation and u-csr-stall. FCSR next-state ORs FP flags then software writes replace addressed bits.
+    Scheduler mscratch assignment order is spawn copy, CTA parameter, software CSR; hardware synchronous trap CSR
+    writes follow software trap CSR writes. Dynamic FRM reads old registered fcsr before the update edge.
+- id: r-lsu-request
+  status: FROZEN
+  nodes:
+  - n-lsu
+  - n-lsu-scheduler
+  evidence:
+  - lsu-slice::mem_req_valid/execute_if.ready/no_rsp_buf_enable/fence_lock
+  - mem-scheduler::req_queue/core_req_ready/req_ibuf
+  statement: LSU ready=(mem_req_ready||req_skip)&&!(no_rsp_buf_enable&&!no_rsp_buf_ready)&&!fence_lock. Memory request
+    excludes req_skip and obeys the same no-response space and fence guard. Ordinary store/no-wb completion enters
+    no_rsp_buf on accepted request, not external write response. FENCE sets is_flush, locks after final request
+    fire, unlocks on matching final response; do not reinterpret it as fixed drain delay. Memory scheduler ready
+    requires request FIFO room and available tag condition; load allocates req_ibuf, store does not.
+- id: r-lsu-response
+  status: FROZEN
+  nodes:
+  - n-lsu
+  - n-lsu-scheduler
+  evidence:
+  - mem-scheduler::rsp_rem_mask/crsp_eop/ibuf_pop
+  - lsu-scheduler::RSP_PARTIAL=1
+  - lsu-slice::rsp_hdr2/rsp_arb
+  statement: RSP_PARTIAL=1 returns lane subsets with original tag. Outstanding load entry is released only on crsp_fire&&crsp_eop,
+    not the first lane response. Slice carries response mask and packet sop/eop into result. P response arbitration
+    prefers load response over no-response completion; backpressure propagates to client response and retains tag
+    ownership.
+- id: r-coalescer-detail
+  status: FROZEN
+  nodes:
+  - n-coalescer
+  evidence:
+  - coalescer::STATE_WAIT/STATE_SEND/is_last_batch/req_sent/ibuf_push/ibuf_pop
+  statement: WAIT waits for old outgoing transfer and free load metadata, then enters SEND; SEND registers one coalesced
+    batch, advances remaining mask, returns input ready only for last batch. Per-batch load metadata allocates on
+    req_sent&&!in_req_rw and releases on out_rsp_fire&&out_rsp_eop. Outputs may precede final input handshake for
+    a multi-batch request. empty checks WAIT, no outgoing valid and no input valid; it is a store-tail test and
+    does not test outstanding load metadata.
+- id: r-local-detail
+  status: FROZEN
+  nodes:
+  - n-local-memory
+  - n-local-adapter
+  evidence:
+  - local::req_bank_idx/req_xbar/lmem_store/bram_buf/rsp_xbar/is_rdw_hazard
+  statement: Bank select is low word-address bits; P request arbitration and registered output precede one single-port
+    SRAM per bank. A bank accepts at most one read or write per edge. Read requires response-buffer space; write
+    needs no response. With DMA disabled, ready=(bank_rsp_ready||write)&&!is_rdw_hazard. A read matching last-cycle
+    written address is delayed by the explicit hazard. SRAM output and tag pipe align; response xbar carries data
+    safely under stall.
+- id: r-cache-queues
+  status: FROZEN
+  nodes:
+  - n-icache
+  - n-dcache
+  evidence:
+  - cache-bank::MREQ_QUEUE_SIZE/CRSQ_QUEUE_SIZE/mshr_pending_size
+  - cache::mem_rsp_queue/cache_bank
+  statement: MREQ depth=next_pow2(max(2*LATENCY,WRITEBACK?MSHR_SIZE:0)+MREQ_SIZE), almost-full at depth-LATENCY.
+    CRSQ depth=next_pow2(2+CRSQ_SIZE). MRSQ is per external memory port in VX_cache; bank ignores that knob. MSHR_SIZE
+    applies per bank unchanged; mshr_alm_full is wired to pending_size.full (not its alm_full). Accepted core requests
+    temporarily reserve even before hit/miss finalize, releases count finalize plus replay/forward drain.
+- id: r-cache-service
+  status: FROZEN
+  nodes:
+  - n-icache
+  - n-dcache
+  - n-memory-fabric
+  evidence:
+  - cache-bank::input arbitration/core_req_ready/pipe_stall
+  - cache::REQ_XBAR_BUF/MEM_REQ_BUF_ENABLE/CORE_RSP_BUF_ENABLE
+  - cache-wrap::g_bypass
+  statement: Bank input priority is init, eligible replay, eligible fill, flush, core request. Core ready requires
+    grant, !mreq_queue_alm_full, !mshr_alm_full, !pipe_stall and no request-defer. With AMO disabled and single-sector
+    lines, amo_chain_stall and wb_hold are zero; crsp_queue_valid&&!crsp_queue_ready still stalls. Fill waits for
+    grant, no forward pending/inflight and (writeback case) MREQ space. Bank-selection xbar is R with REQ_XBAR_BUF=0
+    for both frozen L1s; bank responses and memory outputs have their own buffering/arbiter. D-cache NC bypass is
+    a separate route; L2/L3 DIRECT_PASSTHRU removes actual wrapper output buffers and bank storage for this frozen
+    width/port match.
+- id: r-simt-barrier-detail
+  status: FROZEN
+  nodes:
+  - n-sfu
+  - n-schedule
+  - n-simt
+  - n-barrier
+  evidence:
+  - wctl::wctl_reg/bar_addr/bar_drain/wsync_drain
+  - schedule::bar_unit/split_join.OUT_REG
+  - barrier::read_addr/store_waddr/is_rdw_hazard/unlock_valid_r
+  statement: WCTL execute-fire/eop drives registered TMC/spawn/split/join/BAR/WSYNC. BAR requires LSU drained, WSYNC
+    pending_alm_empty. Barrier read_addr is provided one cycle before req_valid; state RAM output is registered,
+    phase read has explicit same-address forwarding, unlock is registered then consumed by scheduler. Local release
+    occurs on participant completion with zero events, final event completion, or phase mismatch wait, according
+    to req_data. JOIN adds split_join OUT_REG=1 before scheduler mask/PC update. Global network is disabled and
+    no visibility contract is inferred.
+- id: r-completion-detail
+  status: FROZEN
+  nodes:
+  - n-commit
+  - n-schedule
+  - n-cta
+  - n-kmu
+  - n-coalescer
+  evidence:
+  - commit::committed_warp_mask_r
+  - schedule::per_warp_ctr/busy_buf/cta_warp_done
+  - cta::warp_done/cta_done
+  - core::busy
+  - top::busy
+  statement: WB eop is converted into a registered committed mask; scheduler pending decrements and instret increments
+    when that mask is consumed. Pending increments from registered issue_sched_if (scoreboard output acceptance);
+    almost-empty means <=1, used by WSYNC. TMC zero mask sends warp_done to dispatcher; CTA final-member completion
+    differs from pipeline drain. Scheduler busy includes active next-state, nonempty pending and dispatcher busy;
+    Core adds LSU emptiness, mem-unit store tail and DCR busy; top adds KMU/DCR/cluster busy. KMU generation finished
+    alone is not execution complete.
+- id: r-mixed-split
+  status: FROZEN
+  nodes:
+  - n-lmem-switch
+  evidence:
+  - lmem-switch::req_global_buf.valid_in/req_local_buf.valid_in/lsu_in_if.req_ready
+  statement: Each nonempty subset sees input.valid independently; upstream ready is AND of required subset ready
+    signals. No sent-subset mask is stored here. Exactly-once transfer under asymmetric mixed-subset backpressure
+    is not established by these equations; see u-mixed-split. Do not silently invent sent bits in the static IR.
+- id: r-software-edge
+  status: PROVISIONAL
+  nodes:
+  - n-schedule
+  - n-scoreboard
+  - n-commit
+  evidence:
+  - functional::ownership/effect boundary
+  statement: Candidate software cycle evaluates combinational equations against old registered state, determines
+    handshakes, then commits next state at one edge. This is an implementation direction, not proof of all combinational
+    ordering or a requirement to inherit functional Step order.
+unknowns:
+- id: u-build
+  functional_refs: []
+  status: UNRESOLVED
+  evidence:
+  - bundle::excluded implementations/platform headers
+  - header::conditional FPU enum
+  - platform::toolchain branches
+  question: Which external define set, backend and platform were used for a concrete elaborated run?
+  known: Source default without SYNTHESIS/SV_DPI selects STD, but headers permit overrides; DPI executable implementation
+    is absent.
+  missing: Actual build command and any external backend/platform implementation required by that choice.
+  affected:
+  - n-fpu
+  - n-alu
+  - n-external-memory
+  deadline: Before selecting execution backend or claiming run-specific cycle alignment.
+- id: u-execution
+  functional_refs: []
+  status: UNRESOLVED
+  evidence:
+  - muldiv::serial and pipelined subpaths
+  - fpu::backend selection
+  - alu::pe_switch
+  - sfu::pe_switch
+  question: What are the detailed acceptance intervals, occupancy and start/end latencies for each operation under
+    stalls?
+  known: timing_measurements now records RV32 INT, multiply, serial divide, conditional STD serializers, CSR context
+    delay and local boundaries with precise event endpoints.
+  missing: Other externally selected backends and exhaustive contention-dependent whole-path delays; variable stalls
+    have no fixed bound.
+  affected:
+  - n-alu
+  - n-lsu
+  - n-sfu
+  - n-fpu
+  deadline: Before implementing the selected execution components and their contention rules.
+- id: u-memory
+  functional_refs: [U-MEM-01, U-FAULT-01, U-WSYNC-01, U-BAR-01]
+  status: UNRESOLVED
+  evidence:
+  - cache-wrap::LATENCY/MREQ_SIZE/PASSTHRU
+  - mem-scheduler::queues
+  - bundle::excluded platform inputs
+  question: What service timing, automatically derived internal queue capacities and per-path cache/bypass delays
+    should the later model expose?
+  known: L1 MREQ/CRSQ/MRSQ/MSHR derivations, local bank pipeline, coalescer sequencing and L2/L3 direct bypass have
+    been audited in timing-rules.
+  missing: External memory service time, cross-warp visible ordering, and exhaustive miss/eviction/flush scenario
+    timing.
+  affected:
+  - n-icache
+  - n-dcache
+  - n-memory-fabric
+  - n-external-memory
+  - n-local-memory
+  latency_cycles: null
+  deadline: Before memory timing implementation; do not implement cache behavior in this milestone.
+- id: u-feedback
+  functional_refs: [U-SCHED-01, U-CSR-01]
+  status: UNRESOLVED
+  evidence:
+  - schedule::stalled_warps_n/warp_pcs_n
+  - scoreboard::operands_ready_r
+  - barrier::unlock
+  question: How should the complete same-edge priority and feedback-to-next-selection table be represented?
+  known: Source-local scheduler overwrite order, WB release/register readiness, CSR priority and registered control
+    consumption are recorded.
+  missing: Exhaustive combined-event reachability and dynamic validation across components; no universal software
+    priority is frozen.
+  affected:
+  - n-schedule
+  - n-cta
+  - n-simt
+  - n-barrier
+  - n-scoreboard
+  deadline: Before Scheduler implementation and simultaneous-event validation.
+- id: u-visibility
+  functional_refs: [U-CSR-01, U-CTA-01, U-ABI-01, U-LOWER-01, U-WSPAWN-01, U-WSYNC-01, U-BAR-01, U-MEM-01, U-FAULT-01]
+  status: UNRESOLVED
+  evidence:
+  - functional::sections 4/5/10
+  - commit::writeback_if
+  - fpu::fpu_csr_reg
+  - wctl::wctl_reg
+  question: How will detached functional effects be staged and made visible with overlapping instructions and partial
+    uop writeback?
+  known: Functional Step and StageEffects use atomic instruction/before-image commits; RTL has distinct register,
+    CSR, memory and control events.
+  missing: Adapter design and validation that preserve unique owners, masks and no double side effects without replaying
+    old whole-state snapshots.
+  affected:
+  - n-commit
+  - n-operands
+  - n-schedule
+  - n-lsu
+  - n-fpu
+  - n-sfu
+  deadline: Before functional semantics is connected to a cycle executor.
+- id: u-csr-stall
+  functional_refs: [U-CSR-01]
+  status: UNRESOLVED
+  question: What repeated CSR write/read behavior is observable while csr_req_valid remains high but csr_req_ready
+    is low?
+  known: write_enable=csr_req_valid&&csr_wr_enable is not qualified by ready; cta_read_done remains set until execute
+    fire.
+  missing: Reachability/response-stall audit and validation of CSR RMW/old-value under stalls; decide adapter handling
+    without rewriting functional semantics.
+  affected:
+  - n-sfu
+  - n-schedule
+  deadline: Before implementing cycle-accurate side effects for this path; do not silently patch frozen RTL.
+  evidence:
+  - csr::csr_req_valid/write_enable/cta_read_wait_r
+- id: u-mixed-split
+  functional_refs: [U-MEM-01]
+  status: UNRESOLVED
+  question: Can a ready local/global subset be accepted repeatedly while the other subset prevents the upstream
+    handshake?
+  known: Both subset valid signals are independently driven from upstream valid; AND-ready is returned upstream;
+    no sent mask in this module.
+  missing: Directed sequence validation or source-level proof of an upstream/downstream invariant preventing asymmetric
+    readiness for mixed masks.
+  affected:
+  - n-lmem-switch
+  - n-lsu-scheduler
+  deadline: Before implementing cycle-accurate side effects for this path; do not silently patch frozen RTL.
+  evidence:
+  - lmem-switch::req_global_buf/req_local_buf/lsu_in_if.req_ready
+audit:
+- id: audit-functional
+  status: RESOLVED
+  evidence:
+  - functional::section 11; U-SCHED-01 T5/03
+  original_question: How does the functional model deterministically advance non-conflicting multiple warps?
+  decision: Functional round-robin and serial Warp.Step, only for the non-conflicting functional subrange.
+  validation: emu/core/run_test.go; scripts/verify-emu.sh as recorded by the existing contract.
+  closure_task: T5/03-core-run-trace-contract
+  timing_implication: None; hardware fetch priority and issue arbitration are separately sourced. Original U-SCHED-01
+    conflicting memory ordering remains open.
+- id: audit-timing-rules-partial
+  status: RESOLVED
+  original_question: Baseline u-execution/u-memory/u-feedback lacked inner queue derivations and local timing boundaries.
+  decision: Close only documented RV32/conditional STD local latency, L1 queue derivation, local memory and local
+    source-priority subranges; remaining unknowns retained.
+  evidence:
+  - cache-bank::MREQ_QUEUE_SIZE/CRSQ_QUEUE_SIZE
+  - serial-div::cntr
+  - serializer::shift_reg
+  - cache-bypass::DIRECT_PASSTHRU
+  - schedule::next-state assignments
+  validation: Source tracing and static YAML/reference checks in timing-rules; no RTL simulation or whole-system
+    cycle equivalence claimed.
+  closure_task: T8/timing-rules
+measurement_convention:
+  status: PROVISIONAL
+  condition: All measurements use cfg-baseline unless a stricter backend/path condition is stated; no reset during
+    interval.
+  transfer_edges: 'Input fire at E[k]; output transfer means first legal downstream sampling edge E[k+L]. A single
+    register has L=1: its output settles after E[k], and the receiver samples at E[k+1].'
+  enable_steps: Pipeline depth counts enabled shifts including input capture; stalled wall-clock cycles do not advance
+    it.
+  capacity: Entries resident between start allocation/push and end release/pop; start/end are lifecycle events,
+    not a latency interval.
+  static_configuration: Configuration widths/counts/RTL knobs are static elaboration properties, not time measurements;
+    config and resource units apply.
+  interval: Minimum distance between two input acceptance edges, under the explicit isolated/uncontended condition.
+    Not steady-state whole-core throughput.
+  visibility: A sideband receiver update is distinct from producer result availability and architectural effect
+    commitment.
+timing_measurements:
+- id: tm-buffer-0
+  status: FROZEN
+  node: n-decode
+  resource_refs: []
+  kind: minimum_transfer_latency
+  value: 0
+  unit: cycles
+  start_event: elastic input fire E[k]
+  end_event: elastic output fire E[k+value]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; SIZE=0,
+    OUT_REG=0 or 1; SIZE=0 ignores OUT_REG
+  evidence:
+  - elastic::SIZE branches
+  - fifo::head bypass
+  - stream-buffer::valid_out_r
+  - pipe-buffer::valid register
+  boundary_refs:
+  - b-decode
+- id: tm-buffer-1
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: elastic input fire E[k]
+  end_event: elastic output fire E[k+value]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; SIZE=1,
+    OUT_REG=0 or 1; SIZE=0 ignores OUT_REG
+  evidence:
+  - elastic::SIZE branches
+  - fifo::head bypass
+  - stream-buffer::valid_out_r
+  - pipe-buffer::valid register
+  boundary_refs:
+  - b-alu-int-result
+- id: tm-buffer-2
+  status: FROZEN
+  node: n-schedule
+  resource_refs: []
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: elastic input fire E[k]
+  end_event: elastic output fire E[k+value]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; SIZE=2,
+    OUT_REG=0 or 1; SIZE=0 ignores OUT_REG
+  evidence:
+  - elastic::SIZE branches
+  - fifo::head bypass
+  - stream-buffer::valid_out_r
+  - pipe-buffer::valid register
+  boundary_refs:
+  - b-schedule
+- id: tm-buffer-4
+  status: FROZEN
+  node: n-dispatch
+  resource_refs:
+  - res-dispatch
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: elastic input fire E[k]
+  end_event: elastic output fire E[k+value]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; SIZE=4,
+    OUT_REG=0 or 1; SIZE=0 ignores OUT_REG
+  evidence:
+  - elastic::SIZE branches
+  - fifo::head bypass
+  - stream-buffer::valid_out_r
+  - pipe-buffer::valid register
+  boundary_refs:
+  - b-dispatch
+- id: tm-buffer-interval
+  status: FROZEN
+  node: n-dispatch
+  resource_refs:
+  - res-dispatch
+  kind: minimum_acceptance_interval
+  value: 1
+  unit: cycles
+  start_event: input fire
+  end_event: next input fire
+  condition: steady ready output, valid input, not previously full; applies instantiated depth 1/2/4 buffers
+  evidence:
+  - elastic::ready_in
+  - fifo::pending_size
+  - stream-buffer::valid_in_r
+- id: tm-opc-read
+  status: FROZEN
+  node: n-operands
+  resource_refs:
+  - res-register-banks
+  kind: minimum_transfer_latency
+  value: 3
+  unit: cycles
+  start_event: scoreboard_if fire into OPC E[k]
+  end_event: OPC out_buf output accepted E[k+3]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; all used
+    sources granted in first bank pass
+  evidence:
+  - opc::pipe_reg1/pipe_reg2/out_buf
+  - operands::opc_unit.OUT_BUF
+- id: tm-wb-dependent-stage
+  status: FROZEN
+  node: n-scoreboard
+  resource_refs:
+  - res-hazards
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: matching WB valid/eop release E[k]
+  end_event: already-staged dependent staging_fire E[k+1]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; no new
+    conflicting reserve; FU credit/lock available; selected by arbiter
+  evidence:
+  - scoreboard::wb_inuse_regs/inuse_regs_n/operands_ready_r
+- id: tm-int-result
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: INT execute_if fire
+  end_event: INT result_if fire
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall
+  evidence:
+  - integer::rsp_buf
+  - elastic::default SIZE=1
+- id: tm-int-interval
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_acceptance_interval
+  value: 1
+  unit: cycles
+  start_event: INT execute_if fire
+  end_event: next INT execute_if fire
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall
+  evidence:
+  - integer::rsp_buf
+  - pipe-buffer::ready_in
+- id: tm-imul-result
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_transfer_latency
+  value: 3
+  unit: cycles
+  start_event: mul_valid_in&&mul_ready_in
+  end_event: mul_valid_out&&mul_ready_out before MULDIV merge
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; RV32 non-IMUL_DPI
+    path, LATENCY_IMUL=3, pipeline enable always true
+  evidence:
+  - muldiv::RV32 multiplier and shift register
+  - platform::LATENCY_IMUL
+- id: tm-imul-interval
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_acceptance_interval
+  value: 1
+  unit: cycles
+  start_event: mul input fire
+  end_event: next mul input fire
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; RV32 non-IMUL_DPI
+    path
+  evidence:
+  - muldiv::mul_ready_in/multiplier.enable
+- id: tm-idiv-iterations
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: arithmetic_iterations
+  value: 32
+  unit: busy iteration edges
+  start_event: edge after divider strobe
+  end_event: edge clearing busy at cntr=0
+  condition: cfg-baseline; !IDIV_DPI; WIDTHN=32; includes divide-by-zero path, no early exit
+  evidence:
+  - serial-div::cntr/busy_r/working
+- id: tm-idiv-result
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_transfer_latency
+  value: 33
+  unit: cycles
+  start_event: div input fire/strobe E[k]
+  end_event: adapter div_valid_out&&div_ready_out E[k+33]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; !IDIV_DPI;
+    busy clears after E[k+32], valid then settles
+  evidence:
+  - serial-div::busy_r/cntr
+  - elastic-adapter::valid_out
+- id: tm-idiv-accept
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_acceptance_interval
+  value: 34
+  unit: cycles
+  start_event: div input fire E[k]
+  end_event: next div input fire E[k+34]
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; !IDIV_DPI;
+    earliest result pop at E[k+33], loaded clears only on pop
+  evidence:
+  - elastic-adapter::loaded/ready_in
+  - serial-div::WIDTHN
+- id: tm-idiv-capacity
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: capacity
+  value: 1
+  unit: vector operations
+  start_event: adapter push
+  end_event: adapter pop
+  condition: cfg-baseline; !IDIV_DPI; same loaded context spans arithmetic and result waiting
+  evidence:
+  - elastic-adapter::loaded
+  - muldiv::div_tag_r
+- id: tm-dpi-div-result
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: minimum_transfer_latency
+  value: 3
+  unit: cycles
+  start_event: DPI div input fire
+  end_event: DPI div output fire before MULDIV merge
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; IDIV_DPI
+    explicitly defined; executable DPI implementation absent, this is RTL envelope only; derived define from !SYNTHESIS
+    && SV_DPI
+  evidence:
+  - muldiv::IDIV_DPI shift_reg DEPTH=LATENCY_IMUL
+  - platform::LATENCY_IMUL
+  - define::IMUL_DPI/IDIV_DPI
+- id: tm-fp-fma
+  status: FROZEN
+  node: n-fpu
+  resource_refs:
+  - res-fpu
+  - res-fpu-tags
+  kind: minimum_transfer_latency
+  value: 9
+  unit: cycles
+  start_event: STD per_core input accepted by pe_serializer
+  end_event: same serializer output accepted before STD rsp_arb
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; explicit
+    STD/no backend overrides, RV32/FLEN32, PE ratios=1, PE_REG=0; excludes backend merge and top tag admission
+  evidence:
+  - fpu-std::g_fma.pe_ser
+  - serializer::shift_reg/out_buf
+  - header::VX_CFG_*_LATENCY
+  - fma-rtl::stage latencies
+  - fdivsqrt::LATENCY static assert
+  - fcvt::stage depth/OUT_REG
+  - fncp::stage depth/OUT_REG
+  derivation: 8 enabled datapath/tag shifts + one serializer output buffer
+- id: tm-fp-divsqrt
+  status: FROZEN
+  node: n-fpu
+  resource_refs:
+  - res-fpu
+  - res-fpu-tags
+  kind: minimum_transfer_latency
+  value: 18
+  unit: cycles
+  start_event: STD per_core input accepted by pe_serializer
+  end_event: same serializer output accepted before STD rsp_arb
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; explicit
+    STD/no backend overrides, RV32/FLEN32, PE ratios=1, PE_REG=0; excludes backend merge and top tag admission
+  evidence:
+  - fpu-std::g_fdivsqrt.pe_ser
+  - serializer::shift_reg/out_buf
+  - header::VX_CFG_*_LATENCY
+  - fma-rtl::stage latencies
+  - fdivsqrt::LATENCY static assert
+  - fcvt::stage depth/OUT_REG
+  - fncp::stage depth/OUT_REG
+  derivation: 17 enabled datapath/tag shifts + one serializer output buffer
+- id: tm-fp-cvt
+  status: FROZEN
+  node: n-fpu
+  resource_refs:
+  - res-fpu
+  - res-fpu-tags
+  kind: minimum_transfer_latency
+  value: 6
+  unit: cycles
+  start_event: STD per_core input accepted by pe_serializer
+  end_event: same serializer output accepted before STD rsp_arb
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; explicit
+    STD/no backend overrides, RV32/FLEN32, PE ratios=1, PE_REG=0; excludes backend merge and top tag admission
+  evidence:
+  - fpu-std::g_cvt.pe_ser
+  - serializer::shift_reg/out_buf
+  - header::VX_CFG_*_LATENCY
+  - fma-rtl::stage latencies
+  - fdivsqrt::LATENCY static assert
+  - fcvt::stage depth/OUT_REG
+  - fncp::stage depth/OUT_REG
+  derivation: 5 enabled datapath/tag shifts + one serializer output buffer
+- id: tm-fp-ncp
+  status: FROZEN
+  node: n-fpu
+  resource_refs:
+  - res-fpu
+  - res-fpu-tags
+  kind: minimum_transfer_latency
+  value: 3
+  unit: cycles
+  start_event: STD per_core input accepted by pe_serializer
+  end_event: same serializer output accepted before STD rsp_arb
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; explicit
+    STD/no backend overrides, RV32/FLEN32, PE ratios=1, PE_REG=0; excludes backend merge and top tag admission
+  evidence:
+  - fpu-std::g_ncp.pe_ser
+  - serializer::shift_reg/out_buf
+  - header::VX_CFG_*_LATENCY
+  - fma-rtl::stage latencies
+  - fdivsqrt::LATENCY static assert
+  - fcvt::stage depth/OUT_REG
+  - fncp::stage depth/OUT_REG
+  derivation: 2 enabled datapath/tag shifts + one serializer output buffer
+- id: tm-fp-pe-interval
+  status: FROZEN
+  node: n-fpu
+  resource_refs:
+  - res-fpu
+  kind: minimum_acceptance_interval
+  value: 1
+  unit: cycles
+  start_event: serializer input fire
+  end_event: next same serializer input fire
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; STD, equal
+    lane/PE count, free top header tag for each input; not a sustained top-level throughput claim
+  evidence:
+  - serializer::g_passthru.enable/ready_in
+  - fpu::mdata_full
+  - fma-rtl::stage latencies
+  - fdivsqrt::LATENCY static assert
+  - fcvt::stage depth/OUT_REG
+  - fncp::stage depth/OUT_REG
+- id: tm-csr-admission
+  status: FROZEN
+  node: n-sfu
+  resource_refs:
+  - res-sfu
+  kind: minimum_acceptance_interval
+  value: 2
+  unit: cycles
+  start_event: CSR execute fire
+  end_event: next CSR execute fire
+  condition: cfg-baseline; continuous valid CSR stream, result buffer ready; wait counter resets on each acceptance
+  evidence:
+  - csr::cta_read_wait_r/CTA_READ_LATENCY/execute_if.ready
+- id: tm-csr-context
+  status: FROZEN
+  node: n-sfu
+  resource_refs:
+  - res-sfu
+  kind: context_wait
+  value: 1
+  unit: cycles
+  start_event: first edge observing new valid with wait=0
+  end_event: earliest execute fire at following edge
+  condition: cfg-baseline; no result backpressure; applies every CSR address
+  evidence:
+  - csr::CTA_READ_LATENCY/cta_read_wait_r
+- id: tm-csr-result
+  status: FROZEN
+  node: n-sfu
+  resource_refs:
+  - res-sfu
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: CSR execute acceptance (after context wait)
+  end_event: CSR result_if acceptance before SFU PE merge
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall
+  evidence:
+  - csr::result buffer SIZE=2
+  - stream-buffer::valid_out_r
+- id: tm-branch-owner
+  status: FROZEN
+  node: n-alu
+  resource_refs:
+  - res-alu
+  kind: sideband_consumer_latency
+  value: 1
+  unit: cycles
+  start_event: INT result_fire with branch/eop E[k]
+  end_event: scheduler consumes branch_ctl_if at E[k+1]
+  condition: cfg-baseline; producer fire already occurred; excludes subsequent fetch eligibility/wait
+  evidence:
+  - integer::br_enable/branch pipe_register
+  - schedule::branch handling
+- id: tm-wctl-owner
+  status: FROZEN
+  node: n-sfu
+  resource_refs:
+  - res-sfu
+  kind: sideband_consumer_latency
+  value: 1
+  unit: cycles
+  start_event: WCTL execute_fire/eop E[k]
+  end_event: scheduler or barrier consumes wctl_reg output E[k+1]
+  condition: cfg-baseline; drain guards satisfied; JOIN downstream pipeline separately accounted
+  evidence:
+  - wctl::wctl_reg
+  - schedule::warp_ctl_if
+- id: tm-commit-wb
+  status: FROZEN
+  node: n-commit
+  resource_refs: []
+  kind: minimum_transfer_latency
+  value: 1
+  unit: cycles
+  start_event: selected commit_if fire into commit_arb
+  end_event: writeback_if valid sampled by RF/scoreboard
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall
+  evidence:
+  - commit::commit_arb.OUT_BUF=1/writeback_if
+  - pipe-buffer::valid
+- id: tm-wb-pending
+  status: FROZEN
+  node: n-schedule
+  resource_refs: []
+  kind: sideband_consumer_latency
+  value: 1
+  unit: cycles
+  start_event: WB eop sampled E[k]
+  end_event: scheduler pending decrement from registered committed mask E[k+1]
+  condition: cfg-baseline; no reset; instruction identity from commit data
+  evidence:
+  - commit::committed_warp_mask_r
+  - schedule::per_warp_ctr
+- id: tm-local-read
+  status: FROZEN
+  node: n-local-memory
+  resource_refs:
+  - res-local-storage
+  kind: minimum_transfer_latency
+  value: 3
+  unit: cycles
+  start_event: lsu_bus_if lane request accepted by local req_xbar
+  end_event: same lane local rsp accepted
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; read,
+    no DMA, no RDW hazard, no bank contention; excludes upstream local-adapter and lmem-switch
+  evidence:
+  - local::req_xbar/lmem_store/bram_buf/rsp_xbar
+  derivation: request xbar register + SRAM/tag aligned register + response xbar register
+- id: tm-local-bank-interval
+  status: FROZEN
+  node: n-local-memory
+  resource_refs:
+  - res-local-storage
+  kind: minimum_acceptance_interval
+  value: 1
+  unit: cycles
+  start_event: per_bank_req fire
+  end_event: next request fire at same bank
+  condition: cfg-baseline; no reset; initially empty relevant buffers; no contention or downstream stall; no same-address
+    read-after-write hazard; reads have response space
+  evidence:
+  - local::per_bank_req_ready/lsu_active
+- id: tm-local-rdw
+  status: FROZEN
+  node: n-local-memory
+  resource_refs:
+  - res-local-storage
+  kind: hazard_delay
+  value: 1
+  unit: cycles
+  start_event: edge after same-bank store, matching read blocked by last_wr_valid
+  end_event: earliest matching read bank acceptance next edge
+  condition: cfg-baseline; DMA disabled, matching read continuously valid and no other backpressure; no new intervening
+    write
+  evidence:
+  - local::last_wr_valid/is_rdw_hazard
+- id: tm-cache-mreq-icache
+  status: FROZEN
+  node: n-icache
+  resource_refs:
+  - res-icache
+  kind: capacity
+  value: 4
+  unit: entries per bank
+  start_event: mreq_queue_push
+  end_event: mem_req_valid&&mem_req_ready
+  condition: cfg-baseline; ordinary frozen L1 path; no overrides
+  evidence:
+  - cache-bank::MREQ_QUEUE_SIZE/mem_req_queue
+  - socket::icache
+  instances: 1
+  almost_full_threshold: 2
+  derivation: next_pow2(max(2*LATENCY,WRITEBACK?MSHR_SIZE:0)+MREQ_SIZE)
+- id: tm-cache-crsq-icache
+  status: FROZEN
+  node: n-icache
+  resource_refs:
+  - res-icache
+  kind: capacity
+  value: 2
+  unit: responses per bank
+  start_event: core_rsp_queue input fire
+  end_event: core_rsp_valid&&core_rsp_ready
+  condition: cfg-baseline; CRSQ_SIZE=0; not the outer response xbar buffer
+  evidence:
+  - cache-bank::CRSQ_QUEUE_SIZE/core_rsp_queue
+  instances: 1
+- id: tm-cache-mshr-icache
+  status: FROZEN
+  node: n-icache
+  resource_refs:
+  - res-icache
+  kind: capacity
+  value: 16
+  unit: reservation entries per bank
+  start_event: core_req_fire reservation; MSHR allocate at lookup
+  end_event: finalize release or replay/forward dequeue
+  condition: cfg-baseline; includes provisional hit reservations; mshr_alm_full uses full pin
+  evidence:
+  - cache-bank::mshr_pending_size/VX_cache_mshr
+  - cache::cache_bank.MSHR_SIZE
+  instances: 1
+- id: tm-cache-mrsq-icache
+  status: FROZEN
+  node: n-icache
+  resource_refs:
+  - res-icache
+  kind: capacity
+  value: 0
+  unit: response entries per memory port
+  start_event: mem response queue input fire
+  end_event: mem response queue output fire
+  condition: cfg-baseline; SIZE=0 means passthrough specifically at this wrapper, not bank MREQ/CRSQ
+  evidence:
+  - cache::mem_rsp_queue
+  - socket::icache.MRSQ_SIZE
+  instances: 1
+- id: tm-cache-mreq-dcache
+  status: FROZEN
+  node: n-dcache
+  resource_refs:
+  - res-dcache
+  kind: capacity
+  value: 16
+  unit: entries per bank
+  start_event: mreq_queue_push
+  end_event: mem_req_valid&&mem_req_ready
+  condition: cfg-baseline; ordinary frozen L1 path; no overrides
+  evidence:
+  - cache-bank::MREQ_QUEUE_SIZE/mem_req_queue
+  - socket::dcache
+  instances: 2
+  almost_full_threshold: 14
+  derivation: next_pow2(max(2*LATENCY,WRITEBACK?MSHR_SIZE:0)+MREQ_SIZE)
+- id: tm-cache-crsq-dcache
+  status: FROZEN
+  node: n-dcache
+  resource_refs:
+  - res-dcache
+  kind: capacity
+  value: 2
+  unit: responses per bank
+  start_event: core_rsp_queue input fire
+  end_event: core_rsp_valid&&core_rsp_ready
+  condition: cfg-baseline; CRSQ_SIZE=0; not the outer response xbar buffer
+  evidence:
+  - cache-bank::CRSQ_QUEUE_SIZE/core_rsp_queue
+  instances: 2
+- id: tm-cache-mshr-dcache
+  status: FROZEN
+  node: n-dcache
+  resource_refs:
+  - res-dcache
+  kind: capacity
+  value: 16
+  unit: reservation entries per bank
+  start_event: core_req_fire reservation; MSHR allocate at lookup
+  end_event: finalize release or replay/forward dequeue
+  condition: cfg-baseline; includes provisional hit reservations; mshr_alm_full uses full pin
+  evidence:
+  - cache-bank::mshr_pending_size/VX_cache_mshr
+  - cache::cache_bank.MSHR_SIZE
+  instances: 2
+- id: tm-cache-mrsq-dcache
+  status: FROZEN
+  node: n-dcache
+  resource_refs:
+  - res-dcache
+  kind: capacity
+  value: 4
+  unit: response entries per memory port
+  start_event: mem response queue input fire
+  end_event: mem response queue output fire
+  condition: cfg-baseline; SIZE=0 means passthrough specifically at this wrapper, not bank MREQ/CRSQ
+  evidence:
+  - cache::mem_rsp_queue
+  - socket::dcache.MRSQ_SIZE
+  instances: 2
+- id: tm-cache-bank-pipeline
+  status: FROZEN
+  node: n-dcache
+  resource_refs:
+  - res-dcache
+  - res-icache
+  kind: pipeline_depth
+  value: 2
+  unit: enabled pipeline stages
+  start_event: bank selected request capture
+  end_event: bank commit-stage payload used for response/miss enqueue
+  condition: cfg-baseline; LATENCY=2 and pipe_stall=false; excludes queue output and cache wrappers
+  evidence:
+  - cache-bank::PIPELINE_STAGES/st0/st1/stC
+  note: Not a cache-interface hit latency
+- id: tm-coalescer-single-batch
+  status: FROZEN
+  node: n-coalescer
+  resource_refs:
+  - res-coalescer-tags
+  kind: minimum_acceptance_interval
+  value: 2
+  unit: cycles
+  start_event: final input fire of one one-batch vector
+  end_event: final input fire of next one-batch vector
+  condition: cfg-baseline; every vector fits one batch, outgoing ready continuously high and index pool not full;
+    WAIT/SEND alternation
+  evidence:
+  - coalescer::STATE_WAIT/STATE_SEND/in_req_ready_n
+- id: tm-coalescer-first-output
+  status: FROZEN
+  node: n-coalescer
+  resource_refs:
+  - res-coalescer-tags
+  kind: minimum_transfer_latency
+  value: 2
+  unit: cycles
+  start_event: first WAIT edge seeing valid stable input E[k]
+  end_event: first outgoing batch accepted E[k+2]
+  condition: cfg-baseline; initially WAIT/no pending out; free metadata; outgoing ready; this starts at presentation,
+    NOT final input handshake
+  evidence:
+  - coalescer::STATE_WAIT/STATE_SEND/pipe_reg

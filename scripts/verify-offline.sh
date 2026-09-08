@@ -6,7 +6,8 @@ project_root="$(cd -- "${script_dir}/.." && pwd -P)"
 source "${project_root}/env/env.sh"
 "${project_root}/scripts/environment-check.sh"
 
-offline_root="$(mktemp -d "${project_root}/.cache/offline-verify.XXXXXX")"
+mkdir -p -- "${SIMULATOR_RUNTIME_ROOT}"
+offline_root="$(mktemp -d "${SIMULATOR_RUNTIME_ROOT}/offline-verify.XXXXXX")"
 cleanup() {
     chmod -R u+w -- "${offline_root}" 2>/dev/null || true
     rm -rf -- "${offline_root}"

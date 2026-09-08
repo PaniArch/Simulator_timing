@@ -616,3 +616,17 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 - 是否把实现验证得到的设计从 `PROVISIONAL` 正确升级，或在失败时回退；
 - 是否只模拟架构功能语义，没有把 pipeline/cache/hazard/timing 偶然带入正确性契约；
 - 文档与代码是否在同一 Task 同步更新。
+
+## 14. T8 静态 Timing IR 衔接（timing-baseline）
+
+`PROVISIONAL（T8/timing-baseline）`：新增独立的 [Timing IR 入口](../../timing/README.md)、[结构解释](../../timing/architecture.md) 与 [结构化基线](../../timing/ir.yaml)。本阶段已按冻结配置与实际 RTL 实例登记流水节点、资源、端口、缓冲和控制/访存反馈；这些属于独立 timing 证据，不改变本文的功能正确性范围、canonical state owner 或已有 `RESOLVED` 审计。
+
+`PROVISIONAL`：后续可复用无状态 ISA decode/evaluate/completion 和最小 detached view 原则；现有 `Warp.Step`、同步 MemoryService、全 before-image `EffectStage` 原子替换及 Core round-robin 不能直接解释为重叠流水的执行/可见顺序。具体周期组件、Scheduler 与 effect 可见性适配尚未实现，也不在本阶段固定 Go 类型或调用组织。
+
+`UNRESOLVED`：Timing IR 的 `u-build/u-execution/u-memory/u-feedback/u-visibility` 分别跟踪外部构建轴、执行路径详细时序、memory 服务及内部队列、完整同周期反馈表和功能 effect 适配。它们不替代第 10 节的 fault、ordering、ABI 或 checker 问题；结构化事实和时序参数只维护于 Timing IR，不在本功能契约重复维护。
+
+`PROVISIONAL（T8/timing-rules）`：静态 Timing IR 现补充 [周期规则说明](../../timing/rules.md) 与具备条件、单位、起止事件的 YAML 定量条目。底层队列、串行/流水执行、局部反馈与 cache bypass 参数的源级求值不改变功能原子 effect 契约；仍未实现周期推进。此次发现 CSR 背压写使能与混合 local/global 子集握手的源码疑点，分别登记于 Timing IR 的 `u-csr-stall` 和 `u-mixed-split`，不把未验证行为补入本功能语义。
+
+`PROVISIONAL（T8/timing-integration-validation）`：[功能衔接设计](../../timing/integration.md) 按实际 isa、state、warp、core、device 与 support 实现记录复用和适配边界。功能计算、时序结果就绪、架构可见事件分开，唯一 owner 不变；同步 Warp.Step、memory completion 和全 before-image 原子 effect stage 不能直接充当重叠流水。本文仍是功能语义、owner 与既有未决/RESOLVED 审计的权威来源；timing YAML 的 functional_refs 只索引相关问题，不宣称闭合它们。
+
+T8 维护检查：结构参数、周期规则与来源更新 timing/ir.yaml；软件职责候选更新 timing/integration.md；若未来改变功能 owner/effect 契约，必须同步本文，不能只改时序文档。`bash scripts/verify-timing.sh` 使用已有离线 YAML 依赖检查结构及无效样例，`bash scripts/verify-all.sh` 保留 RTL 完整性及功能回归职责。T8 没有改写冻结 RTL 或现有功能语义实现，也没有实现周期执行器、Scheduler、cache 模型或 RTLSIM 对齐。
