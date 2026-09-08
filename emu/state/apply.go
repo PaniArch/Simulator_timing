@@ -232,6 +232,19 @@ func stageRegisterWrites(candidate *WarpState, writes []isa.RegisterWriteEffect)
 		if err := validateRegister(write.Destination); err != nil {
 			return effectError("register-write", "entry %d: %v", index, err)
 		}
+		if write.ByteMask & ^uint8(15) != 0 {
+			return effectError("register-write", "byte mask exceeds one word")
+		}
+		byteMask := write.ByteMask
+		if byteMask == 0 {
+			byteMask = 15
+		}
+		bits := uint32(0)
+		for b := uint(0); b < 4; b++ {
+			if byteMask&(1<<b) != 0 {
+				bits |= uint32(255) << (8 * b)
+			}
+		}
 		if !write.Mask.Valid() {
 			return effectError("register-write", "entry %d mask %#x exceeds frozen lanes", index, write.Mask)
 		}
@@ -247,9 +260,11 @@ func stageRegisterWrites(candidate *WarpState, writes []isa.RegisterWriteEffect)
 				continue
 			}
 			if write.Destination.File == isa.Integer {
-				candidate.lanes[lane].gpr[write.Destination.Index] = write.Values[lane]
+				old := candidate.lanes[lane].gpr[write.Destination.Index]
+				candidate.lanes[lane].gpr[write.Destination.Index] = old & ^bits | write.Values[lane]&bits
 			} else {
-				candidate.lanes[lane].fpr[write.Destination.Index] = write.Values[lane]
+				old := candidate.lanes[lane].fpr[write.Destination.Index]
+				candidate.lanes[lane].fpr[write.Destination.Index] = old & ^bits | write.Values[lane]&bits
 			}
 		}
 	}

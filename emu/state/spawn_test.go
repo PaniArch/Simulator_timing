@@ -156,3 +156,57 @@ func TestWarpSpawnCommitStalenessNeverPartiallyActivates(t *testing.T) {
 		}
 	})
 }
+
+func TestSpawnDeliveryUsesLiveSourceAndOriginalTargets(t *testing.T) {
+	_, _, source := makeSpawnStage(t)
+	decoded, _ := isa.Decode(spawnCatalogWord(t))
+	before, _ := source.Snapshot()
+	effects, err := before.Evaluate(decoded, state.ReadContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delivery, err := source.NewEffectDelivery(effects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets := []*state.WarpState{spawnOwner(t, spawnInitial(0, false)), spawnOwner(t, spawnInitial(1, false)), spawnOwner(t, spawnInitial(2, false))}
+	descriptors := targetDescriptors(targets...)
+	// A stale target must reject the entire control event, without consuming it.
+	if err = targets[1].SetPC(0x500); err != nil {
+		t.Fatal(err)
+	}
+	if err = delivery.DeliverWarpSpawn(descriptors); err == nil {
+		t.Fatal("stale target accepted")
+	}
+	if delivery.Delivered(state.ControlEvent) {
+		t.Fatal("failed spawn consumed receipt")
+	}
+	sourceAfter, _ := source.Snapshot()
+	target0, _ := targets[0].Snapshot()
+	if sourceAfter != before || target0 != descriptors[0].Expected {
+		t.Fatal("partial spawn mutation")
+	}
+	// The caller explicitly refreshes pre-issue context for this owner-level retry.
+	descriptors = targetDescriptors(targets...)
+	marker := isa.Register{File: isa.Integer, Index: 25}
+	if err = source.WriteRegister(marker, 1, isa.LaneValues{0xabcdef}); err != nil {
+		t.Fatal(err)
+	}
+	if err = delivery.DeliverWarpSpawn(descriptors); err != nil {
+		t.Fatal(err)
+	}
+	sourceAfter, _ = source.Snapshot()
+	values, _ := sourceAfter.ReadRegister(marker)
+	if sourceAfter.PC() != before.PC()+4 || values[0] != 0xabcdef {
+		t.Fatal("spawn restored old source")
+	}
+	for _, target := range targets {
+		s, _ := target.Snapshot()
+		if s.PC() != 0x300 || s.ActiveMask() != 1 || s.Lifecycle() != state.WarpRunning {
+			t.Fatal("target not initialized", s)
+		}
+	}
+	if err = delivery.DeliverWarpSpawn(descriptors); err == nil {
+		t.Fatal("spawn replay accepted")
+	}
+}

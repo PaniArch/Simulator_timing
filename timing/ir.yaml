@@ -1,7 +1,7 @@
 schema_version: 1
 id: timing-baseline
 status: PROVISIONAL
-scope: Static frozen-source structure; no executable cycle model
+scope: Frozen-source structure with incremental T9 cycle components; complete instruction executor pending
 units:
   capacity: entries at the named scope; not added across aliases
   data_bytes: bytes of data per physical transfer, excluding metadata
@@ -11,6 +11,87 @@ units:
   rtl_parameters: verbatim or evaluated instance parameters, not end-to-end timing
   null: unknown or intentionally unassigned; never zero
 sources:
+  cycle-effects:
+    path: timing/effects/adapter.go
+    locator: Adapter.Begin/Observe/Reset
+  functional-operands:
+    path: emu/state/operands.go
+    locator: OperandCapture.Read/EvaluateAt
+  functional-delivery:
+    path: emu/state/delivery.go
+    locator: EffectDelivery.Deliver
+  cycle-core:
+    path: timing/model/core.go
+    locator: Core.Evaluate
+  cycle-observe:
+    path: timing/model/observe.go
+    locator: ResourceState and component Resources methods
+  cycle-driver:
+    path: timing/model/driver.go
+    locator: RunTokens
+  cycle-lsu:
+    path: timing/model/lsu.go
+    locator: LSU.Evaluate
+  cycle-frontend:
+    path: timing/model/frontend.go
+    locator: Frontend.Evaluate
+  cycle-dispatch:
+    path: timing/model/dispatch.go
+    locator: Dispatch.Evaluate
+  cycle-sfu:
+    path: timing/model/sfu.go
+    locator: SFU.Evaluate
+  cycle-fpu:
+    path: timing/model/fpu.go
+    locator: STDFPU.Evaluate
+  cycle-merge:
+    path: timing/model/merge.go
+    locator: Merge.Evaluate
+  cycle-alu:
+    path: timing/model/alu.go
+    locator: ALU.Evaluate
+  rr-arbiter:
+    path: Vortex_rtl/hw/rtl/libs/VX_rr_arbiter.sv
+    locator: g_model1 reqs_mask and grant_valid/grant_ready
+  stream-arbiter:
+    path: Vortex_rtl/hw/rtl/libs/VX_stream_arb.sv
+    locator: g_arbiter ready_out_w and out_buf
+  cycle-buffer:
+    path: timing/model/buffer.go
+    locator: Buffer.Evaluate; Flush
+  cycle-edge:
+    path: timing/model/edge.go
+    locator: revision; mutation; CommitEdge
+  cycle-execute:
+    path: timing/model/execute.go
+    locator: Pipeline; Divider; STDPath
+  cycle-operands:
+    path: timing/model/operands.go
+    locator: Collector.Evaluate; OperandTransition.Read
+  cycle-wait:
+    path: timing/model/wait.go
+    locator: WaitPool.Evaluate; response coverage
+  cycle-fetch:
+    path: timing/model/fetch.go
+    locator: Fetch.Evaluate; request and tag acceptance
+  cycle-decode:
+    path: timing/model/decode.go
+    locator: DecodeToken
+  cycle-issue:
+    path: timing/model/issue.go
+    locator: Issue.Evaluate; registered ready and FU credits
+  cycle-uop:
+    path: timing/model/uop.go
+    locator: Sequencer.Evaluate
+  cycle-csr:
+    path: timing/model/csr.go
+    locator: CSR.Evaluate; RequestWindow
+  cycle-commit:
+    path: timing/model/commit.go
+    locator: Commit.Evaluate
+  cycle-clock:
+    path: timing/model/clock.go
+    locator: Clock.Run; edgeDriver.Handle
   bundle:
     path: Vortex_rtl/README.md
     locator: frozen XLEN and revisions; excluded backends
@@ -561,8 +642,11 @@ resources:
   status: FROZEN
   evidence:
   - uop::uop_active/uop_data
+  - packld::uop_count
   instances: 4
   capacity: 1
+  packed_byte_uops: 4
+  packed_half_uops: 2
   capacity_unit: active burst per warp
   condition: cfg-baseline; per declared instance/scope; count only this physical resource, not aliases
   measurement:
@@ -709,6 +793,11 @@ resources:
   capacity_unit: queued vector requests
   clients: 1
   rtl_parameters:
+    CORE_REQS: 4
+    MEM_CHANNELS: 4
+    WORD_SIZE: 4
+    LINE_SIZE: 4
+    RSP_PARTIAL: 1
     CORE_QUEUE_SIZE: 4
     MEM_QUEUE_SIZE: 8
     PENDING_SIZE: 8
@@ -989,6 +1078,34 @@ boundaries:
     unit: RTL parameter encoding/stage count as named
     start: input captured at named instance
     end: output of named instance; no implied end-to-end delay
+- id: b-opc-read-first
+  node: n-operands
+  status: FROZEN
+  evidence:
+  - opc::pipe_reg1
+  - pipe-buffer::DEPTH default and ready chain
+  kind: pipe_buffer
+  rtl_parameters:
+    DEPTH: 1
+  condition: cfg-baseline; first metadata register; included in b-opc-read, not extra storage
+  measurement:
+    unit: register stages
+    start: bank pass captured by pipe_reg1
+    end: pipe_reg1 fire drives synchronous RAM read
+- id: b-opc-read-second
+  node: n-operands
+  status: FROZEN
+  evidence:
+  - opc::pipe_reg2/gpr_ram
+  - pipe-buffer::DEPTH default and ready chain
+  kind: pipe_buffer
+  rtl_parameters:
+    DEPTH: 1
+  condition: cfg-baseline; RAM output and metadata align; included in b-opc-read, not additive to RAM
+  measurement:
+    unit: register stages
+    start: final metadata pass captured by pipe_reg2
+    end: pipe_reg2 fire into out_buf
 - id: b-opc-out
   node: n-operands
   status: FROZEN
@@ -1182,10 +1299,17 @@ boundaries:
   node: n-alu
   status: FROZEN
   evidence:
+  - stream-arbiter::g_arbiter grant_ready at buffer input
+  - rr-arbiter::g_model1 for policy R only
   - alu::pe_switch.RSP_OUT_BUF
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 3
@@ -1199,10 +1323,17 @@ boundaries:
   node: n-sfu
   status: FROZEN
   evidence:
+  - stream-arbiter::g_arbiter grant_ready at buffer input
+  - rr-arbiter::g_model1 for policy R only
   - sfu::pe_switch.RSP_OUT_BUF
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 3
@@ -1232,10 +1363,17 @@ boundaries:
   node: n-alu
   status: FROZEN
   evidence:
+  - stream-arbiter::g_arbiter grant_ready at buffer input
+  - rr-arbiter::g_model1 for policy R only
   - muldiv::VX_stream_arb.OUT_BUF
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    inputs: 2
+    policy: P
+    sticky: 0
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 2
@@ -1321,6 +1459,11 @@ boundaries:
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    inputs: 2
+    policy: P
+    sticky: 0
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 3
@@ -1334,10 +1477,18 @@ boundaries:
   node: n-fpu
   status: FROZEN
   evidence:
+  - fpu-std::NUM_FPCORES and rsp_arb ARBITER R for STD profile only
+  - rr-arbiter::g_model1
   - fpu::all backend OUT_BUF actuals with PARTIAL_BW=false
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    condition: Explicit STD backend only; other backend arbitration remains unimplemented
+    inputs: 4
+    policy: R
+    sticky: 0
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 3
@@ -4286,9 +4437,238 @@ rules:
   - n-commit
   evidence:
   - functional::ownership/effect boundary
-  statement: Candidate software cycle evaluates combinational equations against old registered state, determines
-    handshakes, then commits next state at one edge. This is an implementation direction, not proof of all combinational
-    ordering or a requirement to inherit functional Step order.
+  - cycle-buffer::Evaluate
+  - cycle-edge::CommitEdge
+  statement: T9 buffer implementation evaluates combinational equations against old registered state, determines
+    handshakes, then validates all detached transitions before committing one common edge. SIZE=0 forwards without
+    storage; registered outputs use only old payloads. Duplicate or stale proposals reject the entire edge.
+    Flush discards transient contents only and does not roll back architecture or cancel external requests.
+    This implementation does not prove all cross-component simultaneous-event reachability; u-feedback remains open.
+- id: r-software-clock
+  status: PROVISIONAL
+  nodes:
+  - n-schedule
+  - n-commit
+  evidence:
+  - cycle-clock::Clock.Run/edgeDriver.Handle
+  statement: One Akita event drives one common edge. Caller supplies a positive integer-picosecond scale;
+    it is not an inferred RTL frequency. Finite budgets preserve monotonically numbered edges across Run calls.
+    Callback failure is retained by the driver and prevents further events because the bundled Akita engine
+    discards Handler return errors. No architecture state is owned by the clock.
+- id: r-software-components
+  status: PROVISIONAL
+  nodes:
+  - n-fetch
+  - n-decode
+  - n-uop
+  - n-scoreboard
+  - n-operands
+  - n-alu
+  - n-fpu
+  - n-sfu
+  - n-commit
+  evidence:
+  - cycle-fetch::Fetch.Evaluate
+  - cycle-decode::DecodeToken
+  - cycle-uop::Sequencer.Evaluate
+  - cycle-issue::Issue.Evaluate
+  - cycle-operands::Collector.Evaluate
+  - cycle-execute::Pipeline/Divider/STDPath
+  - cycle-csr::CSR.Evaluate
+  - cycle-commit::Commit.Evaluate
+  statement: T9 components use detached value tokens and private next-state proposals. Fetch allocates context
+    at request-buffer input, retains the I-flush request boundary and rejects responses before external request
+    acceptance. Decode uses existing strict ISA Decode and adds no register. Packed sequencing holds ibuffer
+    through final uop acceptance. Single-active-warp Issue registers externally supplied eligibility and the
+    old FU almost-full predicate; credits span issue through dispatch, not an extra queue. Collector performs
+    partial bank passes before final input acceptance, aligns two metadata/RAM stages and separate output skid.
+    Multiply and explicitly selected STD paths globally stall their shifts; serial divider retains loaded through
+    response waiting. CSR models context wait and exposes unqualified request-valid without applying effects.
+    Commit uses P priority, ack-free registered WB and separate registered pending notification. Architectural
+    effects and exhaustive feedback remain pending; current composition is recorded by r-software-composition.
+- id: r-software-composition
+  status: PROVISIONAL
+  nodes:
+  - n-fetch
+  - n-decode
+  - n-scoreboard
+  - n-operands
+  - n-dispatch
+  - n-alu
+  - n-sfu
+  - n-fpu
+  - n-commit
+  evidence:
+  - cycle-core::Core.Evaluate
+  - cycle-observe::ResourceState
+  - cycle-driver::RunTokens
+  - cycle-lsu::LSU.Evaluate
+  - cycle-frontend::Frontend.Evaluate
+  - cycle-dispatch::Dispatch.Evaluate
+  - cycle-merge::Merge.Evaluate
+  - cycle-alu::ALU.Evaluate
+  - cycle-sfu::SFU.Evaluate
+  - cycle-fpu::STDFPU.Evaluate
+  - rr-arbiter::g_model1
+  - stream-arbiter::g_arbiter grant_ready
+  - integer::br_enable/branch_reg
+  - wctl::wctl_reg and drain predicates
+  - fpu::tag_store/fpu_csr_reg
+  statement: Under cfg-baseline full-width non-DPI RV32 integer and explicitly selected STD FPU conditions,
+    Frontend connects schedule, Fetch, combinational Decode, ibuffer, sequencer, Issue, Collector and four
+    Dispatch queues. Dispatch completion releases Issue credits at FU acceptance. Merge P selects the lowest
+    valid input; R begins at input zero after reset and advances past the accepted input only when the merge
+    buffer accepts. Arbitration adds no extra stage beyond its named result buffer. ALU connects INT and
+    MUL/DIV through their P merge and R PE merge; branch identity notification follows INT result-fire/eop by
+    one edge. SFU connects registered lane dispatch, WCTL/CSR, R merge and registered gather; WCTL requires
+    externally supplied old-state drain eligibility and notifies one edge after execute-fire/eop. STDFPU
+    allocates two header contexts on execute-fire, releases on backend response-fire, and emits FFLAGS identity
+    one edge later. Headers alias datapath tokens and add no data capacity; full cannot borrow same-edge release.
+    Core connects all four FU outputs through Commit using only old-state proposals. Token-only tests cover
+    every execution class and packed bursts; resource snapshots and handshake observations are detached values.
+    RunTokens drives one instruction at a time with Akita, waits for all uop pending notifications and complete
+    internal/external drain, and reports cycle-budget exhaustion as an error. Its fetch/memory service delays
+    are explicit diagnostic inputs, not RTL latency claims. It neither redirects branch targets nor evaluates
+    architectural effects. Functional integration, barrier events and complete feedback remain pending.
+- id: r-software-lsu
+  status: PROVISIONAL
+  nodes:
+  - n-lsu
+  - n-lsu-scheduler
+  evidence:
+  - cycle-lsu::LSU.Evaluate
+  - lsu-slice::fence_lock/no_rsp_buf_enable/execute_if.ready
+  - mem-scheduler::req_queue/ibuf_push/ibuf_pop/g_no_coalescer/g_no_batch/rsp_buf
+  - core::LSU_SCHED_NUM_CLIENTS conditional and lsu_scheduler
+  statement: The implementation selects cfg-baseline single-client full-width scheduler, LINE_SIZE equal to
+    WORD_SIZE, CORE_REQS equal to MEM_CHANNELS and no MEM_OUT_BUF/CORE_OUT_BUF. Registered lane dispatch
+    feeds the four-entry request queue and eight-entry load context pool with joint admission. Stores require
+    request and no-response result space but no load tag; their result may reach WB before external request
+    acceptance. Load/last-fence responses must match an already-sent old context, keep partial lane coverage,
+    and release the tag only at final response acceptance into the load-result buffer. Load-priority P merge
+    and registered gather precede Commit. Non-final fence packets skip memory and use no-response completion;
+    a final fence sets fence_lock at request-queue admission and clears it on final fence-response acceptance.
+    Old lock still blocks same-edge admission. Drained also requires provider-reported service idle, preserving
+    external store tails. The service begins at the scheduler vector port; downstream memory coalescing,
+    local/global split, caches and visibility remain external and unresolved rather than assigned zero cycles.
+- id: r-software-wait-pool
+  status: PROVISIONAL
+  nodes:
+  - n-fetch
+  - n-lsu-scheduler
+  - n-fpu
+  evidence:
+  - cycle-wait::WaitPool.Evaluate
+  - fetch::tag_store
+  - mem-scheduler::rsp_rem_mask/crsp_eop/ibuf_pop
+  statement: Timing wait resources retain identity and remaining lane coverage without assigning a memory delay.
+    Provider holds response valid and payload until downstream accepts; pool adds no response register.
+    Responses match old ID/epoch/warp/uop context; unknown, duplicate coverage and old epoch reject before
+    mutation. Fetch additionally requires whole response coverage and permits one context per warp. STD FPU
+    header contexts also require whole response coverage, without the per-warp restriction. Full pool
+    does not borrow a same-edge released entry. Flush discards local context only; provider cancellation and
+    memory visibility remain u-memory/u-visibility, not inferred from tag release.
+- id: r-software-effect-delivery-foundation
+  status: PROVISIONAL
+  nodes:
+  - n-operands
+  - n-commit
+  - n-sfu
+  - n-fpu
+  evidence:
+  - functional-operands::OperandCapture.Read/EvaluateAt
+  - functional-delivery::EffectDelivery.Deliver
+  - functional::sections 2/4/5/10/11 state owner and stale transaction contract
+  statement: The execution-effects foundation captures source positions independently at operand-read events,
+    retaining detached PC/mask and copied external context. EvaluateAt can obtain CSR/FRM/control context at
+    a separately selected execution event while retaining source values. Existing ISA Decode and the shared
+    snapshot evaluator dispatch remain the sole semantic implementation. EffectDelivery retains copied effects
+    and receipts, never a delayed whole-Warp candidate. Explicit WB lane subsets, control/trap, CSR, FFLAGS,
+    memory/ordering and fault groups each stage against the live canonical owner immediately before synchronous
+    commit. Trap CSR writes remain with trap/control validation. Forwarded groups require the existing
+    all-or-error external-owner callback; failure records no receipt, and successful duplicate delivery is
+    rejected. Legacy EffectStage stale checks are unchanged. These are owner-side APIs only; wiring actual
+    cycle observations, residency epochs, memory completion and packed byte visibility remains pending, so
+    u-visibility and u-csr-stall are not resolved by this foundation.
+- id: r-software-nonmemory-visibility
+  status: PROVISIONAL
+  nodes:
+  - n-operands
+  - n-alu
+  - n-sfu
+  - n-fpu
+  - n-simt
+  - n-commit
+  evidence:
+  - cycle-effects::Adapter.Begin/Observe/Reset
+  - cycle-core::CoreReport.Executed/CSRRequest
+  - functional-operands::OperandCapture.Read/EvaluateAt
+  - functional-delivery::EffectDelivery.Deliver
+  - integer::alu_hdr_in WGATHER mask and branch_reg
+  - csr::csr_req_valid/ready
+  - simt::OUT_REG
+  - fpu::fpu_csr_reg
+  statement: The initial functional binding admits one non-memory instruction with explicit epoch and increasing
+    instruction ID; architectural faults return the original typed stop interface without guessed trap writes. Memory extends this profile
+    under r-software-memory-visibility. Reports carry
+    actual ALU/FPU admission, LSU slice and SFU PE acceptance identities; dispatch queue admission is not confused
+    with PE execution. Adapter validates every report identity before owner effects, captures RF-read positions
+    and evaluates through the existing snapshot dispatch at execution acceptance using old-edge owner context.
+    CSR writes occur at an unstalled CSR request/acceptance window; a stalled window is rejected explicitly as
+    outside this profile, preserving u-csr-stall. Full-width non-memory WB uses the evaluator register-write mask,
+    including WGATHER inactive non-source lanes; transient token mask remains packet identity, not a replacement
+    semantic write mask. Branch/trap and WCTL effects use registered control observations, with JOIN adding the
+    b-simt-feedback OUT_REG edge. FFLAGS use the registered FPU notification. Sequential PC is a conservative
+    single-active-instruction model update at registered pending release, not an RTL scheduler PC timing claim.
+    Successful effects are never replayed; errors require reset, which invalidates old epoch context without
+    architectural rollback. The caller also flushes the timing core and cancels services. External control groups
+    require the existing all-or-error owner callback; spawn uses the original atomic source/target transaction,
+    and u-visibility is still unresolved outside the tested profiles.
+- id: r-software-memory-visibility
+  status: PROVISIONAL
+  nodes:
+  - n-lsu
+  - n-commit
+  evidence:
+  - cycle-effects::Adapter.Service/observeMemory/observePacked
+  - functional-delivery::EffectDelivery.Deliver
+  statement: Single-active memory binding requires an explicit original byte owner and caller-scheduled service
+    strictly after scheduler-port request acceptance. No default cache latency is inferred. Loads sample bytes
+    at service and hold identity-tagged responses until accepted; disjoint lane fragments update registers only
+    at matching WB. Packed completion shares original validation and assembly, with an optional byte mask
+    merged into live owner state per element; zero byte mask retains legacy whole-word semantics. Stores use
+    the original single Write or atomic WriteBatch once at service, even when LSU completion occurred earlier.
+    Sequential PC waits for pending release and all services. Tests cover ordinary loads/stores and reverse-uop
+    packed byte/half loads with split lane responses. Read-service faults pass through original completion to warp.Fault with lane metadata and cause; the failed
+    fragment has no response or mutation and stops the adapter, without rolling back earlier visible fragments.
+    Fence tests deliver ordering once at explicit service; single-participant barrier tests use original
+    BarrierCoordinator Stage/Commit at registered feedback. ControlAllowed holds WSYNC/BAR before execution while old-edge drain context is pending. WSPAWN binds
+    original pre-issue target snapshots and requires one active source; registered feedback uses StageWarpSpawn
+    for atomic source/target commit with original stale checks. Residency and CTA membership remain caller-owned.
+    Same-core Akita mixed instruction tests compare original functional owners after each drained instruction.
+    Full scheduling remains outside this profile; u-memory and u-visibility remain unresolved outside it.
+- id: r-software-program-runner
+  status: PROVISIONAL
+  nodes:
+  - n-fetch
+  - n-lsu
+  - n-commit
+  evidence:
+  - cycle-effects::Adapter.Begin/Observe/Service/Reset
+  statement: The initial program runner uses one active instruction and waits for all uop pending notifications,
+    all internal resources and explicit external services to drain before reading canonical next PC/mask.
+    Instruction words are read from the original byte owner at an explicitly delayed fetch service, not at
+    instruction issue. Fetch and memory delays and Akita period are positive caller model choices, not RTL
+    frequency or cache latency claims. Budget exhaustion preserves state; flush cancels queued services and
+    increments epoch without rollback of visible effects. Raw program entry is initially limited to one
+    source warp; spawn residency requires the separate effects binding and is rejected by this runner.
+    Component Residents snapshots expose every stored token with local position, remaining arithmetic stages
+    and readiness condition. Post-edge enter/stay/advance/leave records are deterministic and distinguish resource
+    aliases; old-edge CoreReport and explicit service due times remain separate. Flush cancellation records
+    retain the invalidated epoch. Tests cover closed residence histories, 33-cycle divider residency and a
+    full four-entry packed request queue under backpressure followed by exactly one WB per uop. Increased
+    service delay changes run duration without changing functional results. External time and visibility
+    unknowns remain unresolved.
 unknowns:
 - id: u-build
   functional_refs: []

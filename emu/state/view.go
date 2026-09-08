@@ -157,6 +157,10 @@ func (s WarpSnapshot) CustomInput(decoded isa.Decoded, context ReadContext) (isa
 	if err != nil {
 		return isa.CustomInput{}, err
 	}
+	return s.customInputWithSources(decoded, context, sources)
+}
+
+func (s WarpSnapshot) customInputWithSources(decoded isa.Decoded, context ReadContext, sources [3]isa.LaneValues) (isa.CustomInput, error) {
 	bounds, err := validateContext(context)
 	if err != nil {
 		return isa.CustomInput{}, err

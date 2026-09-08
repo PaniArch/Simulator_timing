@@ -40,6 +40,15 @@ func (w *WarpState) ExecuteSingle(word uint32, context ReadContext) (SingleInstr
 // detached snapshot. It is shared by ExecuteSingle and higher orchestration
 // layers so evaluator dispatch is not copied into Warp executors.
 func (s WarpSnapshot) Evaluate(decoded isa.Decoded, context ReadContext) (isa.InstructionEffects, error) {
+	sources, err := s.sourceValues(decoded)
+	if err != nil {
+		return isa.InstructionEffects{}, err
+	}
+	return s.evaluateOperands(decoded, context, sources)
+}
+
+// evaluateOperands keeps evaluator routing shared by atomic and cycle callers.
+func (s WarpSnapshot) evaluateOperands(decoded isa.Decoded, context ReadContext, sources [3]isa.LaneValues) (isa.InstructionEffects, error) {
 	var effects isa.InstructionEffects
 	var err error
 	switch decoded.Category {
@@ -48,21 +57,24 @@ func (s WarpSnapshot) Evaluate(decoded isa.Decoded, context ReadContext) (isa.In
 		if inputErr != nil {
 			return isa.InstructionEffects{}, inputErr
 		}
+		input.RS1, input.RS2 = sources[0], sources[1]
 		effects, err = isa.EvaluateInteger(decoded, input)
 	case isa.CategoryRV32F:
 		input, inputErr := s.FloatInput(decoded, context)
 		if inputErr != nil {
 			return isa.InstructionEffects{}, inputErr
 		}
+		input.RS1, input.RS2, input.RS3 = sources[0], sources[1], sources[2]
 		effects, err = isa.EvaluateFloat(decoded, input)
 	case isa.CategorySystem:
 		input, inputErr := s.SystemInput(decoded, context)
 		if inputErr != nil {
 			return isa.InstructionEffects{}, inputErr
 		}
+		input.RS1 = sources[0]
 		effects, err = isa.EvaluateSystem(decoded, input)
 	case isa.CategoryCustom:
-		input, inputErr := s.CustomInput(decoded, context)
+		input, inputErr := s.customInputWithSources(decoded, context, sources)
 		if inputErr != nil {
 			return isa.InstructionEffects{}, inputErr
 		}
@@ -104,4 +116,10 @@ func (s WarpSnapshot) CompleteMemory(decoded isa.Decoded, expected isa.LaneMask,
 // assembly semantics without exposing canonical state to the ISA package.
 func (s WarpSnapshot) CompletePackedLoad(decoded isa.Decoded, expected isa.LaneMask, responses []isa.PackedLoadResponse) (isa.InstructionEffects, error) {
 	return isa.CompletePackedLoad(decoded, s.PC(), expected, responses)
+}
+
+// CompletePackedLoadPart exposes one byte-masked element completion without
+// changing the all-elements contract of CompletePackedLoad.
+func (s WarpSnapshot) CompletePackedLoadPart(decoded isa.Decoded, expected isa.LaneMask, element uint8, responses []isa.PackedLoadResponse) (isa.InstructionEffects, error) {
+	return isa.CompletePackedLoadPart(decoded, s.PC(), expected, element, responses)
 }

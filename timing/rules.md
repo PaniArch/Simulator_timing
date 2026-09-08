@@ -4,6 +4,8 @@
 
 ## 如何读一个周期数
 
+T9 已实现 `r-software-edge` 的复合组件旧状态计算和统一提交、`r-software-clock` 的 Akita 边沿驱动，以及 `r-software-components/r-software-wait-pool` 的组件子范围；定向验证及剩余连接见 [implementation.md](implementation.md)。这不闭合完整反馈可达性或整机时序。
+
 YAML `measurement_convention` 区分传输边沿、组合信号与边沿后状态。一个寄存器的输出在接受边沿后出现，下游最早在下一边沿接受；不要再给“输出出现”和“下游接受”各加一次相同寄存器延迟。背压会拉长实际时间；minimum 不是 guaranteed，II 是同一入口连续接受的最短间隔，不是执行延迟，也不是整机稳态吞吐。容量条目用 allocation/release 定义占用，不用周期差衡量。
 
 `r-buffer-detail` 和 `tm-buffer-*` 描述实际底层 primitive。大 FIFO 的 OUT_REG 配合 look-ahead RAM 和 head bypass，不能按 RAM 名字再加一层容量。SIZE=2 的两种 OUT_REG 都保存 valid/data；满后是否可同拍入出须看 registered ready，而不能一概使用软件 queue 的“先 pop 再 push”。软件若按阶段推进，计算旧状态、组合下一状态、统一提交的做法仅为 `PROVISIONAL` 的 `r-software-edge`。
@@ -49,3 +51,29 @@ YAML `measurement_convention` 区分传输边沿、组合信号与边沿后状�
 BAR 的地址预读必须早于注册请求；barrier state/phase 的 RAM、同地址 forwarding 和 unlock register 是三种不同边界。`r-simt-barrier-detail` 只冻结可直接确认的配合关系与 local 分支，global 网络及冲突 memory visibility 仍未闭合。WSYNC 消费 per-warp almost-empty，BAR 消费 LSU drain，二者不能合并成一个“所有单元 empty”。
 
 `r-scheduler-edge`、`r-csr-detail` 和 `r-scoreboard-edge` 的覆盖顺序来自 RTL，状态为 FROZEN；假设软件先处理所有完成事件再发射所有请求则为 PROVISIONAL。`u-feedback` 保留完整跨组件同时事件可达性与验证工作，不用未审计的软件顺序填充它。
+
+`r-software-composition`（PROVISIONAL，T9 第三轮）：P/R 汇合由 `Merge` 实现，参数挂在命名 boundary 的 `arbitration` 中；MODEL=1/STICKY=0 的 R 以最低有效端口开始，仅在汇合缓冲输入接受时更新。下游停顿不轮转，输出缓冲是唯一新增注册边界。Frontend 已连到每类 Dispatch，ALU/SFU/显式 STD FPU 已组合。FPU header 在 execute-fire 分配、backend response-fire 释放，不能加算成额外数据队列；满时同拍释放仍背压。INT branch、WCTL、STD FFLAGS 只发注册身份通知，条件与局部起止点沿用原证据。LSU、完整反馈和架构效果仍待实现。
+
+`r-software-lsu`：冻结 scheduler 为单 client、同宽通道、无内部 coalescer/batching、输出直通。Load tag 和请求队列联合准入；store 不占 load tag，但同时要求请求队列及 no-response buffer 可接收。fence 入队后锁住 slice，最后响应接受时解锁，同拍不旁路旧锁。部分响应保留未完成 lane mask，load 优先汇合。外部服务 idle 是排空条件的一部分，store WB 不等于外部完成。新增代码只落实这些边界，未给未知存储层赋固定延迟。
+
+### r-software-memory-visibility（PROVISIONAL）
+
+`Adapter.Service/observeMemory/observePacked` 将原 byte owner 的显式服务接到请求接受之后的未来边沿；服务时间由调用者提供，不推定 cache 延迟。普通/packed load 服务时采样字节，对应 WB 才按 lane/byte mask 修改当前 owner 状态。packed 部分 completion 与原完整 completion 共用校验和组装，原 API 仍要求全覆盖。store 即使早已 LSU 完成，也只在服务事件以原 Write/WriteBatch 提交一次。顺序 PC 等待 pending 和全部服务，属于保守模型条件。逆序 uop、分 lane 和逐字节可见性测试已覆盖成功路径；后续增量已补齐故障停止/reset、fence 与外部控制交付；不承诺跨片段精确异常，u-memory/u-visibility 不因此宣告解决。
+
+第八轮补充 `r-software-memory-visibility`：读取服务失败逐 lane 形成原 MemoryResponse/PackedLoadResponse fault，经原 completion 返回 `warp.Fault`（保留 cause 和地址/宽度），失败片段不产生响应与状态写入。此前已经可见的片段不回滚，不宣称精确异常。fence ordering 已验证只在显式服务交付一次；单 participant barrier 注册反馈经原 BarrierCoordinator.Stage/Commit 修改唯一 owner。完整 driver drain、调度 slot 和多目标 spawn 仍待接线，未知项继续保留。
+
+第九轮补充 `r-software-memory-visibility`：WSPAWN 在 Begin 前绑定唯一 active source 与原 target Expected 快照，注册控制通知以原 StageWarpSpawn 原子提交 source/targets；保留 source/target stale 与 MScratch/inactive 校验，成功一次 receipt。CTA membership/residency 仍属调用者。`ControlAllowed` 使用与 Observe 相同的旧边沿 context，在 PendingLSU/PendingPriorWork 时分别阻止 BAR/WSYNC 执行，不能将 wait-only effects 当成完成。混合指令测试以同一 Akita clock/Core/Adapter 逐条排空（含 store tail），对照原功能状态。此条件不扩展为多 Warp 调度，也不关闭外部时序未知项。
+
+### Task9 程序运行器增量
+
+`timing/runner` 复用 Core/effects 和原 state/memory owner，以单活动指令排空策略从 canonical PC 自动取指；取指与数据服务均采用显式正延迟，不代表 cache 时间。Akita Run 支持预算续跑，Flush 清除在途服务并增加 epoch，不回滚已可见效果。条件见 `r-software-program-runner`。
+
+本地入口：在仓库根目录 `source env/env.sh` 后运行 `go run ./cmd/timing-run`；`-trace` 输出逐周期 JSON，`-program file.bin` 从 0x100 加载 raw little-endian RV32 镜像。默认四 lane、x1=64+8*lane，内建示例验证依赖 ADDI/MUL/DIV、store/load、分支跳过指令与 TMC 结束。显式 STD、1ps 模型时基、fetch=3/memory=19 cycles；可用对应 flags 修改服务延迟。命令行预算耗尽返回非零；库保留进度可续跑。多目标 spawn residency 仍需 effects.BindSpawn，当前程序入口明确拒绝，不实现多 Warp scheduler。
+
+观测包含旧边沿 CoreReport、提交后的 ResourcesAfter/Residents、Services 及 Events。按 ID/epoch/warp/uop/mask 对应资源生成 enter/stay/advance/leave，读、执行、WB/反馈另有事件；Flush 取消事件保留旧 epoch。位置与 Remaining 是本地资源状态，不推定外部 cache 时间。
+
+### Task9 对象驻留观测与验证
+
+每个资源通过 `Residents()` 返回 detached value，含 Token、位置、局部 Remaining 与 readiness 原因；runner 不访问组件队列。CoreReport.Resources 是旧边沿，ResourcesAfter 是本次统一提交后状态。Events 的 enter/leave 对应本周期提交的转移，stay/advance 表示资源仍持有该对象；tag/context alias 保持独立资源身份，不能累加为指令数量。FIFO 中的 queue-order、输出 awaiting-transfer、执行 execution-latency、tag response-coverage 与外部 backpressure/control-drain 明确区分；这些原因不宣称解析全部 RTL 仲裁信号。Services 列出原 byte owner 服务队列及显式 due cycle。
+
+程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求队列填满四项后恢复且每 uop 只 WB 一次；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。

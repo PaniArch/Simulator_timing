@@ -621,7 +621,7 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 
 `PROVISIONAL（T8/timing-baseline）`：新增独立的 [Timing IR 入口](../../timing/README.md)、[结构解释](../../timing/architecture.md) 与 [结构化基线](../../timing/ir.yaml)。本阶段已按冻结配置与实际 RTL 实例登记流水节点、资源、端口、缓冲和控制/访存反馈；这些属于独立 timing 证据，不改变本文的功能正确性范围、canonical state owner 或已有 `RESOLVED` 审计。
 
-`PROVISIONAL`：后续可复用无状态 ISA decode/evaluate/completion 和最小 detached view 原则；现有 `Warp.Step`、同步 MemoryService、全 before-image `EffectStage` 原子替换及 Core round-robin 不能直接解释为重叠流水的执行/可见顺序。具体周期组件、Scheduler 与 effect 可见性适配尚未实现，也不在本阶段固定 Go 类型或调用组织。
+`PROVISIONAL`：后续可复用无状态 ISA decode/evaluate/completion 和最小 detached view 原则；现有 `Warp.Step`、同步 MemoryService、全 before-image `EffectStage` 原子替换及 Core round-robin 不能直接解释为重叠流水的执行/可见顺序。这是 T8 的衔接基线；Task9 周期组件与 effect 可见性实现见文末，真实多 Warp Scheduler 仍不在当前范围。
 
 `UNRESOLVED`：Timing IR 的 `u-build/u-execution/u-memory/u-feedback/u-visibility` 分别跟踪外部构建轴、执行路径详细时序、memory 服务及内部队列、完整同周期反馈表和功能 effect 适配。它们不替代第 10 节的 fault、ordering、ABI 或 checker 问题；结构化事实和时序参数只维护于 Timing IR，不在本功能契约重复维护。
 
@@ -630,3 +630,29 @@ T0 不猜测以下事项。每项都记录当前已知 RTL 事实，避免把“
 `PROVISIONAL（T8/timing-integration-validation）`：[功能衔接设计](../../timing/integration.md) 按实际 isa、state、warp、core、device 与 support 实现记录复用和适配边界。功能计算、时序结果就绪、架构可见事件分开，唯一 owner 不变；同步 Warp.Step、memory completion 和全 before-image 原子 effect stage 不能直接充当重叠流水。本文仍是功能语义、owner 与既有未决/RESOLVED 审计的权威来源；timing YAML 的 functional_refs 只索引相关问题，不宣称闭合它们。
 
 T8 维护检查：结构参数、周期规则与来源更新 timing/ir.yaml；软件职责候选更新 timing/integration.md；若未来改变功能 owner/effect 契约，必须同步本文，不能只改时序文档。`bash scripts/verify-timing.sh` 使用已有离线 YAML 依赖检查结构及无效样例，`bash scripts/verify-all.sh` 保留 RTL 完整性及功能回归职责。T8 没有改写冻结 RTL 或现有功能语义实现，也没有实现周期执行器、Scheduler、cache 模型或 RTLSIM 对齐。
+
+## 15. T9 周期组件增量（cycle-components，未完成）
+
+`PROVISIONAL`：`timing/model` 开始实现独立的 transient 缓冲状态与 Akita 公共边沿驱动，使用 `timing/ir.yaml` 的稳定 boundary ID 读取参数。Token 只含值身份，没有 canonical state 或 memory 引用；Evaluate/CommitEdge/Flush 不调用 ISA、Warp.Step 或 State apply，不改变既有唯一 owner 和原子功能契约。第一轮先完成缓冲级容量/背压/注册边界验证；后续已补齐完整组件、功能连接与效果可见性，见 [实施记录](../../timing/implementation.md)。Timing 未决项继续保留；新增 transient flush 不意味着架构 rollback 或外部请求取消已获得语义定义。
+
+`PROVISIONAL（第二轮组件增量）`：新增 Fetch、直通 DecodeToken、packed Sequencer、单 Warp Issue、Collector、整数/显式 STD 执行资源、WaitPool、CSR context 与 Commit 组件。DecodeToken 调用既有严格 ISA Decode，仅生成 timing route/source IDs；其余组件推进不计算或交付功能效果。Collector 的 read observation、CSR request window、WB 和 registered pending 保持不同边界，后续已补齐完整资源图与 functional adapter。没有改变任何 canonical owner、ISA 功能方程或既有 EffectStage 契约。
+
+T9 execution-effects 基础 API：`OperandCapture` 保存 detached 逐源读事件，和原 `WarpSnapshot.Evaluate` 共用 evaluator 分派；`EffectDelivery` 只保留 effects/receipt，每个明确事件从 live owner 创建并同步提交新的 `StageEffects`。旧原子 API 和 stale 检查保留。外部 owner 成功仍遵守既有 all-or-error 契约。周期事件绑定、epoch 校验及 memory/packed completion 尚待后续适配，详见 timing/implementation.md。
+
+Task9 memory 增量：`RegisterWriteEffect.ByteMask` 为可选的 lane 内字节选择，0 保持既有全字写入语义。非零 mask 只能使用低四位，由 StageEffects 在当前 owner 值上合并；旧事务 stale 检查不变。无状态 `CompletePackedLoadPart` 与 `CompletePackedLoad` 共享校验/组装代码，前者只接受指定 element 的 lane 覆盖并不产生 PC effect，后者原完整语义保持不变。
+
+Task9 WSPAWN 控制交付使用 `EffectDelivery.DeliverWarpSpawn`，在当前可见事件构造 source control stage 并立即调用原 `StageWarpSpawn/Commit`。source 与 targets 在同一事务提交，沿用旧 target Expected、source MScratch/lifecycle 和双侧 stale 校验；只有成功才记 control receipt。此接口不创建 Core slot 或 CTA owner，也不跨周期保存可替换整状态的候选。
+
+### Task9 程序运行器增量
+
+`timing/runner` 复用 Core/effects 和原 state/memory owner，以单活动指令排空策略从 canonical PC 自动取指；取指与数据服务均采用显式正延迟，不代表 cache 时间。Akita Run 支持预算续跑，Flush 清除在途服务并增加 epoch，不回滚已可见效果。条件见 `r-software-program-runner`。
+
+本地入口：在仓库根目录 `source env/env.sh` 后运行 `go run ./cmd/timing-run`；`-trace` 输出逐周期 JSON，`-program file.bin` 从 0x100 加载 raw little-endian RV32 镜像。默认四 lane、x1=64+8*lane，内建示例验证依赖 ADDI/MUL/DIV、store/load、分支跳过指令与 TMC 结束。显式 STD、1ps 模型时基、fetch=3/memory=19 cycles；可用对应 flags 修改服务延迟。命令行预算耗尽返回非零；库保留进度可续跑。多目标 spawn residency 仍需 effects.BindSpawn，当前程序入口明确拒绝，不实现多 Warp scheduler。
+
+观测包含旧边沿 CoreReport、提交后的 ResourcesAfter/Residents、Services 及 Events。按 ID/epoch/warp/uop/mask 对应资源生成 enter/stay/advance/leave，读、执行、WB/反馈另有事件；Flush 取消事件保留旧 epoch。位置与 Remaining 是本地资源状态，不推定外部 cache 时间。
+
+### Task9 对象驻留观测与验证
+
+每个资源通过 `Residents()` 返回 detached value，含 Token、位置、局部 Remaining 与 readiness 原因；runner 不访问组件队列。CoreReport.Resources 是旧边沿，ResourcesAfter 是本次统一提交后状态。Events 的 enter/leave 对应本周期提交的转移，stay/advance 表示资源仍持有该对象；tag/context alias 保持独立资源身份，不能累加为指令数量。FIFO 中的 queue-order、输出 awaiting-transfer、执行 execution-latency、tag response-coverage 与外部 backpressure/control-drain 明确区分；这些原因不宣称解析全部 RTL 仲裁信号。Services 列出原 byte owner 服务队列及显式 due cycle。
+
+程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求队列填满四项后恢复且每 uop 只 WB 一次；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。

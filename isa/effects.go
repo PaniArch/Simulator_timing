@@ -111,6 +111,8 @@ func (b AddressBounds) contains(address uint32, width uint8) bool {
 // Mask are inert. Writes to integer x0 are suppressed by every evaluator and
 // completion helper and therefore never appear as an effect.
 type RegisterWriteEffect struct {
+	// ByteMask selects bytes within each lane; zero preserves legacy full-word writes.
+	ByteMask    uint8
 	Destination Register
 	Mask        LaneMask
 	Values      LaneValues

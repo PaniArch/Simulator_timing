@@ -299,6 +299,19 @@ func evaluatePackedLoad(decoded Decoded, input CustomInput) (CustomEffects, erro
 // CompletePackedLoad assembles little-endian element uops into one FPR value
 // per active lane. A fault suppresses every partial write and PC effect.
 func CompletePackedLoad(decoded Decoded, pc uint32, expected LaneMask, responses []PackedLoadResponse) (CustomEffects, error) {
+	return completePackedLoad(decoded, pc, expected, responses, nil)
+}
+
+// CompletePackedLoadPart reuses the full completion validator/assembler for
+// one element's WB packet. Other bytes and the PC are not effects of this part.
+func CompletePackedLoadPart(decoded Decoded, pc uint32, expected LaneMask, element uint8, responses []PackedLoadResponse) (CustomEffects, error) {
+	if element >= decoded.Memory.Packed {
+		return CustomEffects{}, evalError(decoded, "invalid packed-load element")
+	}
+	return completePackedLoad(decoded, pc, expected, responses, &element)
+}
+func completePackedLoad(decoded Decoded, pc uint32, expected LaneMask, responses []PackedLoadResponse, part *uint8) (CustomEffects, error) {
+
 	if decoded.Category != CategoryCustom || decoded.Memory.Kind != MemoryLoad || !decoded.Memory.Float ||
 		!((decoded.Memory.Bytes == 1 && decoded.Memory.Packed == 4) || (decoded.Memory.Bytes == 2 && decoded.Memory.Packed == 2)) {
 		return CustomEffects{}, evalError(decoded, "instruction has no completable packed load")
@@ -335,7 +348,7 @@ func CompletePackedLoad(decoded Decoded, pc uint32, expected LaneMask, responses
 	}
 	for lane := uint8(0); lane < FrozenLaneCount; lane++ {
 		for element := uint8(0); element < decoded.Memory.Packed; element++ {
-			if seen[lane][element] != expected.Active(lane) {
+			if seen[lane][element] != (expected.Active(lane) && (part == nil || element == *part)) {
 				return CustomEffects{}, evalError(decoded, "packed-load responses do not cover the expected lane/element set")
 			}
 		}
@@ -345,6 +358,12 @@ func CompletePackedLoad(decoded Decoded, pc uint32, expected LaneMask, responses
 	}
 	effects := CustomEffects{Control: sequentialControl(pc)}
 	appendRegisterWrite(&effects, decoded, expected, values)
+	if part != nil {
+		effects.Control = nil
+		for i := range effects.RegisterWrites {
+			effects.RegisterWrites[i].ByteMask = uint8((1<<decoded.Memory.Bytes)-1) << (decoded.Memory.Bytes * *part)
+		}
+	}
 	return effects, nil
 }
 

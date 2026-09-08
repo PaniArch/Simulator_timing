@@ -604,3 +604,30 @@ func TestCustomInputValidationAndNoStateOwnership(t *testing.T) {
 		t.Fatalf("invalid warp error=%T %v effects=%+v", err, err, effects)
 	}
 }
+
+func TestPackedPartCompletionCoverage(t *testing.T) {
+	for _, name := range []string{"vx_packlb_f", "vx_packlh_f"} {
+		d := customDecoded(t, name, nil)
+		for element := uint8(0); element < d.Memory.Packed; element++ {
+			response := PackedLoadResponse{Request: PackedLoadRequest{Lane: 0, Element: element, Width: d.Memory.Bytes}, Data: 0xabcd}
+			e, err := CompletePackedLoadPart(d, 0x100, 1, element, []PackedLoadResponse{response})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := onlyWrite(t, e)
+			mask := uint32(0xff)
+			if d.Memory.Bytes == 2 {
+				mask = 0xffff
+			}
+			if e.Control != nil || w.ByteMask != uint8((1<<d.Memory.Bytes)-1)<<(element*d.Memory.Bytes) || w.Values[0] != (response.Data&mask)<<(8*element*d.Memory.Bytes) {
+				t.Fatal(e)
+			}
+			if _, err := CompletePackedLoadPart(d, 0x100, 3, element, []PackedLoadResponse{response}); err == nil {
+				t.Fatal("missing lane accepted")
+			}
+			if _, err := CompletePackedLoadPart(d, 0x100, 1, (element+1)%d.Memory.Packed, []PackedLoadResponse{response}); err == nil {
+				t.Fatal("foreign element accepted")
+			}
+		}
+	}
+}

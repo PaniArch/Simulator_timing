@@ -76,6 +76,26 @@ scheduler 内的 CTA dispatch、split/join/IPDOM、barrier 以独立控制节点
 
 ## 本阶段验证与后续闭合
 
+T9 增量实现见 [implementation.md](implementation.md)。`r-software-edge` 已有缓冲级 Evaluate/CommitEdge 实证，`r-software-clock` 记录 Akita 公共边沿驱动；上文 T8 软件职责候选仍不能视为已全部实现。缓冲容量与注册语义沿用原有稳定 ID，不改变任何功能 owner。
+
 交付检查包括 YAML 安全解析、各类 ID 唯一、端口/节点/规则/来源引用有效、来源路径存在，以及冻结的文件非空和 `git diff --check`。这些是静态一致性验证，不是 RTL 仿真或周期准确性证明。
 
 本阶段提供可开始组件分解的结构基线。[rules.md](rules.md) 已补充这些局部容量/延迟/接收间隔与事件规则；剩余条件路径仍见 `u-execution`、`u-memory`、`u-feedback`，[integration.md](integration.md) 已给出 `u-visibility` 的适配候选，具体协议仍须后续实现验证。`u-build` 需要实际构建定义才能选择后端；未知项不得以零延迟或任选默认后端绕过。
+
+T9 第三轮的 `Frontend` 已实现上述前端的瞬态连接；`ALU`、`SFU` 和显式 `STDFPU` 通过各自局部 result buffer/merge 组合，见 `r-software-composition`。这些复合组件只通过子组件公开端口和 proposal 交互。Frontend→ALU→Commit 的 token 测试已验证公共边沿和遍历顺序独立性；后续增量已补齐 LSU、程序驱动、功能交付与对象驻留观测，见文末当前运行说明。
+
+第四轮增量补齐 `LSU` 和 `Core`，见 `r-software-lsu`/`r-software-composition`。LSU scheduler 的 vector port 是外部服务边界；内部 request4/tag8 与 load/store result/merge/gather 均已建模。`RunTokens` 用 Akita 驱动全部路径，`ResourceState/CoreReport` 提供每边沿旧态快照和握手通知。独立运行示例见 README；该诊断入口不执行功能 effects，不能替代后续功能适配验收。
+
+### Task9 程序运行器增量
+
+`timing/runner` 复用 Core/effects 和原 state/memory owner，以单活动指令排空策略从 canonical PC 自动取指；取指与数据服务均采用显式正延迟，不代表 cache 时间。Akita Run 支持预算续跑，Flush 清除在途服务并增加 epoch，不回滚已可见效果。条件见 `r-software-program-runner`。
+
+本地入口：在仓库根目录 `source env/env.sh` 后运行 `go run ./cmd/timing-run`；`-trace` 输出逐周期 JSON，`-program file.bin` 从 0x100 加载 raw little-endian RV32 镜像。默认四 lane、x1=64+8*lane，内建示例验证依赖 ADDI/MUL/DIV、store/load、分支跳过指令与 TMC 结束。显式 STD、1ps 模型时基、fetch=3/memory=19 cycles；可用对应 flags 修改服务延迟。命令行预算耗尽返回非零；库保留进度可续跑。多目标 spawn residency 仍需 effects.BindSpawn，当前程序入口明确拒绝，不实现多 Warp scheduler。
+
+观测包含旧边沿 CoreReport、提交后的 ResourcesAfter/Residents、Services 及 Events。按 ID/epoch/warp/uop/mask 对应资源生成 enter/stay/advance/leave，读、执行、WB/反馈另有事件；Flush 取消事件保留旧 epoch。位置与 Remaining 是本地资源状态，不推定外部 cache 时间。
+
+### Task9 对象驻留观测与验证
+
+每个资源通过 `Residents()` 返回 detached value，含 Token、位置、局部 Remaining 与 readiness 原因；runner 不访问组件队列。CoreReport.Resources 是旧边沿，ResourcesAfter 是本次统一提交后状态。Events 的 enter/leave 对应本周期提交的转移，stay/advance 表示资源仍持有该对象；tag/context alias 保持独立资源身份，不能累加为指令数量。FIFO 中的 queue-order、输出 awaiting-transfer、执行 execution-latency、tag response-coverage 与外部 backpressure/control-drain 明确区分；这些原因不宣称解析全部 RTL 仲裁信号。Services 列出原 byte owner 服务队列及显式 due cycle。
+
+程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求队列填满四项后恢复且每 uop 只 WB 一次；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。

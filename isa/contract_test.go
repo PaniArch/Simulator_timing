@@ -62,7 +62,7 @@ func TestISAPublicSurfaceIsStatelessAndSingleInstruction(t *testing.T) {
 		"EvaluateInteger": true, "CompleteMemory": true,
 		"EvaluateFloat": true, "CompleteFloatMemory": true,
 		"EvaluateSystem": true,
-		"EvaluateCustom": true, "CompletePackedLoad": true,
+		"EvaluateCustom": true, "CompletePackedLoad": true, "CompletePackedLoadPart": true,
 	}
 	forbiddenTopLevelTypes := map[string]bool{
 		"State": true, "Machine": true, "Device": true, "Core": true, "Warp": true,
