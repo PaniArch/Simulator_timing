@@ -8,6 +8,8 @@
 | GCC/G++ | 9.4.0 | cgo/build | FROZEN ON HOST | Compile the cgo bridge against the pinned SoftFloat archive |
 | Berkeley SoftFloat | Release 3e, commit `b51ef8f3201669b2288104c28546fc72532a1ea4` | floating-point mathematics | USED | Deterministic F32 operations, rounding modes, and exception flags |
 | Akita | v5.0.0-beta.10 | future timing framework | FROZEN / VENDORED | Offline framework baseline; no Vortex timing behavior yet |
+| `go.yaml.in/yaml/v3` | v3.0.5 | timing IR / contract serialization | PINNED / VENDORED | Read and write the timing model's YAML contracts |
+| `github.com/pelletier/go-toml/v2` | v2.4.3 | Vortex configuration | PINNED / VENDORED | Parse the frozen `Vortex_rtl/VX_config.toml` input |
 
 SoftFloat is deployed once in the repository-owned, ignored environment capsule
 `.harness-environment/v1/softfloat` and mounted read-only by Harness at
@@ -37,17 +39,22 @@ The functional memory package uses only the Go standard library.
 
 | Dependency | Version baseline | Scope | Status | Reason |
 | --- | --- | --- | --- | --- |
-| `github.com/pelletier/go-toml/v2` | v2.4.3 | config | APPROVED / NOT YET REQUIRED | Parse Vortex TOML without a custom parser |
 | `github.com/google/go-cmp/cmp` | v0.7.0 | test only | APPROVED / NOT YET REQUIRED | Deterministic comparison of complex state |
 
 Akita v5 is required only by `internal/dependencycheck`, which compiles and runs
-an empty serial engine as an availability smoke test. `go mod tidy` and
-`go mod vendor` selected and copied its required packages; no Akita API is used
-by `isa/`, `support/`, or `emu/`.
+an empty serial engine as an availability smoke test. The same package exercises
+YAML and TOML round trips so both serializers remain present in the offline
+vendor tree. `go mod tidy` and `go mod vendor` select and copy the required
+packages; none of these APIs are used by `isa/`, `support/`, or `emu/`.
 
 - module sum: `h1:eaVg8DYN0LDrCeh5WkLRcXP2UjGRJarl09N+xgTmARA=`
 - go.mod sum: `h1:lpv/tSeBBx1W80ihELOsinlVKnYNrdPBisHG66SAuZI=`
 - vendored packages: `hooking`, `internal/codec`, and `timing`
+
+YAML v3.0.5 and go-toml v2.4.3 support the pinned Go 1.26.2 toolchain. YAML is
+dual-covered by MIT and Apache-2.0 terms; go-toml is MIT licensed. Their license
+files are included in `vendor/`. Both projects are maintained upstream and are
+constrained here to exact module versions.
 
 No additional GPU simulation framework is present in `go.mod`, `go.sum`, or
 `vendor/`. Later dependency changes require a separately scoped support update.

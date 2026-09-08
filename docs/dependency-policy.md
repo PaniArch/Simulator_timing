@@ -12,7 +12,9 @@ dependency repositories, or download dependencies with curl/wget. All builds
 and tests must resolve from the committed `vendor/` tree and the frozen local
 toolchain capsule.
 
-Akita is pinned exactly at `github.com/sarchlab/akita/v5 v5.0.0-beta.10`.
-Adding or changing a framework dependency requires a separately reviewed
-support-baseline update with regenerated `go.mod`, `go.sum`, `vendor/`, and a
-fresh empty-cache offline verification.
+Akita is pinned exactly at `github.com/sarchlab/akita/v5 v5.0.0-beta.10`, YAML
+at `go.yaml.in/yaml/v3 v3.0.5`, and TOML at
+`github.com/pelletier/go-toml/v2 v2.4.3`. Adding or changing a framework or
+serialization dependency requires a separately reviewed support-baseline update
+with regenerated `go.mod`, `go.sum`, `vendor/`, and a fresh empty-cache offline
+verification.
