@@ -24,6 +24,7 @@ type FrontendTransition struct {
 	Outputs                        [4]Signal
 	Releases                       [4]bool
 	Read, Issued, Decoded          Signal
+	PendingIssue                   Signal // scoreboard output handshake, before registered scheduler notification
 	IBufferPop                     [4]bool
 }
 
@@ -150,7 +151,9 @@ func (f *Frontend) Evaluate(input Signal, response Response, requestReady, eligi
 		}
 		t = combine(t, scheduler)
 	}
-	return FrontendTransition{IssueSelected: issue.Selected, Transition: t, Offered: input, Request: fetch.Request, RequestAccepted: fetch.RequestAccepted, ResponseReady: fetch.ResponseReady, Outputs: d.Outputs, Releases: d.Releases, Read: opc.Read, Issued: issue.Issued, Decoded: decodeEvent, IBufferPop: pops}, nil
+	pendingIssue := f.issue.Output()
+	pendingIssue.Valid = opc.Accepted
+	return FrontendTransition{PendingIssue: pendingIssue, IssueSelected: issue.Selected, Transition: t, Offered: input, Request: fetch.Request, RequestAccepted: fetch.RequestAccepted, ResponseReady: fetch.ResponseReady, Outputs: d.Outputs, Releases: d.Releases, Read: opc.Read, Issued: issue.Issued, Decoded: decodeEvent, IBufferPop: pops}, nil
 }
 func (f *Frontend) Flush() Transition {
 	t := combine(Transition{}, f.schedule.Flush(), f.fetch.Flush(), f.issue.Flush(), f.opc.Flush(), f.dispatch.Flush())

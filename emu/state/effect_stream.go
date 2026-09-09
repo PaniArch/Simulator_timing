@@ -77,3 +77,12 @@ func (d *EffectDelivery) stageStreamControl(part isa.InstructionEffects) (*Effec
 	}
 	return d.owner.stageInstructionEffects(d.instruction, part)
 }
+
+// RecordActivation prevents late ordinary PC deliveries from the previous
+// activation from rewinding a newly spawned warp. Register and memory receipts
+// are not cancelled. Timing supplies its greatest previously admitted ID.
+func (s *EffectStream) RecordActivation(through uint64) {
+	if through > s.controlOrder {
+		s.controlOrder = through
+	}
+}

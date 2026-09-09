@@ -55,7 +55,7 @@ func (r *MultiRunner) trackExternalWait(report model.CoreReport) error {
 // services so a cancelled younger store cannot reach its byte owner this edge.
 func (r *MultiRunner) cleanupRedirects(cycle uint64) error {
 	branch, control := r.core.FeedbackSignals()
-	feedback, err := r.effects.Feedback(cycle, branch, control)
+	feedback, err := r.effects.Feedback(cycle, branch, control, r.core.SingleActive())
 	if err != nil {
 		return err
 	}

@@ -260,3 +260,167 @@ func TestConcurrentCancellationTombstonesUnbegunFetch(t *testing.T) {
 		t.Fatal("wrong retained contexts")
 	}
 }
+
+func TestConcurrentHeldCSRWindowWritesBeforeAcceptance(t *testing.T) {
+	c, owners, _ := concurrentSetup(t)
+	csr := concurrentToken(t, 1, 0x340091f3, 0x100) // csrrw x3,mscratch,x1
+	if err := c.Begin(csr.Token); err != nil {
+		t.Fatal(err)
+	}
+	read := csr
+	read.Token.ReadMask, read.Token.LastRead = 1, true
+	concurrentEdge(t, c, 0, model.CoreReport{Read: read})
+	for cycle := uint64(1); cycle < 4; cycle++ {
+		concurrentEdge(t, c, cycle, model.CoreReport{CSRRequest: csr, CSRRequestWindow: true})
+		if got := reg(t, snap(t, owners[0]), isa.Integer, 3); got != (isa.LaneValues{0x7777, 0x7777, 0x7777, 0x7777}) {
+			t.Fatal("held CSR wrote destination before WB", got)
+		}
+		if done, err := c.Reap(); err != nil || len(done) != 0 {
+			t.Fatal("held CSR retired", done, err)
+		}
+	}
+	concurrentEdge(t, c, 4, model.CoreReport{CSRRequest: csr, CSRRequestWindow: true, Executed: [4]model.Signal{{}, {}, csr}})
+	concurrentEdge(t, c, 5, model.CoreReport{Writeback: csr})
+	// The accepted result samples MSCRATCH after the prior held windows wrote
+	// six. If writes were incorrectly gated by ready, this would return zero.
+	if got := reg(t, snap(t, owners[0]), isa.Integer, 3); got != (isa.LaneValues{6, 6, 6, 6}) {
+		t.Fatal("CSR did not re-read after held request writes", got)
+	}
+	concurrentEdge(t, c, 6, model.CoreReport{PendingRelease: csr})
+	if done, err := c.Reap(); err != nil || len(done) != 1 {
+		t.Fatal("accepted CSR did not finish once", done, err)
+	}
+}
+
+func TestConcurrentCSRFlagsOldEdgePriority(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		word uint32
+		want uint32
+	}{
+		{"fflags-write", 0x001011f3, 0},
+		{"frm-write-preserves-flags", 0x002111f3, 0x61},
+		{"fcsr-write", 0x003011f3, 0},
+		{"read-only", 0x001021f3, 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, reverse := range []bool{false, true} {
+				c, owners, _ := concurrentSetup(t)
+				fpID, csrID := uint64(1), uint64(2)
+				if reverse {
+					fpID, csrID = csrID, fpID
+				}
+				fp := concurrentToken(t, fpID, 0x182081d3, 0x100) // 1/3 sets NX
+				csr := concurrentToken(t, csrID, test.word, 0x104)
+				admissions := []model.Signal{fp, csr}
+				if reverse {
+					admissions = []model.Signal{csr, fp}
+				}
+				for _, s := range admissions {
+					if err := c.Begin(s.Token); err != nil {
+						t.Fatal(err)
+					}
+				}
+
+				read := fp
+				read.Token.ReadMask, read.Token.LastRead = fp.Token.Used, true
+				concurrentEdge(t, c, 0, model.CoreReport{Read: read})
+				concurrentEdge(t, c, 1, model.CoreReport{Executed: [4]model.Signal{{}, {}, {}, fp}})
+				read = csr
+				read.Token.ReadMask, read.Token.LastRead = csr.Token.Used, true
+				for n, source := range csr.Token.Sources {
+					if source == 0 {
+						read.Token.ReadMask &^= 1 << n
+					}
+				}
+				concurrentEdge(t, c, 2, model.CoreReport{Read: read})
+				concurrentEdge(t, c, 3, model.CoreReport{Flags: fp, CSRRequest: csr, CSRRequestWindow: true, Executed: [4]model.Signal{{}, {}, csr}})
+				if got := snap(t, owners[0]).FCSR(); got != test.want {
+					t.Fatal("lost RTL FCSR priority", reverse, got, test.want)
+				}
+				concurrentEdge(t, c, 4, model.CoreReport{Writeback: csr})
+				if got := reg(t, snap(t, owners[0]), isa.Integer, 3); got != (isa.LaneValues{}) {
+					t.Fatal("CSR read forwarded same-edge flags", got)
+				}
+				if err := c.Observe(5, model.CoreReport{Flags: fp}, [4]state.ReadContext{}); err == nil {
+					t.Fatal("combined flags receipt replayed")
+				}
+			}
+		})
+	}
+}
+
+func TestConcurrentHeldCSRWithFlags(t *testing.T) {
+	c, owners, _ := concurrentSetup(t)
+	fp := concurrentToken(t, 1, 0x182081d3, 0x100)
+	csr := concurrentToken(t, 2, 0x001021f3, 0x104) // read fflags
+	for _, signal := range []model.Signal{fp, csr} {
+		if err := c.Begin(signal.Token); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := fp
+	read.Token.ReadMask, read.Token.LastRead = 3, true
+	concurrentEdge(t, c, 0, model.CoreReport{Read: read})
+	concurrentEdge(t, c, 1, model.CoreReport{Executed: [4]model.Signal{{}, {}, {}, fp}})
+	read = csr
+	read.Token.ReadMask, read.Token.LastRead = 0, true
+	concurrentEdge(t, c, 2, model.CoreReport{Read: read})
+	concurrentEdge(t, c, 3, model.CoreReport{Flags: fp, CSRRequest: csr, CSRRequestWindow: true})
+	if got := snap(t, owners[0]).FCSR(); got != 1 {
+		t.Fatal("held CSR lost FPU flags", got)
+	}
+	concurrentEdge(t, c, 4, model.CoreReport{CSRRequest: csr, CSRRequestWindow: true, Executed: [4]model.Signal{{}, {}, csr}})
+	concurrentEdge(t, c, 5, model.CoreReport{Writeback: csr})
+	if got := reg(t, snap(t, owners[0]), isa.Integer, 3); got != (isa.LaneValues{1, 1, 1, 1}) {
+		t.Fatal("accepted CSR did not read next-edge flags", got)
+	}
+}
+
+func TestConcurrentNonblockingBarrierAndBranchFeedback(t *testing.T) {
+	_, owners, ram := concurrentSetup(t)
+	if err := owners[0].WriteRegister(isa.Register{File: isa.Integer, Index: 1}, 15, isa.LaneValues{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := owners[0].WriteRegister(isa.Register{File: isa.Integer, Index: 2}, 15, isa.LaneValues{1, 1, 1, 1}); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	c, err := effects.NewConcurrent(owners, 9, ram, [4]effects.ExternalOwner{func(e isa.InstructionEffects) error { calls += len(e.Barriers); return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var word uint32
+	for _, entry := range isa.Catalog() {
+		if entry.Name == "bar.arrive" {
+			word = entry.Example&^uint32(31<<15|31<<20) | 1<<15 | 2<<20
+		}
+	}
+	bar := concurrentToken(t, 1, word, 0x100)
+	branch := concurrentToken(t, 2, 0x00000463, 0x104)
+	if bar.Token.WarpStall || !branch.Token.WarpStall {
+		t.Fatal("test does not represent nonblocking arrive")
+	}
+	for _, signal := range []model.Signal{bar, branch} {
+		if err := c.Begin(signal.Token); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := bar
+	read.Token.ReadMask, read.Token.LastRead = bar.Token.Used, true
+	concurrentEdge(t, c, 0, model.CoreReport{Read: read})
+	read = branch
+	read.Token.ReadMask, read.Token.LastRead = 0, true
+	concurrentEdge(t, c, 1, model.CoreReport{Read: read})
+	concurrentEdge(t, c, 2, model.CoreReport{Executed: [4]model.Signal{branch, {}, bar}})
+	concurrentEdge(t, c, 3, model.CoreReport{Branch: branch, Control: bar})
+	if calls != 1 || snap(t, owners[0]).PC() != 0x10c {
+		t.Fatal("barrier event or branch redirect lost", calls, snap(t, owners[0]).PC())
+	}
+	concurrentEdge(t, c, 4, model.CoreReport{Writeback: bar})
+	concurrentEdge(t, c, 5, model.CoreReport{PendingRelease: bar, Writeback: branch})
+	concurrentEdge(t, c, 6, model.CoreReport{PendingRelease: branch})
+	if done, err := c.Reap(); err != nil || len(done) != 2 {
+		t.Fatal("overlap did not complete both instructions", done, err)
+	}
+}

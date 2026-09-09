@@ -1,6 +1,9 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 type FeedbackKind string
 
@@ -27,23 +30,28 @@ type SchedulerFeedback struct {
 	Mask                 uint8
 }
 
-func (s *Scheduler) validateFeedback(events []SchedulerFeedback, selected Signal, accepted bool, fetch, decode Signal) error {
-	seen := [4]bool{}
+func (s *Scheduler) validateFeedback(events []SchedulerFeedback) error {
+	seen := [4]map[FeedbackKind]bool{}
+	identities := [4]map[uint64]bool{}
 	for _, e := range events {
 		w := e.Token.Warp
 		if w >= 4 || e.Token.ID == 0 {
 			return fmt.Errorf("invalid feedback identity")
 		}
 		old := s.state.Warps[w]
-		if seen[w] {
-			return fmt.Errorf("UNRESOLVED simultaneous same-warp feedback")
+		if seen[w] == nil {
+			seen[w] = map[FeedbackKind]bool{}
+			identities[w] = map[uint64]bool{}
 		}
-		seen[w] = true
+		if seen[w][e.Kind] || identities[w][e.Token.ID] {
+			return fmt.Errorf("duplicate scheduler producer or instruction feedback")
+		}
+		seen[w][e.Kind], identities[w][e.Token.ID] = true, true
 		if e.Token.Epoch != old.Epoch || e.Token.ID <= s.state.LastControl[w] {
 			return fmt.Errorf("stale or repeated scheduler feedback")
 		}
-		if !old.Active || !old.Stalled {
-			return fmt.Errorf("feedback requires a blocked active warp")
+		if !old.Active {
+			return fmt.Errorf("feedback requires an active warp")
 		}
 		if e.UpdatePC && e.PC&3 != 0 || e.UpdateMask && e.Mask & ^uint8(15) != 0 {
 			return fmt.Errorf("invalid feedback PC/mask")
@@ -80,17 +88,16 @@ func (s *Scheduler) validateFeedback(events []SchedulerFeedback, selected Signal
 		if e.UpdateMask && e.Mask == 0 && e.Kind != FeedbackTMC {
 			return fmt.Errorf("only TMC may deactivate a warp")
 		}
-		// Local RTL assignment order is documented, but this software interface
-		// cannot infer reachability of conflicting producer events. Fail before
-		// constructing mutations instead of choosing priority by call order.
-		for _, event := range []Signal{fetch, decode, s.state.DecodeUnlock} {
-			if event.Valid && event.Token.Warp == w {
-				return fmt.Errorf("UNRESOLVED feedback overlapping same-warp frontend event")
-			}
-		}
-		if accepted && selected.Token.Warp == w {
-			return fmt.Errorf("UNRESOLVED feedback and same-warp scheduling")
-		}
+
 	}
 	return nil
+}
+
+// orderedFeedback follows VX_scheduler's per-field assignment order. Copy the
+// slice so evaluating a proposal never mutates caller-owned producer events.
+func orderedFeedback(events []SchedulerFeedback) []SchedulerFeedback {
+	priority := map[FeedbackKind]int{FeedbackSpawn: 0, FeedbackTMC: 1, FeedbackSplit: 2, FeedbackJoin: 3, FeedbackWake: 4, FeedbackBranch: 5}
+	next := append([]SchedulerFeedback(nil), events...)
+	sort.SliceStable(next, func(i, j int) bool { return priority[next[i].Kind] < priority[next[j].Kind] })
+	return next
 }

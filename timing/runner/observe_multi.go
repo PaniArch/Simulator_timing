@@ -7,7 +7,8 @@ type WarpObservation struct {
 	PC                        uint32
 	Mask                      uint8
 	Epoch                     uint64
-	Pending, PendingLSU       int
+	Pending, PendingLSU       int // software observations, not scheduler counters
+	HardwarePending           int // old registered issue minus EOP commit count
 	StallReason               string
 }
 
@@ -24,8 +25,9 @@ func (r *MultiRunner) observeWarps(s model.SchedulerState) (result [4]WarpObserv
 			result[t.Warp].Pending++
 		}
 	}
+	hardware := r.core.HardwarePending()
 	for w, c := range s.Warps {
-		result[w] = WarpObservation{Active: c.Active, Stalled: c.Stalled, Runnable: c.Active && !c.Stalled && (!s.IBufferFull[w] || s.AllIBuffersFull), PC: c.PC, Mask: c.Mask, Epoch: c.Epoch}
+		result[w] = WarpObservation{HardwarePending: hardware[w], Active: c.Active, Stalled: c.Stalled, Runnable: c.Active && !c.Stalled && (!s.IBufferFull[w] || s.AllIBuffersFull), PC: c.PC, Mask: c.Mask, Epoch: c.Epoch}
 		switch {
 		case !c.Active:
 			result[w].StallReason = "inactive"

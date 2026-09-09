@@ -91,7 +91,7 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 		}
 	}
 	next.SingleActive = activeCount == 1
-	if err := s.validateFeedback(feedback, selected, t.Completed, fetchAccepted, decode); err != nil {
+	if err := s.validateFeedback(feedback); err != nil {
 		return Transition{}, err
 	}
 	// Local RTL assignment order is explicit. None of these edits is installed
@@ -104,12 +104,7 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 		if nextID == ^uint64(0) {
 			return Transition{}, fmt.Errorf("instruction identity exhausted")
 		}
-		next.Warps[selected.Token.Warp].Stalled = true
 		nextID++
-	}
-	if fetchAccepted.Valid {
-		tok := fetchAccepted.Token
-		next.Warps[tok.Warp].PC = tok.PC + 4
 	}
 	next.AllIBuffersFull = true
 	for w := range next.Warps {
@@ -131,7 +126,7 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 		next.IBufferFull[w] = count == 4
 		next.AllIBuffersFull = next.AllIBuffersFull && next.IBufferFull[w]
 	}
-	for _, event := range feedback {
+	for _, event := range orderedFeedback(feedback) {
 		w := event.Token.Warp
 		context := &next.Warps[w]
 		if event.UpdatePC {
@@ -144,7 +139,9 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 			context.Active = event.Mask != 0
 		}
 		context.Stalled = false
-		next.LastControl[w] = event.Token.ID
+		if event.Token.ID > next.LastControl[w] {
+			next.LastControl[w] = event.Token.ID
+		}
 		if event.Kind == FeedbackSpawn {
 			for target := range next.Warps {
 				if event.Targets&(1<<target) != 0 {
@@ -155,6 +152,14 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 				}
 			}
 		}
+	}
+	// VX_scheduler applies schedule stall and fetch PC advance after feedback.
+	if t.Completed {
+		next.Warps[selected.Token.Warp].Stalled = true
+	}
+	if fetchAccepted.Valid {
+		tok := fetchAccepted.Token
+		next.Warps[tok.Warp].PC = tok.PC + 4
 	}
 	t.edits = []mutation{s.rev.propose(func() { s.state, s.nextID = next, nextID })}
 	return t, nil

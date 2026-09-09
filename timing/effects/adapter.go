@@ -13,6 +13,8 @@ import (
 type ExternalOwner func(isa.InstructionEffects) error
 
 type instruction struct {
+	trapCycle          uint64
+	trapRefreshed      bool
 	spawnAt            *uint64
 	feedback           *model.SchedulerFeedback
 	packed             *packedInstruction
@@ -30,9 +32,12 @@ type instruction struct {
 // is a single instruction in flight; memory completion is handled by
 // the service adapter, never emulated by an early Warp.Step call.
 type Adapter struct {
+	csrTrap       *state.EffectDelivery // optional same-edge scheduler trap receipt
+	csrFlags      *state.EffectDelivery // same-edge FPU receipt paired by Concurrent
 	stream        *state.EffectStream
 	spawnTargets  []state.WarpSpawnTarget
 	spawnBound    bool
+	spawnPool     bool
 	memory        warp.MemoryService
 	joinLatency   uint64
 	failed        bool
@@ -153,9 +158,6 @@ func (a *Adapter) validateReport(cycle uint64, r model.CoreReport) error {
 			return fmt.Errorf("partial non-memory result outside full-width profile")
 		}
 	}
-	if r.CSRRequest.Valid && !r.Executed[2].Valid {
-		return fmt.Errorf("unsupported stalled CSR request window (u-csr-stall)")
-	}
 	return nil
 }
 
@@ -189,6 +191,11 @@ func (a *Adapter) observeAt(cycle uint64, r model.CoreReport, context state.Read
 			return err
 		}
 	}
+	if r.Branch.Valid && a.isTrap() {
+		if err = a.refreshTrap(cycle, snapshot); err != nil {
+			return err
+		}
+	}
 	if i.packed != nil {
 		return a.observePacked(cycle, r, context, snapshot)
 	}
@@ -204,6 +211,28 @@ func (a *Adapter) observeAt(cycle uint64, r model.CoreReport, context state.Read
 		}
 		if r.Read.Token.LastRead && !i.capture.Complete() {
 			return fmt.Errorf("final read lacks operand coverage")
+		}
+	}
+	// VX_csr_unit writes on csr_req_valid, independently of result readiness.
+	// A held request re-reads old-edge CSR state and applies that edge's write;
+	// it does not create a writeback or complete the instruction receipt.
+	if r.CSRRequest.Valid && !r.Executed[2].Valid {
+		if i.evaluated || i.capture == nil {
+			return fmt.Errorf("premature or repeated CSR request after execution")
+		}
+		e, err := i.capture.EvaluateAt(snapshot, context)
+		if err != nil {
+			return err
+		}
+		if len(e.Faults) != 0 {
+			return architecturalFault(i.token.PC, e.Faults, nil)
+		}
+		delivery, err := a.newDelivery(e)
+		if err != nil {
+			return err
+		}
+		if err = a.deliverCSR(delivery, e); err != nil {
+			return err
 		}
 	}
 	for class, s := range r.Executed {
@@ -225,26 +254,29 @@ func (a *Adapter) observeAt(cycle uint64, r model.CoreReport, context state.Read
 				return fmt.Errorf("control executed before drain; use ControlAllowed with old-edge context")
 			}
 		}
-		i.delivery, err = a.newDelivery(e)
-		if err != nil {
-			return err
+		// Trap recognition in ALU does not read scheduler-owned CSR registers.
+		// Build its delivery at feedback, avoiding execute-edge CSR validation.
+		if !a.isTrap() {
+			i.delivery, err = a.newDelivery(e)
+			if err != nil {
+				return err
+			}
 		}
 		for _, w := range e.RegisterWrites {
 			i.writes |= w.Mask
 		}
 		i.feedback = latchFeedback(i.token, i.decoded, e)
+		if a.spawnPool && i.decoded.Control == isa.ControlWarpSpawn {
+			if _, err := a.selectedSpawnTargets(); err != nil {
+				return err
+			}
+		}
 		i.evaluated = true
 		if i.token.Class == 1 {
 			i.memory = &memoryInstruction{snapshot: snapshot, requests: append([]isa.MemoryRequest(nil), e.MemoryRequests...), parts: map[uint8]*memoryPart{}}
 		}
 		if i.token.Path == model.CSRPath {
-			var callback func(isa.InstructionEffects) error
-			for _, w := range e.CSRWrites {
-				if w.Scope != isa.CSRScopeWarp && !(w.Scope == isa.CSRScopeConstant && w.Ignored) {
-					callback = a.external
-				}
-			}
-			if err = i.delivery.Deliver(state.CSREvent, 0, callback); err != nil {
+			if err = a.deliverCSR(i.delivery, e); err != nil {
 				return err
 			}
 		}
@@ -264,11 +296,12 @@ func (a *Adapter) observeAt(cycle uint64, r model.CoreReport, context state.Read
 		}
 		return i.delivery.Deliver(event, mask, callback)
 	}
-	if i.spawnAt != nil && cycle >= *i.spawnAt {
-		if cycle != *i.spawnAt {
-			return fmt.Errorf("missed registered spawn edge")
+	if i.spawnAt != nil && cycle >= *i.spawnAt && (!r.Scheduled || r.Scheduler.SingleActive) {
+		targets, e := a.selectedSpawnTargets()
+		if e != nil {
+			return e
 		}
-		if err = i.delivery.DeliverWarpSpawn(a.spawnTargets); err != nil {
+		if err = i.delivery.DeliverWarpSpawnAtActivation(targets); err != nil {
 			return err
 		}
 		i.spawnAt = nil
@@ -325,7 +358,7 @@ func (a *Adapter) observeAt(cycle uint64, r model.CoreReport, context state.Read
 			return fmt.Errorf("premature or duplicate pending release")
 		}
 		if i.token.Branch || i.token.Path == model.WCTL {
-			if !i.delivery.Delivered(state.ControlEvent) {
+			if !i.delivery.Delivered(state.ControlEvent) && i.spawnAt == nil {
 				return fmt.Errorf("pending release before control visibility")
 			}
 		} else {
@@ -341,12 +374,13 @@ func (a *Adapter) observeAt(cycle uint64, r model.CoreReport, context state.Read
 	return nil
 }
 func (a *Adapter) Finish() error {
-	if a.failed || a.current == nil || !a.current.pending || a.current.memory != nil && !a.memoryFinished() || a.current != nil && a.current.packed != nil && !a.packedFinished() {
+	if a.failed || a.current == nil || !a.current.pending || a.current.spawnAt != nil || a.current.memory != nil && !a.memoryFinished() || a.current != nil && a.current.packed != nil && !a.packedFinished() {
 		return fmt.Errorf("instruction effects are incomplete")
 	}
 	a.current = nil
 	a.spawnBound = false
 	a.spawnTargets = nil
+	a.spawnPool = false
 	return nil
 }
 
@@ -362,6 +396,7 @@ func (a *Adapter) Reset(epoch uint64) error {
 	a.current = nil
 	a.spawnBound = false
 	a.spawnTargets = nil
+	a.spawnPool = false
 	a.failed = false
 	a.epoch = epoch
 	a.lastID = 0
@@ -383,4 +418,20 @@ func (a *Adapter) newDelivery(e isa.InstructionEffects) (*state.EffectDelivery, 
 		return a.stream.NewDelivery(a.current.token.ID, a.instructionContext(), e)
 	}
 	return a.owner.NewEffectDelivery(e)
+}
+
+func (a *Adapter) deliverCSR(delivery *state.EffectDelivery, e isa.InstructionEffects) error {
+	var callback func(isa.InstructionEffects) error
+	for _, w := range e.CSRWrites {
+		if w.Scope != isa.CSRScopeWarp && !(w.Scope == isa.CSRScopeConstant && w.Ignored) {
+			callback = a.external
+		}
+	}
+	if a.csrTrap != nil {
+		return delivery.DeliverCSRWithTrap(a.csrTrap, a.csrFlags, callback)
+	}
+	if a.csrFlags != nil {
+		return delivery.DeliverCSRWithFlags(a.csrFlags, callback)
+	}
+	return delivery.Deliver(state.CSREvent, 0, callback)
 }

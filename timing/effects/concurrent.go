@@ -5,6 +5,7 @@ import (
 	"sort"
 	"vortex.local/simulator/emu/state"
 	"vortex.local/simulator/emu/warp"
+	"vortex.local/simulator/isa"
 	"vortex.local/simulator/timing/model"
 )
 
@@ -26,7 +27,7 @@ type Concurrent struct {
 	owners           [4]*state.WarpState
 	streams          [4]*state.EffectStream
 	external         [4]ExternalOwner
-	memory           warp.MemoryService
+	memory           [4]warp.MemoryService
 	entries          map[Identity]*Adapter
 	lastID           [4]uint64
 	epoch, lastCycle uint64
@@ -34,8 +35,17 @@ type Concurrent struct {
 }
 
 func NewConcurrent(owners [4]*state.WarpState, epoch uint64, memory warp.MemoryService, external [4]ExternalOwner) (*Concurrent, error) {
-	if memory == nil {
-		return nil, fmt.Errorf("explicit memory owner required")
+	return NewConcurrentWithMemory(owners, epoch, [4]warp.MemoryService{memory, memory, memory, memory}, external)
+}
+
+// NewConcurrentWithMemory binds one data service per Warp. Each instruction
+// retains that service until all its memory receipts complete; fetch is owned
+// separately by the runner. Residency owners must not retarget live services.
+func NewConcurrentWithMemory(owners [4]*state.WarpState, epoch uint64, memory [4]warp.MemoryService, external [4]ExternalOwner) (*Concurrent, error) {
+	for _, service := range memory {
+		if service == nil {
+			return nil, fmt.Errorf("explicit memory owner required for every warp")
+		}
 	}
 	c := &Concurrent{owners: owners, external: external, memory: memory, epoch: epoch, entries: map[Identity]*Adapter{}}
 	for w, owner := range owners {
@@ -71,16 +81,14 @@ func (c *Concurrent) begin(token model.Token, binding *SpawnBinding) error {
 	if err != nil {
 		return err
 	}
-	if err = a.BindMemory(c.memory); err != nil {
+	if err = a.BindMemory(c.memory[token.Warp]); err != nil {
 		return err
 	}
+	a.stream = c.streams[token.Warp]
 	if binding != nil {
+		a.spawnPool = binding.Pool
 		for _, target := range binding.Targets {
-			for key := range c.entries {
-				if key.Warp == target.WarpID {
-					return fmt.Errorf("spawn target retains in-flight work")
-				}
-			}
+
 			if target.WarpID >= 4 || target.Owner != c.owners[target.WarpID] {
 				return fmt.Errorf("foreign spawn owner")
 			}
@@ -89,7 +97,6 @@ func (c *Concurrent) begin(token model.Token, binding *SpawnBinding) error {
 			return err
 		}
 	}
-	a.stream = c.streams[token.Warp]
 	if err = a.Begin(token); err != nil {
 		return err
 	}
@@ -124,7 +131,7 @@ func (c *Concurrent) lookup(token model.Token) (*Adapter, error) {
 // Observe validates the complete report before invoking an engine. All engines
 // receive snapshots taken BEFORE any engine applies visible effects this edge.
 // Map traversal can therefore neither forward a same-edge WB into a read nor
-// select a CSR/control collision priority. Unsupported overlaps are rejected.
+// select a CSR/control collision priority. FFLAGS and CSR share one old-edge transaction.
 func (c *Concurrent) Observe(cycle uint64, r model.CoreReport, contexts [4]state.ReadContext) (err error) {
 	if c.failed {
 		return fmt.Errorf("concurrent effects require reset")
@@ -138,10 +145,16 @@ func (c *Concurrent) Observe(cycle uint64, r model.CoreReport, contexts [4]state
 		return fmt.Errorf("repeated or reordered concurrent edge")
 	}
 	if r.Branch.Valid && r.Control.Valid && r.Branch.Token.Warp == r.Control.Token.Warp {
-		return fmt.Errorf("UNRESOLVED same-warp branch/control overlap")
-	}
-	if r.Flags.Valid && r.CSRRequest.Valid && r.Flags.Token.Warp == r.CSRRequest.Token.Warp {
-		return fmt.Errorf("UNRESOLVED same-warp flags/CSR overlap")
+		control, lookupErr := c.lookup(r.Control.Token)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		// All other WCTL operations retain wstall until feedback. BAR.arrive
+		// unlocks at decode and can overlap a younger branch. Its sequential
+		// control delivery precedes the branch in the instruction-order walk.
+		if control.current.decoded.Barrier != isa.BarrierArrive || r.Control.Token.ID >= r.Branch.Token.ID {
+			return fmt.Errorf("overlapping blocking controls violate warp fetch stall")
+		}
 	}
 	reports := map[Identity]model.CoreReport{}
 	route := func(s model.Signal, set func(*model.CoreReport)) error {
@@ -214,6 +227,9 @@ func (c *Concurrent) Observe(cycle uint64, r model.CoreReport, contexts [4]state
 	}
 	keys := c.keys()
 	for _, key := range keys {
+		part := reports[key]
+		part.Scheduler, part.Scheduled = r.Scheduler, r.Scheduled
+		reports[key] = part
 		if err = c.entries[key].validateReport(cycle, reports[key]); err != nil {
 			return err
 		}
@@ -237,9 +253,89 @@ func (c *Concurrent) Observe(cycle uint64, r model.CoreReport, contexts [4]state
 			return err
 		}
 	}
-	for _, key := range keys {
-		if err = c.entries[key].observeAt(cycle, reports[key], contexts[key.Warp], snapshots[key.Warp]); err != nil {
+	// Trap CSR operands resolve at the scheduler feedback edge, before any
+	// same-edge software CSR or other owner mutation.
+	var trapKey Identity
+	hasTrap := false
+	if r.Branch.Valid {
+		trapKey = identity(r.Branch.Token)
+		a := c.entries[trapKey]
+		if a.isTrap() {
+			hasTrap = true
+			if err = a.refreshTrap(cycle, snapshots[trapKey.Warp]); err != nil {
+				return err
+			}
+		}
+	}
+	pairFlags := r.Flags.Valid && r.CSRRequest.Valid && r.Flags.Token.Warp == r.CSRRequest.Token.Warp
+	pairTrap := hasTrap && r.CSRRequest.Valid && trapKey.Warp == r.CSRRequest.Token.Warp
+	if pairTrap && r.Control.Valid && r.Control.Token.Warp == r.Branch.Token.Warp {
+		// A prior nonblocking BAR.arrive may share this edge with CSR and trap.
+		// Deliver its external event before the newer trap advances the control
+		// frontier. All evaluations still use the snapshots captured above.
+		barKey := identity(r.Control.Token)
+		if err = c.entries[barKey].observeAt(cycle, reports[barKey], contexts[barKey.Warp], snapshots[barKey.Warp]); err != nil {
 			return err
+		}
+		var remaining []Identity
+		for _, key := range keys {
+			if key != barKey {
+				remaining = append(remaining, key)
+			}
+		}
+		keys = remaining
+	}
+	if pairFlags || pairTrap {
+		csrKey := identity(r.CSRRequest.Token)
+		csr := c.entries[csrKey]
+		if pairFlags {
+			flag := c.entries[identity(r.Flags.Token)]
+			if flag.current.delivery == nil {
+				return fmt.Errorf("flags before execution")
+			}
+			csr.csrFlags = flag.current.delivery
+		}
+		if pairTrap {
+			csr.csrTrap = c.entries[trapKey].current.delivery
+		}
+		defer func() { csr.csrFlags, csr.csrTrap = nil, nil }()
+		if err = csr.observeAt(cycle, reports[csrKey], contexts[csrKey.Warp], snapshots[csrKey.Warp]); err != nil {
+			return err
+		}
+		if pairFlags {
+			key := identity(r.Flags.Token)
+			part := reports[key]
+			part.Flags = model.Signal{} // joint transaction consumed this receipt
+			reports[key] = part
+		}
+		if pairTrap {
+			part := reports[trapKey]
+			part.Branch = model.Signal{} // joint transaction consumed this receipt
+			reports[trapKey] = part
+		}
+		var remaining []Identity
+		for _, key := range keys {
+			if key != csrKey {
+				remaining = append(remaining, key)
+			}
+		}
+		keys = remaining
+	}
+
+	for _, key := range keys {
+		a := c.entries[key]
+		activating := a.current.spawnAt != nil && cycle >= *a.current.spawnAt && (!r.Scheduled || r.Scheduler.SingleActive)
+		if err = a.observeAt(cycle, reports[key], contexts[key.Warp], snapshots[key.Warp]); err != nil {
+			return err
+		}
+		if activating {
+			targets, err := a.selectedSpawnTargets()
+			if err != nil {
+				return err
+			}
+			for _, target := range targets {
+				c.streams[target.WarpID].RecordActivation(c.lastID[target.WarpID])
+			}
 		}
 	}
 	c.observed = true
@@ -272,7 +368,7 @@ func (c *Concurrent) Reap() ([]model.Token, error) {
 	for _, key := range c.keys() {
 		a := c.entries[key]
 		i := a.current
-		if !i.pending || i.memory != nil && !a.memoryFinished() || i.packed != nil && !a.packedFinished() {
+		if !i.pending || i.spawnAt != nil || i.memory != nil && !a.memoryFinished() || i.packed != nil && !a.packedFinished() {
 			continue
 		}
 		token := i.token
@@ -298,7 +394,7 @@ func (c *Concurrent) Reset(epoch uint64) error {
 	if epoch <= c.epoch {
 		return fmt.Errorf("epoch must increase")
 	}
-	next, err := NewConcurrent(c.owners, epoch, c.memory, c.external)
+	next, err := NewConcurrentWithMemory(c.owners, epoch, c.memory, c.external)
 	if err != nil {
 		return err
 	}

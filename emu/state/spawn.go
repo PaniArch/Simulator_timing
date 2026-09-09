@@ -37,6 +37,10 @@ type WarpSpawnStage struct {
 // coordinated source/target replacement. Only target PC, lane0 mask/running
 // lifecycle, and mscratch differ in each target candidate.
 func StageWarpSpawn(source *EffectStage, targets []WarpSpawnTarget) (*WarpSpawnStage, error) {
+	return stageWarpSpawn(source, targets, nil)
+}
+
+func stageWarpSpawn(source *EffectStage, targets []WarpSpawnTarget, instructionPC *uint32) (*WarpSpawnStage, error) {
 	if source == nil || source.owner == nil {
 		return nil, fmt.Errorf("state: nil WSPAWN source stage")
 	}
@@ -63,6 +67,9 @@ func StageWarpSpawn(source *EffectStage, targets []WarpSpawnTarget) (*WarpSpawnS
 	}
 	expectedSource := source.before
 	expectedSource.pc += 4
+	if instructionPC != nil {
+		expectedSource.pc = *instructionPC + 4
+	}
 	if source.after != expectedSource {
 		return nil, fmt.Errorf("state: WSPAWN source candidate contains non-sequential or extra local mutation")
 	}

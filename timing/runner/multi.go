@@ -13,7 +13,11 @@ import (
 )
 
 type MultiOptions struct {
-	Spawn func(model.Token) (effects.SpawnBinding, error) // explicit pre-issue owner binding
+	// DataMemory supplies optional Warp-specific data routes. Nil entries use
+	// the global memory argument. Fetch always uses that global argument.
+	// Routes must retain their CTA binding while requests/effects remain live.
+	DataMemory [4]warp.MemoryService
+	Spawn      func(model.Token) (effects.SpawnBinding, error) // explicit pre-issue owner binding
 	Options
 	Contexts func() [4]state.ReadContext
 	// MemoryDelay selects an explicit external service delay, never cache timing.
@@ -21,6 +25,7 @@ type MultiOptions struct {
 	MemoryDelay func(model.Token) uint64
 }
 type MultiRecord struct {
+	Counters       isa.CounterView // old-edge hardware scheduler counters
 	Warps          [4]WarpObservation
 	Events         []StageEvent
 	Cancelled      []model.Token // effect contexts removed since the previous edge
@@ -83,7 +88,13 @@ func NewMulti(owners [4]*state.WarpState, memory warp.MemoryService, options Mul
 		return nil, err
 	}
 	external := [4]effects.ExternalOwner{options.External, options.External, options.External, options.External}
-	adapter, err := effects.NewConcurrent(owners, 1, memory, external)
+	routes := options.DataMemory
+	for w := range routes {
+		if routes[w] == nil {
+			routes[w] = memory
+		}
+	}
+	adapter, err := effects.NewConcurrentWithMemory(owners, 1, routes, external)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +136,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 	if err := r.cleanupRedirects(cycle); err != nil {
 		return MultiRecord{Cycle: cycle}, err
 	}
-	record := MultiRecord{Events: append([]StageEvent(nil), r.recoveryEvents...), Cycle: cycle, Cancelled: append([]model.Token(nil), r.cancelled...)}
+	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Events: append([]StageEvent(nil), r.recoveryEvents...), Cycle: cycle, Cancelled: append([]model.Token(nil), r.cancelled...)}
 	r.cancelled = nil
 	r.recoveryEvents = nil
 	if !r.fetchResponse.Valid {
@@ -159,6 +170,12 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 			contexts[w] = c
 		}
 	}
+	// CSR snapshots observe model state before this edge, independently of
+	// software receipt completion and caller-provided CTA/barrier context.
+	for w := range contexts {
+		contexts[w].Counters = isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}
+		contexts[w].ActiveWarps = r.core.ActiveWarps()
+	}
 	ready := true
 	if r.options.Ready != nil {
 		ready = r.options.Ready(cycle)
@@ -167,13 +184,15 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 	context := state.ReadContext{}
 	if control.Valid {
 		context = contexts[control.Token.Warp]
-		prior, lsu := r.effects.DrainBefore(control.Token)
-		context.PendingPriorWork = context.PendingPriorWork || prior
-		context.PendingLSU = context.PendingLSU || lsu
+		// WSYNC samples the registered pending count (including itself).
+		// BAR samples the shared LSU scheduler request queue, not service tails.
+		context.PendingPriorWork = r.core.HardwarePending()[control.Token.Warp] > 1
+		context.PendingLSU = !r.core.LSUSchedulerDrained()
+
 		contexts[control.Token.Warp] = context
 	}
 	branch, simt := r.core.FeedbackSignals()
-	feedback, err := r.effects.Feedback(cycle, branch, simt)
+	feedback, err := r.effects.Feedback(cycle, branch, simt, r.core.SingleActive())
 	if err != nil {
 		return record, err
 	}

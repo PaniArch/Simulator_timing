@@ -22,11 +22,9 @@ func (c *Concurrent) Pending() []PendingInstruction {
 	return result
 }
 
-// DrainBefore answers the old-edge predicates for a control instruction in
-// this Warp. Decode/issue are ordered per Warp, so when that control reaches SFU
-// every older instruction has an entry here or has already been fully reaped.
-// Frontend-only younger tokens do not constitute prior work. Caller-owned
-// external predicates must be ORed with these, not replaced by them.
+// DrainBefore summarizes older software receipts for diagnostics only. It is
+// not a hardware pending or LSU-drained predicate and must not gate control
+// execution. MultiRunner uses Core hardware accounting and LSU state instead.
 func (c *Concurrent) DrainBefore(token model.Token) (prior, lsu bool) {
 	for _, entry := range c.Pending() {
 		if entry.Token.Warp != token.Warp || entry.Token.Epoch != token.Epoch || entry.Token.ID >= token.ID {

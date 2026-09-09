@@ -145,9 +145,20 @@ func (d *EffectDelivery) Deliver(event VisibilityEvent, lanes isa.LaneMask, exte
 // the existing atomic owner transaction. Target Expected images must come from
 // before instruction issue. No source candidate survives across timing edges.
 func (d *EffectDelivery) DeliverWarpSpawn(targets []WarpSpawnTarget) error {
+	return d.deliverWarpSpawn(targets, false)
+}
+
+// DeliverWarpSpawnAtActivation uses the live target image at the scheduler's
+// single-active activation edge. Only PC/mask/mscratch are initialized; older
+// writebacks and service tails can retain the same owner and instruction IDs.
+func (d *EffectDelivery) DeliverWarpSpawnAtActivation(targets []WarpSpawnTarget) error {
+	return d.deliverWarpSpawn(targets, true)
+}
+
+func (d *EffectDelivery) deliverWarpSpawn(targets []WarpSpawnTarget, activation bool) error {
 	if d != nil && d.stream != nil {
-		if d.order <= d.stream.controlOrder || d.owner.pc != d.instruction.PC || d.owner.activeMask != d.instruction.Mask {
-			return fmt.Errorf("concurrent spawn requires drained source context")
+		if d.order <= d.stream.controlOrder || !activation && d.owner.pc != d.instruction.PC || d.owner.activeMask != d.instruction.Mask {
+			return fmt.Errorf("stale concurrent spawn control context")
 		}
 	}
 	if d == nil || d.owner == nil || d.cancelled || d.delivered[ControlEvent] || d.effects.WarpSpawn == nil {
@@ -159,11 +170,30 @@ func (d *EffectDelivery) DeliverWarpSpawn(targets []WarpSpawnTarget) error {
 	if e.Trap != nil {
 		part.CSRWrites = e.CSRWrites
 	}
-	source, err := d.owner.StageEffects(part)
+	var source *EffectStage
+	var err error
+	var instructionPC *uint32
+	if activation && d.stream != nil {
+		part.WarpSpawn.MScratch = d.owner.trapCSRs.MScratch
+		source, err = d.owner.stageInstructionEffects(d.instruction, part)
+		instructionPC = &d.instruction.PC
+		targets = append([]WarpSpawnTarget(nil), targets...)
+		for n := range targets {
+			if targets[n].Owner == nil {
+				return fmt.Errorf("nil activation target")
+			}
+			targets[n].Expected, err = targets[n].Owner.Snapshot()
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		source, err = d.owner.StageEffects(part)
+	}
 	if err != nil {
 		return err
 	}
-	transaction, err := StageWarpSpawn(source, targets)
+	transaction, err := stageWarpSpawn(source, targets, instructionPC)
 	if err != nil {
 		return err
 	}
@@ -173,6 +203,99 @@ func (d *EffectDelivery) DeliverWarpSpawn(targets []WarpSpawnTarget) error {
 	d.delivered[ControlEvent] = true
 	if d.stream != nil {
 		d.stream.controlOrder = d.order
+	}
+	return nil
+}
+
+// DeliverCSRWithFlags merges the two hardware CSR producers against one old
+// owner image. StageEffects validates reads/RMW old values before accumulating
+// flags and applying the software write to its addressed field. Both receipts
+// advance only after the common transaction commits.
+func (d *EffectDelivery) DeliverCSRWithFlags(flags *EffectDelivery, external func(isa.InstructionEffects) error) error {
+	if flags == nil {
+		return fmt.Errorf("missing combined flags delivery")
+	}
+	return d.deliverCSRJoint(flags, nil, external)
+}
+
+// DeliverCSRWithTrap samples both producers against one old owner. Software
+// CSR writes precede hardware trap writes; trap redirects use old CSR values.
+// An optional FPU flags receipt joins the same transaction.
+func (d *EffectDelivery) DeliverCSRWithTrap(trap, flags *EffectDelivery, external func(isa.InstructionEffects) error) error {
+	if trap == nil {
+		return fmt.Errorf("missing combined trap delivery")
+	}
+	return d.deliverCSRJoint(flags, trap, external)
+}
+
+func (d *EffectDelivery) deliverCSRJoint(flags, trap *EffectDelivery, external func(isa.InstructionEffects) error) error {
+	if d == nil || d.owner == nil || d.cancelled || d.delivered[CSREvent] || d.effects.Trap != nil {
+		return fmt.Errorf("invalid or repeated combined CSR delivery")
+	}
+	part := isa.InstructionEffects{CSRReads: d.effects.CSRReads, CSRWrites: d.effects.CSRWrites}
+	if flags != nil {
+		if flags == d || flags.owner != d.owner || flags.cancelled || flags.delivered[FFlagsEvent] {
+			return fmt.Errorf("invalid combined flags receipt")
+		}
+		part.FFlags = flags.effects.FFlags
+	}
+	stage, err := d.owner.StageEffects(part)
+	if err != nil {
+		return err
+	}
+	if trap != nil {
+		if trap == d || trap == flags || trap.owner != d.owner || trap.cancelled || trap.delivered[ControlEvent] || trap.effects.Trap == nil {
+			return fmt.Errorf("invalid combined trap receipt")
+		}
+		e := trap.effects
+		control := isa.InstructionEffects{Control: e.Control, Trap: e.Trap, CSRWrites: e.CSRWrites}
+		var controlStage *EffectStage
+		if trap.stream != nil {
+			controlStage, err = trap.stageStreamControl(control)
+		} else {
+			controlStage, err = trap.owner.StageEffects(control)
+		}
+		if err != nil {
+			return err
+		}
+		if controlStage.RequiresExternalSuccess() {
+			return fmt.Errorf("trap control unexpectedly forwards external effects")
+		}
+		// Merge only fields written by scheduler trap logic, preserving software
+		// writes to MTVEC/MSTATUS and FCSR updates from the other producers.
+		stage.after.pc = controlStage.after.pc
+		if e.Trap.Kind == isa.TrapEnter {
+			stage.after.trapCSRs.MEPC = controlStage.after.trapCSRs.MEPC
+			stage.after.trapCSRs.MCause = controlStage.after.trapCSRs.MCause
+			stage.after.trapCSRs.MTVal = controlStage.after.trapCSRs.MTVal
+			stage.after.savedThreadMask = controlStage.after.savedThreadMask
+		} else if e.Trap.RestoresThreadMask {
+			stage.after.activeMask, stage.after.lifecycle = controlStage.after.activeMask, controlStage.after.lifecycle
+		}
+	}
+	if stage.RequiresExternalSuccess() {
+		if external == nil {
+			return fmt.Errorf("combined CSR event requires external owner")
+		}
+		err = stage.CommitForwardedWithExternal(func() error { return external(stage.ForwardedEffects()) })
+	} else {
+		if external != nil {
+			return fmt.Errorf("local CSR event cannot invoke external owner")
+		}
+		err = stage.Commit()
+	}
+	if err != nil {
+		return err
+	}
+	d.delivered[CSREvent] = true
+	if flags != nil {
+		flags.delivered[FFlagsEvent] = true
+	}
+	if trap != nil {
+		trap.delivered[ControlEvent] = true
+		if trap.stream != nil && trap.order > trap.stream.controlOrder {
+			trap.stream.controlOrder = trap.order
+		}
 	}
 	return nil
 }

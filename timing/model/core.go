@@ -5,12 +5,13 @@ import "fmt"
 // Core is a transient four-warp pipeline composition, not an ISA executor.
 // Functional owners and external memory bytes are deliberately outside it.
 type Core struct {
-	front  *Frontend
-	alu    *ALU
-	lsu    *LSU
-	sfu    *SFU
-	fpu    *STDFPU
-	commit *Commit
+	account instructionAccounting
+	front   *Frontend
+	alu     *ALU
+	lsu     *LSU
+	sfu     *SFU
+	fpu     *STDFPU
+	commit  *Commit
 }
 type CoreInputs struct {
 	Feedback                      []SchedulerFeedback // resolved old-edge branch/SIMT producer values
@@ -144,10 +145,28 @@ func (c *Core) Evaluate(in CoreInputs) (CoreTransition, error) {
 	executed[3].Valid = fpu.Accepted
 	scheduler, scheduled := c.front.SchedulerState()
 	report := CoreReport{IssueCandidates: c.IssueCandidates(), IssueSelected: front.IssueSelected, Wakeups: append([]SchedulerFeedback(nil), in.Feedback...), Scheduler: scheduler, Scheduled: scheduled, Scoreboard: c.front.ScoreboardState(), Issued: front.Issued, Decoded: front.Decoded, IBufferPop: front.IBufferPop, MemoryResponse: in.MemoryResponse, Executed: executed, CSRRequest: sfu.CSRRequest, Resources: c.Resources(), Credits: c.front.Credits(), Offered: front.Offered, FetchRequest: front.Request, MemoryRequest: lsu.Request, InstructionAccepted: front.Accepted, FetchAccepted: front.RequestAccepted, FetchResponseReady: front.ResponseReady, MemoryAccepted: lsu.RequestAccepted, MemoryResponseReady: lsu.ResponseReady, Dispatched: front.Releases, Read: front.Read, Writeback: wb.Writeback, PendingRelease: wb.PendingRelease, Branch: alu.Branch, Control: sfu.Control, Flags: fpu.Flags, CSRRequestWindow: sfu.CSRRequestWindow}
+	activeNext := c.ActiveWarps()
+	for _, event := range orderedFeedback(in.Feedback) {
+		switch event.Kind {
+		case FeedbackSpawn:
+			activeNext |= event.Targets
+		case FeedbackTMC:
+			if event.Mask == 0 {
+				activeNext &^= 1 << event.Token.Warp
+			} else {
+				activeNext |= 1 << event.Token.Warp
+			}
+		}
+	}
+	account, err := c.account.evaluate(front.PendingIssue, wb.PendingRelease, activeNext)
+	if err != nil {
+		return CoreTransition{}, err
+	}
+	t = combine(t, account)
 	return CoreTransition{Transition: t, Report: report}, nil
 }
 func (c *Core) Flush() Transition {
-	return combine(Transition{}, c.front.Flush(), c.alu.Flush(), c.lsu.Flush(), c.sfu.Flush(), c.fpu.Flush(), c.commit.Flush())
+	return combine(Transition{}, c.front.Flush(), c.alu.Flush(), c.lsu.Flush(), c.sfu.Flush(), c.fpu.Flush(), c.commit.Flush(), c.account.flush())
 }
 
 // ControlInput identifies the old SFU execution candidate for caller-owned
@@ -156,3 +175,8 @@ func (c *Core) ControlInput() Signal { return c.sfu.ExecuteInput() }
 
 // FeedbackSignals exposes registered producer identities, without functional values.
 func (c *Core) FeedbackSignals() (Signal, Signal) { return c.alu.Branch(), c.sfu.Control() }
+
+// SingleActive is the registered active-popcount gate used by pending WSPAWN.
+func (c *Core) SingleActive() bool {
+	return c.front.scheduler != nil && c.front.scheduler.state.SingleActive
+}

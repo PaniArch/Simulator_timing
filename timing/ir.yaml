@@ -1,7 +1,7 @@
 schema_version: 1
 id: timing-baseline
 status: PROVISIONAL
-scope: Frozen-source structure and T10 four-warp scheduled pipeline with concurrent functional effects, explicit control-owner boundaries, recovery and observation
+scope: Frozen-source structure and T11 single-core Kernel launch, four-warp scheduled execution, CTA synchronization, local reclamation and explicit service/identity boundaries
 units:
   capacity: entries at the named scope; not added across aliases
   data_bytes: bytes of data per physical transfer, excluding metadata
@@ -11,6 +11,75 @@ units:
   rtl_parameters: verbatim or evaluated instance parameters, not end-to-end timing
   null: unknown or intentionally unassigned; never zero
 sources:
+  kernel-acceptance-guide:
+    path: timing/kernel-usage.md
+    locator: API usage, AC-019 to AC-024 mapping, normal stop audit and explicit precision boundaries
+  kernel-spawn-regression:
+    path: timing/runner/kernel_spawn_test.go
+    locator: operand-selected target subset from CTA owner pool; unowned target rejection
+  kernel-event-identity:
+    path: timing/runner/kernel_events.go
+    locator: once-only Kernel and CTA generation bound external completion tickets
+  kernel-event-regression:
+    path: timing/runner/kernel_events_test.go
+    locator: old completion after slot reuse rejects without changing replacement CTA
+  kernel-residency-events:
+    path: timing/runner/kernel_observe.go
+    locator: TakeEvents; cycle-stamped generation admission reclamation and external completion
+  kernel-sync-progress:
+    path: timing/task11-kernel-sync.md
+    locator: Barrier owner, delivery edge, queued wake and remaining reclamation work
+  kernel-barrier-regression:
+    path: timing/runner/kernel_barrier_test.go
+    locator: repeated two-Warp local exchange with independent CTA barrier phases
+  kernel-launch-owner:
+    path: timing/runner/kernel.go
+    locator: NewKernel and Run; GridWalker to actual MultiRunner with fixed-stride residency
+  kernel-launch-regression:
+    path: timing/runner/kernel_test.go
+    locator: startup entry CSR jump, parameter and block context, physical LMEM address and global output
+  independent-residency-memory:
+    path: emu/core/residency.go
+    locator: explicit physical offsets, atomic admission checks and canonical CTA routes without functional Core
+  cta-dispatch-model:
+    path: timing/model/cta.go
+    locator: WarpQuiescent and DispatchWarp; per-slot pipeline ownership and staged normal activation
+  cta-dispatch-runner:
+    path: timing/runner/cta.go
+    locator: software and external tail gate; canonical initialization and retained unrelated work
+  cta-dispatch-regression:
+    path: timing/runner/cta_dispatch_test.go
+    locator: TestCTADispatchWhileOtherWarpsRun; actual CSR parameter read and partial mask
+  kernel-residency-progress:
+    path: timing/task11-kernel.md
+    locator: implemented per-Warp data service lifetime and remaining Kernel admission work
+  cta-memory-regression:
+    path: timing/runner/cta_memory_test.go
+    locator: TestMultiCTAMemoryRoutesThroughTiming; four isolated resident CTA local routes and global outputs
+  cycle-control-progress:
+    path: timing/task11-cycle-control.md
+    locator: T11 hardware pending and LSU drain implementation; remaining milestone work
+  architectural-counter-regression:
+    path: timing/runner/counters_test.go
+    locator: packed uop commit versus macro receipt; old-edge CSR cycle instret and active mask
+  scheduler-priority-regression:
+    path: timing/model/feedback_test.go
+    locator: detached producer ordering; per-field branch JOIN merge; frontend assignment priority
+  csr-joint-delivery:
+    path: emu/state/delivery.go
+    locator: DeliverCSRWithFlags and DeliverWarpSpawnAtActivation; common owner transaction and receipts
+  spawn-wait-regression:
+    path: timing/runner/spawn_test.go
+    locator: other-warps-active and target-tails; commit before activation and no effect drain
+  trap-feedback-regression:
+    path: timing/effects/trap_test.go
+    locator: feedback-edge CSR reads; prior versus same-edge writes; held CSR; four-producer overlap
+  trap-runner-regression:
+    path: timing/runner/trap_test.go
+    locator: four-warp scheduled ECALL handler and MRET round trip
+  hardware-accounting:
+    path: timing/model/accounting.go
+    locator: instructionAccounting; registered issue and EOP commit; busy-qualified cycles; LSUSchedulerDrained
   generic-arbiter:
     path: Vortex_rtl/hw/rtl/libs/VX_generic_arbiter.sv
     locator: g_round_robin forwards STICKY; MODEL and LUT_OPT use RR defaults
@@ -4397,7 +4466,7 @@ rules:
   - schedule::CSR writes and branch trap updates
   statement: Every CSR request first waits for cta_read_done; execute.ready=csr_req_ready&&cta_read_done, and wait
     resets on execute fire. Source write_enable=csr_req_valid&&csr_wr_enable, without ready qualification; preserve
-    this observation and u-csr-stall. FCSR next-state ORs FP flags then software writes replace addressed bits.
+    this observation; audit-csr-stall implements the corresponding request-window semantics. FCSR next-state ORs FP flags then software writes replace addressed bits.
     Scheduler mscratch assignment order is spawn copy, CTA parameter, software CSR; hardware synchronous trap CSR
     writes follow software trap CSR writes. Dynamic FRM reads old registered fcsr before the update edge.
 - id: r-lsu-request
@@ -4511,7 +4580,7 @@ rules:
   - top::busy
   statement: WB eop is converted into a registered committed mask; scheduler pending decrements and instret increments
     when that mask is consumed. Pending increments from registered issue_sched_if (scoreboard output acceptance);
-    almost-empty means <=1, used by WSYNC. TMC zero mask sends warp_done to dispatcher; CTA final-member completion
+    almost-empty means <=1, used by WSYNC. Software instructionAccounting implements this registered ledger independently of effect receipts; each packed uop has its own entry. TMC zero mask sends warp_done to dispatcher; CTA final-member completion
     differs from pipeline drain. Scheduler busy includes active next-state, nonempty pending and dispatcher busy;
     Core adds LSU emptiness, mem-unit store tail and DCR busy; top adds KMU/DCR/cluster busy. KMU generation finished
     alone is not execution complete.
@@ -4684,7 +4753,7 @@ rules:
     all-or-error external-owner callback; failure records no receipt, and successful duplicate delivery is
     rejected. Legacy EffectStage stale checks are unchanged. These are owner-side APIs only; wiring actual
     cycle observations, residency epochs, memory completion and packed byte visibility remains pending, so
-    u-visibility and u-csr-stall are not resolved by this foundation.
+    u-visibility is not fully resolved by this foundation; T11 request-window behavior is closed in audit-csr-stall.
 - id: r-software-nonmemory-visibility
   status: PROVISIONAL
   nodes:
@@ -4709,8 +4778,7 @@ rules:
     actual ALU/FPU admission, LSU slice and SFU PE acceptance identities; dispatch queue admission is not confused
     with PE execution. Adapter validates every report identity before owner effects, captures RF-read positions
     and evaluates through the existing snapshot dispatch at execution acceptance using old-edge owner context.
-    CSR writes occur at an unstalled CSR request/acceptance window; a stalled window is rejected explicitly as
-    outside this profile, preserving u-csr-stall. Full-width non-memory WB uses the evaluator register-write mask,
+    CSR writes occur on every valid CSR request window, including result backpressure. Held windows re-evaluate old-edge CSR values with latched RF operands and deliver only CSREvent; final acceptance creates the single writeback receipt. FFLAGS/CSR uses one old-image transaction, preserving old CSR reads and software-field priority with joint receipts. Trap feedback samples scheduler CSR state on its delivery edge and jointly commits with software CSR, giving hardware trap writes final priority. Full-width non-memory WB uses the evaluator register-write mask,
     including WGATHER inactive non-source lanes; transient token mask remains packet identity, not a replacement
     semantic write mask. Branch/trap and WCTL effects use registered control observations, with JOIN adding the
     b-simt-feedback OUT_REG edge. FFLAGS use the registered FPU notification. Sequential PC is a conservative
@@ -4738,8 +4806,7 @@ rules:
     fragment has no response or mutation and stops the adapter, without rolling back earlier visible fragments.
     Fence tests deliver ordering once at explicit service; single-participant barrier tests use original
     BarrierCoordinator Stage/Commit at registered feedback. ControlAllowed holds WSYNC/BAR before execution while old-edge drain context is pending. WSPAWN binds
-    original pre-issue target snapshots and requires one active source; registered feedback uses StageWarpSpawn
-    for atomic source/target commit with original stale checks. Residency and CTA membership remain caller-owned.
+    explicit target owners; the concurrent path retains a committed spawn until registered single-active permits activation, without software effect drain. Activation initializes from live target images with monotonic instruction frontiers for late ordinary PC receipts; legacy standalone StageWarpSpawn retains pre-issue snapshot checks. Residency and CTA membership remain caller-owned.
     Same-core Akita mixed instruction tests compare original functional owners after each drained instruction.
     Full scheduling remains outside this profile; u-memory and u-visibility remain unresolved outside it.
 - id: r-software-program-runner
@@ -4829,19 +4896,18 @@ unknowns:
   - schedule::stalled_warps_n/warp_pcs_n
   - scoreboard::operands_ready_r
   - barrier::unlock
-  question: How should the complete same-edge priority and feedback-to-next-selection table be represented?
+  question: What are the exact cross-module feedback timings when the RTL per-Warp CTA dispatcher pipeline, asynchronous trap and nonbaseline producer paths are modeled?
   known: Source-local scheduler overwrite order, WB release/register readiness, CSR priority and registered control
     consumption are recorded. T10 cycle_contracts and multiwarp-contract.md now distinguish local equations,
-    per-field collision cases and old-state selection; the complete cross-module reachability proof remains absent.
-  missing: Exhaustive combined-event reachability and dynamic validation across components; no universal software
-    priority is frozen.
+    per-field collision cases and old-state selection. T11 model scheduler now implements ordered per-field merges and frontend overlap with duplicate/stale checks; FFLAGS/CSR owner transactions and nonblocking BAR.arrive plus younger branch overlap are implemented. Trap/software-CSR old-edge priority and normal baseline overlaps are closed by audit-t11-control and audit-csr-stall. Full RTL equivalence and future dispatcher/asynchronous producer combinations remain outside this profile.
+  missing: Complete RTL equivalence and timing validation for future dispatcher/asynchronous and nonbaseline producer combinations. Current whole-CTA staged Kernel dispatch and baseline explicit-owner control paths are implemented; no normal Kernel path is deferred under this unknown.
   affected:
   - n-schedule
   - n-cta
   - n-simt
   - n-barrier
   - n-scoreboard
-  deadline: Before Scheduler implementation and simultaneous-event validation.
+  deadline: When extending the implemented baseline with dispatcher/asynchronous producer timing or performing RTL equivalence validation.
 - id: u-visibility
   functional_refs: [U-CSR-01, U-CTA-01, U-ABI-01, U-LOWER-01, U-WSPAWN-01, U-WSYNC-01, U-BAR-01, U-MEM-01, U-FAULT-01]
   status: UNRESOLVED
@@ -4850,13 +4916,11 @@ unknowns:
   - commit::writeback_if
   - fpu::fpu_csr_reg
   - wctl::wctl_reg
-  question: How will detached functional effects be staged and made visible with overlapping instructions and partial
-    uop writeback?
+  question: How do the abstract byte-service and whole-CTA dispatch boundaries correspond cycle-for-cycle to the full RTL memory and dispatcher pipelines?
   known: Functional Step and StageEffects use atomic instruction/before-image commits; RTL has distinct register,
     CSR, memory and control events. Task9 provides captured operands and per-event receipts for single-active
     execution including partial lane/byte WB. T10 cc-software-context-flush separates frontend and locked token context.
-  missing: Concurrent multi-instruction adapter/context validation, monotonic canonical PC progress, selective
-    cancellation and same-edge owner effect composition without double effects or old whole-state replacement.
+  missing: Cache/local-memory internal and dispatcher pipeline timing equivalence only. T11 Kernel generation, residency, synchronization, local reclamation and completion are implemented. Concurrent identity validation, monotonic PC frontiers, partial writeback and baseline same-edge owner composition are regression tested; no normal Kernel execution path is deferred under this unknown.
   affected:
   - n-commit
   - n-operands
@@ -4865,21 +4929,6 @@ unknowns:
   - n-fpu
   - n-sfu
   deadline: Before functional semantics is connected to a cycle executor.
-- id: u-csr-stall
-  functional_refs: [U-CSR-01]
-  status: UNRESOLVED
-  question: What repeated CSR write/read behavior is observable while csr_req_valid remains high but csr_req_ready
-    is low?
-  known: write_enable=csr_req_valid&&csr_wr_enable is not qualified by ready; cta_read_done remains set until execute
-    fire.
-  missing: Reachability/response-stall audit and validation of CSR RMW/old-value under stalls; decide adapter handling
-    without rewriting functional semantics.
-  affected:
-  - n-sfu
-  - n-schedule
-  deadline: Before implementing cycle-accurate side effects for this path; do not silently patch frozen RTL.
-  evidence:
-  - csr::csr_req_valid/write_enable/cta_read_wait_r
 - id: u-mixed-split
   functional_refs: [U-MEM-01]
   status: UNRESOLVED
@@ -4896,6 +4945,21 @@ unknowns:
   evidence:
   - lmem-switch::req_global_buf/req_local_buf/lsu_in_if.req_ready
 audit:
+- id: audit-csr-stall
+  status: RESOLVED
+  original_question: What happens when CSR requests remain valid under backpressure, including simultaneous FFLAGS and trap feedback?
+  decision: Every request window samples old CSR data and applies that edge's software write. Result acceptance alone creates the final WB receipt. Joint owner transactions accumulate FFLAGS before software field writes, then give trap entry MEPC/MCAUSE/MTVAL priority. Trap targets and return masks sample scheduler CSR state at feedback.
+  evidence: [csr::csr_req_valid/write_enable/cta_read_wait_r, csr-data::fcsr_n, schedule::branch handling and trap CSR write order, csr-joint-delivery::deliverCSRJoint, trap-feedback-regression::TestHeldCSRReReadsHardwareTrapWriteOnNextEdge]
+  validation: Held result-buffer and adapter tests; FFLAGS/FRM/FCSR/read-only priority; prior-edge versus same-edge MTVEC/MEPC writes; BAR plus FFLAGS plus CSR plus trap; scheduled four-warp trap round trip.
+  closure_task: T11/cycle-control
+- id: audit-t11-control
+  status: RESOLVED
+  original_question: Can normal explicit-owner multiwarp control paths progress without software receipt drain or unsupported-overlap errors?
+  decision: Registered issue/EOP accounting gates WSYNC; LSU request/tag state gates BAR; WSPAWN commits before its registered single-active activation gate. Scheduler feedback follows per-field RTL order, and BAR.arrive can overlap a younger branch. Monotonic target activation frontiers retain old register/service tails without rewinding new PC. Duplicate identities and pairs forbidden by decode wstall remain errors.
+  evidence: [hardware-accounting::instructionAccounting, spawn-wait-regression::TestMultiRunnerSpawnWaitAndOutstandingServiceTails, csr-joint-delivery::DeliverWarpSpawnAtActivation, schedule::always_comb, decode::is_wstall]
+  validation: Model/effects/runner regressions for pending versus software receipts, packed commits, CSR values, overlap, memory backpressure, store tails, barrier release and spawn wait/reuse; verify-timing.sh and verify-offline.sh.
+  closure_task: T11/cycle-control
+  timing_implication: Closes normal paths in the current single-core explicit-owner profile; no complete RTL equivalence proof or Kernel dispatcher implementation is claimed.
 - id: audit-functional
   status: RESOLVED
   evidence:
@@ -5847,13 +5911,13 @@ cycle_contracts:
   status: UNRESOLVED
   classification: unresolved_pair
   node: n-schedule
-  condition: overlapping same-warp controls, or controls plus buffered schedule acceptance; no invented reachability
+  condition: future dispatcher/asynchronous or nonbaseline producers beyond the explicit-owner profile; baseline normal control paths are closed in audit-t11-control
   trigger: multiple feedbacks target overlapping PC/mask/stall/CSR at E[k]
   sampled_state: common old scheduler registers and full set of valid producer identities
-  next_state: Local field overwrite order is known via r-scheduler-edge; legal cross-module event combinations and owner batching need directed validation.
-  consumer: no universal combined-event latency or software priority assigned
+  next_state: Baseline field order and joint CSR/trap/flags updates are implemented; future producer combinations require separate RTL timing validation.
+  consumer: no universal latency assigned to future producer combinations; baseline same-edge delivery is specified in cc-software-control-merge
   consumer_offset: null
-  simultaneous: Preserve RTL local equations; reject unsupported overlapping owner events before effects rather than let Go traversal order choose a winner. Nonoverlapping warp updates can compose.
+  simultaneous: Model scheduler uses explicit RTL per-field order. Concurrent jointly commits FFLAGS/CSR and permits nonblocking BAR.arrive before younger branch feedback. Blocking-control duplicates remain illegal by decode wstall; trap/software-CSR merging samples old CSR state and gives hardware trap writes priority. Remaining uncertainty concerns future producer timing, not these normal execution paths.
   unknown_ref: u-feedback
   rule_refs: [r-scheduler-edge, r-csr-detail]
   evidence: [schedule::always_comb and CSR always posedge, csr-data::fcsr_n]
@@ -5871,3 +5935,73 @@ cycle_contracts:
   unknown_ref: u-visibility
   rule_refs: [r-software-edge, r-software-effect-delivery-foundation, r-software-program-runner]
   evidence: [functional::canonical ownership and stale gate, functional-effect-stream::controlOrder and fresh stageInstructionEffects, functional-instruction-context::explicit token PC/mask, concurrent-effects::Observe old-edge snapshots and Reap, concurrent-runner::Decode admission and service queues, concurrent-implementation::acceptance and remaining control boundaries, multiwarp-contract::software boundary and follow-up work, ibuffer::reset-only FIFO clearing, scoreboard::reset-only pipeline clearing]
+
+- id: cc-software-control-merge
+  status: PROVISIONAL
+  classification: software_interface
+  node: n-schedule
+  condition: cfg-baseline explicit-owner MultiRunner; recognized branch/WCTL/CSR/FPU producers
+  trigger: registered branch/control/flags feedback and valid CSR request window at E[k]
+  sampled_state: common old owner snapshots; trap targets use feedback-edge CSR values; RF operands remain latched
+  next_state: consume BAR.arrive before younger control frontier; atomically apply FFLAGS then software CSR then hardware trap fields; receipt bits advance only on successful commit
+  consumer: owner state after the common edge and scheduler selection on the following evaluation
+  consumer_offset: 0
+  simultaneous: normal branch/SIMT targets use explicit per-field scheduler priority; duplicate identities and blocking-control pairs forbidden by decode wstall remain errors
+  rule_refs: [r-scheduler-edge, r-csr-detail, r-completion-detail]
+  evidence: [csr-joint-delivery::deliverCSRJoint, trap-feedback-regression::TestTrapCSRFlagsAndPriorBarrierShareOldEdge, schedule::branch handling and trap CSR write order]
+
+- id: cc-kernel-residency
+  status: PROVISIONAL
+  classification: software_interface
+  node: n-schedule
+  condition: frozen single-core Kernel launch with CTA-local barrier and spawn coordination
+  trigger: boundary before each actual timing Core edge
+  sampled_state: validated GridWalker record, fixed-stride slot window, per-Warp pipeline and service ownership
+  next_state: reclaim only drained CTA members; admit next CTA into free round-robin cluster window; initialize canonical mask PC mscratch and CTA CSR view; retain monotonic instruction identities
+  consumer: next timing pipeline edge and bound per-Warp byte-service route
+  consumer_offset: 0
+  simultaneous: unrelated CTAs continue while allocation waits; accepted requests retain membership until service and receipt completion; dispatch latency is abstracted and full-CTA activation is not an RTL cycle-equivalence claim
+  rule_refs: [r-software-edge, r-software-program-runner]
+  evidence: [kernel-launch-owner::residency and Run, independent-residency-memory::Admit explicit physical offsets, kernel-launch-regression::reentry thread coordinates service tails and cluster prewrap, kernel-residency-progress::Kernel API and current execution coverage]
+
+- id: cc-kernel-barrier-owner
+  status: PROVISIONAL
+  classification: software_interface
+  node: n-schedule
+  condition: resident Kernel CTA with validated physical barrier address
+  trigger: WCTL control receipt at E[k]
+  sampled_state: canonical CTA membership and barrier arrival event phase state
+  next_state: commit barrier request; register exact blocked token; queue satisfied waiters for next edge; retain CTA while barrier work remains
+  consumer: scheduler wake at E[k+1]
+  consumer_offset: 1
+  simultaneous: last arrival and newly registered waiter share release; unrelated Warp work continues; successful CTA reclaim clears inactive phase records
+  rule_refs: [r-simt-barrier-detail, r-scheduler-edge]
+  evidence: [kernel-sync-progress::WCTL delivery and release sequence, kernel-barrier-regression::TestKernelRepeatedBarrierLocalExchange, kernel-launch-owner::control and releaseBarriers]
+
+- id: cc-kernel-external-event
+  status: PROVISIONAL
+  classification: software_interface
+  node: n-schedule
+  condition: external completion ticket issued by this Kernel for a resident CTA expectation
+  trigger: CompleteBarrierEvent between edges or from post-edge observer
+  sampled_state: outstanding ticket set, immutable CTA generation, resident slot and barrier event count
+  next_state: reject stale or consumed ticket before mutation; decrement one expected event; queue released waiters using exact blocked tokens
+  consumer: scheduler at next pipeline edge; final reclamation waits for coordinator and all member ownership
+  consumer_offset: 1
+  simultaneous: repeated expectations have distinct sequences even on the same physical barrier; other CTA services and execution continue
+  rule_refs: [r-simt-barrier-detail, r-software-edge]
+  evidence: [kernel-event-identity::CompleteBarrierEvent, kernel-event-regression::TestKernelBarrierEventRejectsOldGeneration, kernel-residency-events::TakeEvents]
+
+- id: cc-kernel-spawn-membership
+  status: PROVISIONAL
+  classification: software_interface
+  node: n-schedule
+  condition: WSPAWN in a resident Kernel CTA
+  trigger: decode binds eligible owners; execute resolves target operand; registered single-active permits activation
+  sampled_state: canonical CTA membership and latched operands; live target owner images at activation
+  next_state: reject unbound targets; activate selected subset only; preserve target services and monotonic stream identity
+  consumer: scheduler feedback and owner activation at the existing spawn boundary
+  consumer_offset: 0
+  simultaneous: non-source Warps may stop while spawn waits; no new allocation or cross-CTA target is introduced
+  rule_refs: [r-scheduler-edge, r-simt-barrier-detail]
+  evidence: [kernel-launch-owner::opts.Spawn owner pool, kernel-spawn-regression::TestKernelSpawnRetainsCTAMembership, kernel-sync-progress::Completion and identity audit]

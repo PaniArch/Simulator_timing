@@ -24,7 +24,7 @@ func (a *Adapter) ControlAllowed(context state.ReadContext) bool {
 		return !context.PendingPriorWork
 	}
 	if decoded.Control == isa.ControlWarpSpawn {
-		return a.spawnBound && (a.stream == nil || !context.PendingPriorWork)
+		return a.spawnBound
 	}
 	return true
 }

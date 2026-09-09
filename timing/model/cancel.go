@@ -204,7 +204,7 @@ func (c *Core) Cancel(scope Cancellation) (Transition, error) {
 	if s := c.front.scheduler; s != nil && s.state.Warps[scope.Warp].Epoch != scope.Epoch {
 		return Transition{}, fmt.Errorf("cancellation epoch does not own scheduled warp")
 	}
-	t := combine(Transition{}, c.front.cancel(scope), c.alu.cancel(scope), c.lsu.cancel(scope), c.sfu.cancel(scope), c.fpu.cancel(scope), c.commit.out.cancel(scope))
+	t := combine(Transition{}, c.front.cancel(scope), c.alu.cancel(scope), c.lsu.cancel(scope), c.sfu.cancel(scope), c.fpu.cancel(scope), c.commit.out.cancel(scope), c.account.cancel(scope))
 	feedback := cancelSignal(c.commit.feedback, scope)
 	t.edits = append(t.edits, c.commit.rev.propose(func() { c.commit.feedback = feedback }))
 	return t, nil

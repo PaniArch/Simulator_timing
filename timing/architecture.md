@@ -1,5 +1,12 @@
 # Timing IR 架构基线
 
+## T11 当前执行架构
+
+`runner.Kernel` → `MultiRunner` → scheduled timing Core 是实际推进链；`emu/device` 仅复用 LaunchState/GridWalker 值语义。CTA metadata/LMEM 由独立 ResidencyMemory 持有，架构效果留在 WarpState，流水线与注册控制留在 model，异步字节服务与效果收据分别跟踪。普通回收只检查相关 CTA 的所有成员和 Barrier 状态；Kernel 完成再汇总生成、驻留、票据和释放状态。
+
+完整 API、停止条件审计与 AC-019 至 AC-024 测试映射见 [kernel-usage.md](kernel-usage.md)。RTL 证据和周期控制见 [task11-cycle-control.md](task11-cycle-control.md)，launch/reentry 见 [task11-kernel.md](task11-kernel.md)，同步/身份见 [task11-kernel-sync.md](task11-kernel-sync.md)。以下章节保留静态 IR 的建模和维护依据，不表示当前仍仅有静态模型。
+
+
 本阶段在完整阅读功能契约后，按 README → 配置 TOML → 生成头 → package 派生参数 → 实际实例/端口 → 缓冲封装的顺序核对。输入均来自仓库；未修改或重新生成冻结 RTL，未使用外部 reference。`ir.yaml` 的 `sources` 给出可定位路径及模块/信号/参数，证据引用采用 `source-id::symbol`。这里的节点是静态传输/资源边界，不预定未来 Go 对象。
 
 ## 表达与维护

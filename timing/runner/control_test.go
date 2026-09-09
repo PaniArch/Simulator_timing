@@ -200,3 +200,51 @@ func TestMultiRunnerWSYNCDrainsOwnWarp(t *testing.T) {
 		}
 	}
 }
+
+// VX_wctl_unit WSYNC waits for pending almost-empty, not external store
+// visibility. Kernel completion must nevertheless retain the service tail.
+func TestMultiRunnerWSYNCDoesNotWaitForStoreTail(t *testing.T) {
+	owners, ram := multiSetup(t)
+	for w := range owners {
+		for n, word := range []uint32{0x0030a023, customWord(t, "wsync", 0, 0), customWord(t, "tmc", 0, 0)} {
+			var data [4]byte
+			binary.LittleEndian.PutUint32(data[:], word)
+			if err := ram.Write(uint32(0x100*(w+1)+4*n), data[:]); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	r, err := runner.NewMulti(owners, ram, runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 150, External: func(isa.InstructionEffects) error { return nil }}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var committed, sync, finished [4]uint64
+	if err := r.Run(400, func(rec runner.MultiRecord) {
+		if p := rec.Report.PendingRelease; p.Valid && p.Token.PC%0x100 == 0 {
+			committed[p.Token.Warp] = rec.Cycle
+		}
+		if p := rec.Report.Executed[2]; p.Valid && p.Token.PC%0x100 == 4 {
+			sync[p.Token.Warp] = rec.Cycle
+		}
+		for _, p := range rec.Finished {
+			if p.PC%0x100 == 0 {
+				finished[p.Warp] = rec.Cycle
+			}
+		}
+		for w := range owners {
+			if sync[w] != 0 && finished[w] == 0 && r.Completed() {
+				t.Fatal("completed with store tail")
+			}
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for w := range owners {
+		if committed[w] == 0 || sync[w] <= committed[w] || finished[w] <= sync[w] {
+			t.Fatal("pending and service tail conflated", committed, sync, finished)
+		}
+	}
+	if !r.Completed() {
+		t.Fatal("service tails never completed")
+	}
+}

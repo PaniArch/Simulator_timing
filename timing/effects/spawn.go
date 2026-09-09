@@ -7,11 +7,9 @@ import (
 	"vortex.local/simulator/timing/model"
 )
 
-// BindSpawn supplies the original target owners and pre-issue snapshots. The
-// caller owns residency/CTA membership and must validate those before binding;
-// this adapter does not create scheduling slots or select another active warp.
-// Binding is consumed by Finish/Reset. StageWarpSpawn validates exact targets,
-// inactive lifecycle, source context and both sides' stale images at feedback.
+// BindSpawn supplies explicit target owners. Standalone adapters retain the
+// single-active/pre-issue snapshot contract; Concurrent binds owners while other
+// warps run and initializes from live images at the scheduler activation edge.
 func (a *Adapter) BindSpawn(active isa.WarpMask, targets []state.WarpSpawnTarget) error {
 	if a.failed || a.current != nil {
 		return fmt.Errorf("bind spawn while idle")
@@ -20,8 +18,15 @@ func (a *Adapter) BindSpawn(active isa.WarpMask, targets []state.WarpSpawnTarget
 	if err != nil {
 		return err
 	}
-	if active != isa.WarpMask(1<<snapshot.WarpID()) {
-		return fmt.Errorf("spawn requires exactly its source active")
+	if active&^isa.AllWarps != 0 || active&(1<<snapshot.WarpID()) == 0 || a.stream == nil && active != isa.WarpMask(1<<snapshot.WarpID()) {
+		return fmt.Errorf("invalid spawn active mask")
+	}
+	var seen isa.WarpMask
+	for _, target := range targets {
+		if target.WarpID >= 4 || target.Owner == nil || seen.Active(target.WarpID) {
+			return fmt.Errorf("invalid or duplicate spawn owner")
+		}
+		seen |= 1 << target.WarpID
 	}
 	a.spawnTargets = append([]state.WarpSpawnTarget(nil), targets...)
 	a.spawnBound = true
@@ -30,6 +35,8 @@ func (a *Adapter) BindSpawn(active isa.WarpMask, targets []state.WarpSpawnTarget
 
 // SpawnBinding explicitly supplies existing owners and their pre-issue images.
 type SpawnBinding struct {
+	// Pool binds eligible owners; the issued operand mask selects the subset.
+	Pool    bool
 	Active  isa.WarpMask
 	Targets []state.WarpSpawnTarget
 }
@@ -43,4 +50,25 @@ func (c *Concurrent) BeginSpawn(token model.Token, binding SpawnBinding) error {
 		return fmt.Errorf("binding requires WSPAWN")
 	}
 	return c.begin(token, &binding)
+}
+
+func (a *Adapter) selectedSpawnTargets() ([]state.WarpSpawnTarget, error) {
+	if !a.spawnPool {
+		return a.spawnTargets, nil
+	}
+	if a.current == nil || a.current.feedback == nil {
+		return nil, fmt.Errorf("spawn targets before operand evaluation")
+	}
+	mask := a.current.feedback.Targets
+	var targets []state.WarpSpawnTarget
+	for _, target := range a.spawnTargets {
+		if mask&(1<<target.WarpID) != 0 {
+			targets = append(targets, target)
+			mask &^= 1 << target.WarpID
+		}
+	}
+	if mask != 0 {
+		return nil, fmt.Errorf("WSPAWN target outside bound CTA membership")
+	}
+	return targets, nil
 }

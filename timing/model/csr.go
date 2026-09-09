@@ -7,7 +7,8 @@ import (
 )
 
 // CSR models context wait and result storage only. RequestWindow exposes the
-// unqualified csr_req_valid observation; u-csr-stall effects remain unresolved.
+// unqualified csr_req_valid observation; effects applies every valid window,
+// independently of result readiness (audit-csr-stall).
 type CSR struct {
 	latency, wait int
 	out           *Buffer

@@ -1,6 +1,8 @@
-# 初版静态 Timing IR
+# 周期执行与 Timing IR
 
-本目录按 [Task/T8.md](../Task/T8.md) 建立冻结 Vortex 配置的静态时序基线。
+T11 已提供从 launch 到 CTA 回收的周期 Kernel 入口。使用与最终验收映射见 [kernel-usage.md](kernel-usage.md)；状态职责见 [architecture.md](architecture.md)。支持多 Warp Barrier/local memory 协作、跨容量驻留复用、事件身份与完成观测，不宣称 RTL 周期等价。
+
+下文保留按 [Task/T8.md](../Task/T8.md) 建立的静态基线和后续阶段历史记录。
 
 T9 当前增量进度见 [implementation.md](implementation.md)：已建立 IR 参数读取、Akita 统一边沿及前端、操作数、执行资源、Commit 组件；完整连接、effects、程序运行器和驻留观测均已实现。下述 T8 交付记录是历史基线。
 
