@@ -9,6 +9,7 @@ import (
 // replacement. Source positions are sampled independently at bank-read events;
 // two occurrences of one register can therefore retain different sampled values.
 type OperandCapture struct {
+	latched  bool
 	snapshot WarpSnapshot
 	decoded  isa.Decoded
 	context  ReadContext
@@ -43,6 +44,13 @@ func (c *OperandCapture) Mask() isa.LaneMask { return c.snapshot.ActiveMask() }
 func (c *OperandCapture) ReadMask() uint8    { return c.read }
 func (c *OperandCapture) Complete() bool     { return c.read == uint8((1<<len(c.decoded.Sources))-1) }
 func (c *OperandCapture) Read(snapshot WarpSnapshot, positions uint8) error {
+	if c.latched {
+		var err error
+		snapshot, err = snapshot.WithInstructionContext(InstructionContext{c.snapshot.WarpID(), c.PC(), c.Mask()})
+		if err != nil {
+			return err
+		}
+	}
 	if snapshot.WarpID() != c.snapshot.WarpID() || snapshot.PC() != c.PC() || snapshot.ActiveMask() != c.Mask() {
 		return fmt.Errorf("operand context changed before read")
 	}
@@ -72,6 +80,13 @@ func (c *OperandCapture) Evaluate() (isa.InstructionEffects, error) {
 // execution event while preserving the captured source operands and PC/mask.
 // Callers must select that event explicitly; this method applies no effects.
 func (c *OperandCapture) EvaluateAt(contextSnapshot WarpSnapshot, context ReadContext) (isa.InstructionEffects, error) {
+	if c.latched {
+		var err error
+		contextSnapshot, err = contextSnapshot.WithInstructionContext(InstructionContext{c.snapshot.WarpID(), c.PC(), c.Mask()})
+		if err != nil {
+			return isa.InstructionEffects{}, err
+		}
+	}
 	if !c.Complete() {
 		return isa.InstructionEffects{}, fmt.Errorf("operands are incomplete")
 	}

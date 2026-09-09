@@ -1,7 +1,7 @@
 schema_version: 1
 id: timing-baseline
 status: PROVISIONAL
-scope: Frozen-source structure with incremental T9 cycle components; complete instruction executor pending
+scope: Frozen-source structure and T10 four-warp scheduled pipeline with concurrent functional effects, explicit control-owner boundaries, recovery and observation
 units:
   capacity: entries at the named scope; not added across aliases
   data_bytes: bytes of data per physical transfer, excluding metadata
@@ -11,9 +11,66 @@ units:
   rtl_parameters: verbatim or evaluated instance parameters, not end-to-end timing
   null: unknown or intentionally unassigned; never zero
 sources:
+  generic-arbiter:
+    path: Vortex_rtl/hw/rtl/libs/VX_generic_arbiter.sv
+    locator: g_round_robin forwards STICKY; MODEL and LUT_OPT use RR defaults
+  multiwarp-implementation:
+    path: timing/task10-progress.md
+    locator: multiwarp-scheduling implementation, API and cycle evidence
+  multiwarp-contract:
+    path: timing/multiwarp-contract.md
+    locator: T10 timing-contract evidence and software boundaries
+  recovery-restart:
+    path: timing/model/restart.go
+    locator: explicit frontend context with retained-work guards and monotonic identity
+  recovery-runner:
+    path: timing/runner/restart.go
+    locator: Restart; Flush epoch and visible-effect preservation; cancellation events
+  multiwarp-observation:
+    path: timing/runner/observe_multi.go
+    locator: old-edge per-warp pending/runnable observations
+  selective-cancel-model:
+    path: timing/model/cancel.go
+    locator: bounded Cancellation; Core.Cancel component proposals and reservation reconstruction
+  selective-cancel-effects:
+    path: timing/effects/cancel.go
+    locator: bounded invalidations and receipt cancellation
+  selective-cancel-runner:
+    path: timing/runner/cancel.go
+    locator: software boundary cancellation of pipeline/effects/queued and held services
+  external-control-boundary:
+    path: timing/runner/release.go
+    locator: registered explicit Release; defensive redirect cleanup before byte services
+  bound-spawn:
+    path: timing/effects/spawn.go
+    locator: BeginSpawn and explicit owner snapshot binding
+  control-feedback-values:
+    path: timing/effects/feedback.go
+    locator: latchFeedback execute-time results; read-only Feedback including JOIN deadline
+  control-recovery-interface:
+    path: timing/model/feedback.go
+    locator: SchedulerFeedback; validateFeedback pre-mutation identity and collision checks
+  control-recovery-progress:
+    path: timing/control-observability-progress.md
+    locator: registered recovery and pending foundation; remaining integration
+  concurrent-effects:
+    path: timing/effects/concurrent.go
+    locator: identity routing; old-edge snapshots; independent Reap
+  concurrent-runner:
+    path: timing/runner/multi.go
+    locator: NewMulti; scheduled admission and identity-matched service queues
+  concurrent-implementation:
+    path: timing/concurrent-effects-progress.md
+    locator: AC-011 through AC-016; control recovery boundaries
   cycle-effects:
     path: timing/effects/adapter.go
     locator: Adapter.Begin/Observe/Reset
+  functional-effect-stream:
+    path: emu/state/effect_stream.go
+    locator: EffectStream.NewDelivery; contextual immediate stage and control-order frontier
+  functional-instruction-context:
+    path: emu/state/instruction_context.go
+    locator: WithInstructionContext; NewLatchedOperandCapture
   functional-operands:
     path: emu/state/operands.go
     locator: OperandCapture.Read/EvaluateAt
@@ -77,6 +134,12 @@ sources:
   cycle-decode:
     path: timing/model/decode.go
     locator: DecodeToken
+  cycle-scoreboard:
+    path: timing/model/scoreboard.go
+    locator: Scoreboard.Evaluate; four staging registers and reserve/release
+  cycle-scheduler:
+    path: timing/model/scheduler.go
+    locator: Scheduler.Evaluate; frontend context and registered occupancy/unlock
   cycle-issue:
     path: timing/model/issue.go
     locator: Issue.Evaluate; registered ready and FU credits
@@ -610,6 +673,23 @@ nodes:
   - top::mem_bus_if
   - bundle::excluded platform inputs
 resources:
+- id: res-warp-pending
+  node: n-schedule
+  status: FROZEN
+  instances: 4
+  capacity: 256
+  capacity_unit: counter range per warp; not physical instruction slots
+  almost_empty_threshold: 1
+  condition: cfg-baseline; no reset; valid balanced issue and completion events
+  measurement:
+    unit: outstanding issued uops per warp
+    start: registered issue_sched_if.valid with matching wis
+    end: registered commit_sched_if.committed_warps bit
+  evidence:
+  - schedule::per_warp_ctr SIZE=256 ALM_EMPTY=1
+  - issue-slice::warp_issued = scoreboard_fire
+  - issue::issued_r
+  - commit::committed_warp_mask_r
 - id: res-fetch-tags
   node: n-fetch
   status: FROZEN
@@ -967,6 +1047,11 @@ boundaries:
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    inputs: 4
+    policy: P
+    sticky: 0
+    model: 1
   kind: elastic
   rtl_parameters:
     SIZE: 2
@@ -1049,6 +1134,11 @@ boundaries:
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   - stream-buffer::valid_out_r/ready_in
+  arbitration:
+    inputs: 4
+    policy: R
+    sticky: 1
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 3
@@ -1791,6 +1881,11 @@ boundaries:
   - commit::commit_arb.OUT_BUF
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
+  arbitration:
+    inputs: 4
+    policy: P
+    sticky: 0
+    model: 1
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 1
@@ -4124,7 +4219,7 @@ rules:
   evidence:
   - scoreboard::wb_inuse_regs/inuse_regs_n/operands_ready_r/out_arb/fu_pending
   - dispatch::fu_release
-  statement: WB eop releases destination and wr_xregs first, staging acceptance then reserves destination and wr_xregs.
+  statement: WB eop releases destination and wr_xregs first, staging OUTPUT acceptance then reserves destination and wr_xregs (not ibuffer-to-staging input).
     Readiness uses dependency masks including rd and special registers, is registered, and is suppressed by FU going-full/lock.
     Four-request sticky R arbitration selects eligible staging; credits return on dispatch acceptance, not execution
     completion.
@@ -4249,7 +4344,7 @@ rules:
   evidence:
   - scoreboard::writeback_fire/staging_fire/operands_ready_r/fu_pending
   - pending::ALM_FULL
-  statement: WB valid+matching wis+eop releases rd (when wb) and wr_xregs. New staging fire reserves after release.
+  statement: WB valid+matching wis+eop releases rd (when wb) and wr_xregs. New staging OUTPUT fire reserves after release; see cc-reserve-release for replacement-input selection.
     Dependency readiness uses resulting inuse next-state and registers operands_ready_r; earliest already-staged
     dependent departure is next edge after WB, if FU credit/lock and arbiter permit. Credit counter increments at
     issue_fire before scoreboard output buffering and decrements at dispatch_if fire. ALM_FULL=DISPATCH_QSIZE-1
@@ -4736,7 +4831,8 @@ unknowns:
   - barrier::unlock
   question: How should the complete same-edge priority and feedback-to-next-selection table be represented?
   known: Source-local scheduler overwrite order, WB release/register readiness, CSR priority and registered control
-    consumption are recorded.
+    consumption are recorded. T10 cycle_contracts and multiwarp-contract.md now distinguish local equations,
+    per-field collision cases and old-state selection; the complete cross-module reachability proof remains absent.
   missing: Exhaustive combined-event reachability and dynamic validation across components; no universal software
     priority is frozen.
   affected:
@@ -4757,9 +4853,10 @@ unknowns:
   question: How will detached functional effects be staged and made visible with overlapping instructions and partial
     uop writeback?
   known: Functional Step and StageEffects use atomic instruction/before-image commits; RTL has distinct register,
-    CSR, memory and control events.
-  missing: Adapter design and validation that preserve unique owners, masks and no double side effects without replaying
-    old whole-state snapshots.
+    CSR, memory and control events. Task9 provides captured operands and per-event receipts for single-active
+    execution including partial lane/byte WB. T10 cc-software-context-flush separates frontend and locked token context.
+  missing: Concurrent multi-instruction adapter/context validation, monotonic canonical PC progress, selective
+    cancellation and same-edge owner effect composition without double effects or old whole-state replacement.
   affected:
   - n-commit
   - n-operands
@@ -5498,3 +5595,279 @@ timing_measurements:
     NOT final input handshake
   evidence:
   - coalescer::STATE_WAIT/STATE_SEND/pipe_reg
+
+# T10 machine-checked event contract. E[k] samples old registers and commits
+# next-state once; consumer_offset counts edges from trigger to named consumer.
+cycle_contracts:
+- id: cc-fetch-eligibility
+  status: FROZEN
+  classification: rtl_fact
+  node: n-schedule
+  condition: cfg-baseline; L1_ENABLE; reset inactive
+  trigger: selection combinationally before E[k]
+  sampled_state: registered active_warps, stalled_warps, ibuf_full and all_ibuf_full
+  next_state: schedule_fire sets selected stalled bit and captures old PC/mask/wid/CTA/uuid into b-schedule
+  consumer: b-schedule input acceptance E[k], only when schedule_ready
+  consumer_offset: 0
+  simultaneous: New unlock/activation at E[k] cannot enable that warp for the same selection; schedule_fire sets stall after local unlock assignments.
+  rule_refs: [r-schedule, r-scheduler-edge]
+  boundary_refs: [b-schedule]
+  evidence: [schedule::ready_warps/preferred_warps/schedule_warps/wid_select, priority::REVERSE default 0]
+  rtl_anchors:
+  - 'schedule::ready_warps = active_warps & ~stalled_warps;'
+  - 'schedule::schedule_warps = all_ibuf_full ? ready_warps : preferred_warps;'
+  - 'schedule::stalled_warps_n[schedule_wid] = 1;'
+  parameters:
+    warps: 4
+    issue_slices: 1
+    fetch_priority: lowest_eligible_wid
+    full_policy: prefer_nonfull_else_all_ready
+- id: cc-frontend-context
+  status: FROZEN
+  classification: rtl_fact
+  node: n-fetch
+  condition: cfg-baseline; C disabled; b-schedule has valid old output
+  trigger: schedule_if.valid && schedule_if.ready at E[k]
+  sampled_state: locked schedule payload PC/mask/wid/CTA/uuid, not current scheduler PC/mask
+  next_state: Scheduler PC becomes payload.PC+4; fetch tag_store[wid] captures payload PC/mask/CTA at request-buffer input fire.
+  consumer: fetch req_buf input and tag-store write at E[k]; cache bus request is a later independent handshake
+  consumer_offset: 0
+  simultaneous: A redirect on the same wid is overwritten by schedule_if PC advance in this local always_comb; reachability remains cc-control-collisions. Payload already in buffers never changes with frontend state.
+  rule_refs: [r-decode-feedback, r-scheduler-edge]
+  boundary_refs: [b-schedule, b-fetch-request]
+  resource_refs: [res-fetch-tags]
+  evidence: [schedule::schedule_if_fire/warp_pcs_n, fetch::tag_store and C-disabled req_buf]
+  rtl_anchors:
+  - "schedule::warp_pcs_n[schedule_if.data.wid] = schedule_if.data.PC + from_fullPC(`VX_CFG_XLEN'(4));"
+  - 'fetch::.wdata ({schedule_if.data.PC, schedule_if.data.tmask, schedule_if.data.cta_id}),'
+  - 'fetch::.write (icache_req_fire),'
+  - 'fetch::assign schedule_if.ready = icache_req_ready;'
+- id: cc-ibuffer-accounting
+  status: FROZEN
+  classification: rtl_fact
+  node: n-ibuffer
+  condition: cfg-baseline; L1_ENABLE; no reset
+  trigger: internal schedule_fire and/or physical ibuf_pop at E[k]
+  sampled_state: scheduler size_r (3 bits), physical per-warp FIFO occupancy (distinct quantities)
+  next_state: size_n=size_r+schedule_onehot_fire-ibuf_pop; full_n=(size_n==4); register size/full and AND(full_n) together. Physical FIFO pushes only at decode acceptance, pops at sequencer input acceptance.
+  consumer: registered full and all-full affect selection at E[k+1]
+  consumer_offset: 1
+  simultaneous: Accepted increment/decrement cancel. A full physical FIFO cannot borrow a same-edge pop. L1 all-full fallback can reserve beyond four before decode; scheduler count is not clamped FIFO occupancy and full uses equality, not >=.
+  rule_refs: [r-schedule, r-buffer-detail, r-packed]
+  resource_refs: [res-ibuffer, res-uop]
+  evidence: [schedule::g_ibuf_cnt/all_ibuf_full, ibuffer::instr_buf/ibuf_pop, uop::input_if.ready, fifo::full]
+  rtl_anchors:
+  - "schedule::assign size_n = size_r + IBUF_CW'(incr) - IBUF_CW'(decr);"
+  - "schedule::assign ibuf_full_n[i] = (size_n == IBUF_CW'(`VX_CFG_IBUF_SIZE));"
+  - 'schedule::else all_ibuf_full <= (& ibuf_full_n);'
+  - 'ibuffer::assign decode_if.ibuf_pop[w] = ibuffer_tmp_if.valid && ibuffer_tmp_if.ready;'
+  - 'uop::assign input_if.ready  = output_if.ready && (uop_active ? uop_done : ~uop_hold);'
+- id: cc-decode-unlock
+  status: FROZEN
+  classification: rtl_fact
+  node: n-decode
+  condition: cfg-baseline; successful fetch/decode acceptance; no competing local stall assignment
+  trigger: fetch_fire at E[k]
+  sampled_state: instruction is_wstall and fetched wid
+  next_state: register valid/unlock=!is_wstall/wid; scheduler clears stall when consuming valid unlock
+  consumer: scheduler consumes decode notification at E[k+1]; first newly enabled selection is E[k+2]
+  consumer_offset: 1
+  simultaneous: Decode unlock does not wait for WB; wstall instructions keep stall until their designated control feedback. BAR.ARRIVE with nonzero rd is the explicit non-wstall exception.
+  rule_refs: [r-decode-feedback, r-scheduler-edge]
+  boundary_refs: [b-decode-feedback]
+  evidence: [decode::is_wstall/fetch_fire/decode_sched registers, schedule::decode unlock]
+  rtl_anchors:
+  - 'decode::decode_sched_valid_r  <= fetch_fire;'
+  - 'decode::decode_sched_unlock_r <= ~is_wstall;'
+  - 'decode::is_wstall = is_rd_zero;'
+- id: cc-reserve-release
+  status: FROZEN
+  classification: rtl_fact
+  node: n-scoreboard
+  condition: cfg-baseline; valid WB identities and old eligible staging output; no reset
+  trigger: matching writeback_if.valid && eop and/or staging_if.valid && staging_if.ready at E[k]
+  sampled_state: per-warp inuse_regs/inuse_xregs and old registered operands_ready_r
+  next_state: Bnext=(Bold & ~WB_release) | staging_output_reserve. rd release/reserve is qualified by wb; special release uses wr_xregs regardless of wb. Readiness tests Bnext against incoming ibuffer operands when ibuffer_fire, otherwise resident staging operands; register the result with FU gates.
+  consumer: Newly unblocked staged dependent can depart at E[k+1], subject to arbiter/output space
+  consumer_offset: 1
+  simultaneous: Reserve wins an overlapping release bit by explicit RTL equations. Staging replacement can accept at E[k] while old staging leaves; compute readiness for replacement, not departed instruction. No same-edge WB-to-staging-departure bypass.
+  rule_refs: [r-scoreboard, r-scoreboard-edge]
+  resource_refs: [res-hazards]
+  boundary_refs: [b-scoreboard-staging, b-scoreboard-out]
+  evidence: [scoreboard::g_scoreboard release/reserve/in_use_mask/operands_ready_n]
+  rtl_anchors:
+  - 'scoreboard::inuse_regs_n  = wb_inuse_regs;'
+  - 'scoreboard::inuse_regs_n |= stg_opd_mask[0];'
+  - 'scoreboard::regs_mask = ibuffer_fire ? ibf_reg_mask : stg_reg_mask;'
+  - 'scoreboard::operands_ready_r <= operands_ready_n;'
+  parameters:
+    release_then_reserve: true
+    readiness_registered: true
+    reserve_boundary: staging_output_fire
+    dependency_set: used_sources_plus_wb_rd_plus_rd_or_wr_xregs
+- id: cc-special-dependencies
+  status: FROZEN
+  classification: rtl_fact
+  node: n-scoreboard
+  condition: cfg-baseline; F enabled; only enabled decoder paths
+  trigger: decoded uop enters or remains in staging at E[k]
+  sampled_state: separate 32 GPR and 32 FPR IDs plus two special busy bits per warp
+  next_state: Dependencies include used sources and wb-qualified rd (RAW/WAW), and rd_xregs|wr_xregs. XREG_0 tracks FFLAGS writers/readers; XREG_1 tracks FRM. Dynamic FP reads XREG_1; flag-producing FP writes XREG_0 per RTL decode, including zero-result flags.
+  consumer: registered dependency eligibility used at E[k+1]
+  consumer_offset: 1
+  simultaneous: Register-value/FFLAGS visibility and busy-bit release are different events. x0 writes are decoder-suppressed; f0 is a real destination. No blanket all-CSR serialization or new special semantic state follows from these two bits.
+  rule_refs: [r-scoreboard-edge, r-csr-detail, r-feedback]
+  resource_refs: [res-hazards]
+  evidence: [decode::rd_xregs/wr_xregs/used regs, scoreboard::ibf_used_rs/xregs_mask, pkg::NUM_XREGS]
+  rtl_anchors:
+  - 'scoreboard::ibuffer_if[w].data.rd_xregs | ibuffer_if[w].data.wr_xregs;'
+  - 'decode::rd_xregs[XREG_1] = frm_is_dyn;'
+  - "decode::wr_xregs[XREG_0] = 1'b1;"
+- id: cc-fu-credit-lock
+  status: FROZEN
+  classification: rtl_fact
+  node: n-scoreboard
+  condition: cfg-baseline; four execution classes; dispatch queue depth four; no reset
+  trigger: issue_fire at Scoreboard output-buffer INPUT and/or dispatch_if[FU] fire at E[k]
+  sampled_state: old per-FU goingfull (pending >=3) and old lock, selected uop lock/unlock bits
+  next_state: FU pending increments/decrements on these respective fires; simultaneous events cancel. Lock next sets on 10, clears on 01, holds on 00/11. operands_ready_n uses OLD goingfull but NEXT lock and the candidate fu_lock bit.
+  consumer: new operands_ready_r participates in issue arbitration at E[k+1]
+  consumer_offset: 1
+  simultaneous: Registered goingfull lag permits the guard slot; do not reduce queue capacity to three or bypass old goingfull with same-edge dispatch release. Lock release is at issue of last locking uop, not execution/WB; credit release is dispatch output, not PE result completion.
+  rule_refs: [r-scoreboard-edge]
+  resource_refs: [res-credits, res-dispatch]
+  evidence: [scoreboard::fu_pending/fu_locked_n/operands_ready_n, dispatch::fu_release, pending::ALM_FULL]
+  rtl_anchors:
+  - 'scoreboard::&& ~fu_goingfull[ex_sel]'
+  - 'scoreboard::&& ~(fu_locked_n[ex_sel] && fu_lock_sel);'
+  - 'scoreboard::if (issue_fu_lock && ~issue_fu_unlock) begin'
+  - 'dispatch::assign fu_release[i] = dispatch_if[i].valid && dispatch_if[i].ready;'
+- id: cc-issue-arbitration
+  status: FROZEN
+  classification: rtl_fact
+  node: n-scoreboard
+  condition: cfg-baseline; PER_ISSUE_WARPS=4 selects R; generic R defaults MODEL=1/LUT_OPT=0; STICKY=1
+  trigger: eligible request vector before E[k]; arb_ready is Scoreboard skid input ready
+  sampled_state: requests[w]=staging.valid && operands_ready_r; previous accepted grant and RR mask
+  next_state: Reset mask=1111, previous=0000. Retain previous if it still requests, else choose lowest masked requester or lowest requester on wrap. On valid&&ready update previous; update mask to indices above winner only when not retaining. Otherwise both hold.
+  consumer: selected staging output enters b-scoreboard-out at E[k]
+  consumer_offset: 0
+  simultaneous: Sticky is on eligible requests, not warp active or burst identity. A request gap can change the combinational winner even under backpressure; no accepted grant means no state advance. Continuous previous eligibility can starve others; no per-cycle fairness guarantee.
+  rule_refs: [r-scoreboard]
+  boundary_refs: [b-scoreboard-out]
+  evidence: [scoreboard::out_arb/arb_valid_in/arb_ready, generic-arbiter::g_round_robin, rr-arbiter::g_model1]
+  rtl_anchors:
+  - 'scoreboard::assign arb_valid_in[w] = staging_if[w].valid && operands_ready[w];'
+  - 'scoreboard::.STICKY   (1)'
+  - 'rr-arbiter::wire retain_grant = (STICKY != 0) && (|(prev_grant & requests));'
+  - 'rr-arbiter::grant_valid && grant_ready && ~retain_grant'
+  - 'rr-arbiter::reqs_mask <= {NUM_REQS{1''b1}};'
+- id: cc-pending
+  status: FROZEN
+  classification: rtl_fact
+  node: n-schedule
+  condition: cfg-baseline; one issue slice; balanced uop issue/completion identities; no reset
+  trigger: scoreboard_if valid&&ready into OPC or WB valid&&eop at E[k]
+  sampled_state: accepted output wis or WB wid, old per-warp pending flags
+  next_state: Issue registers warp_issued; Commit registers WB eop mask. Scheduler adds issue_sched_if matching wis and subtracts committed bit; <=1 produces almost-empty, zero empty. Each packed uop counts separately.
+  consumer: scheduler pending counter consumes registered increment/decrement at E[k+1]
+  consumer_offset: 1
+  simultaneous: Same-warp registered increment/decrement cancel. WSYNC sees old almost-empty (including itself); 2->1 at E[k+1] can allow WCTL no earlier than E[k+2]. Pending zero excludes unissued frontend work and does not prove external store-tail drain.
+  rule_refs: [r-completion-detail, r-lsu-drain]
+  resource_refs: [res-warp-pending]
+  boundary_refs: [b-issue-feedback, b-commit-feedback]
+  evidence: [issue-slice::scoreboard_fire/warp_issued, issue::issued_r, commit::committed_warp_mask_r, schedule::per_warp_ctr]
+  rtl_anchors:
+  - 'issue-slice::assign warp_issued     = scoreboard_fire;'
+  - 'issue::`BUFFER(issued_r,   issued_warps[i]);'
+  - 'commit::`BUFFER(committed_warp_mask_r, committed_warp_mask);'
+  - 'schedule::.ALM_EMPTY (1)'
+- id: cc-packed-release
+  status: FROZEN
+  classification: rtl_fact
+  node: n-uop
+  condition: cfg-baseline; PACKLB/PACKLH only; SIMD_COUNT=1 and LSU PID_BITS=0
+  trigger: one packed uop staging output acceptance, followed by its partial/final WB
+  sampled_state: unchanged wb/rd/source IDs and lock=unlock=1 inherited by every packed uop; changed UUID/offset/bytesel
+  next_state: Reserve same FPR for each uop; retain it across partial-lane WB; release at that uop WB eop. Next packed uop is a WAW dependent and waits for registered readiness. Physical IBuffer pops only when last uop enters staging, not when final WB arrives.
+  consumer: WB eop release sampled by Scoreboard at E[k]; next same-rd uop can leave staging at E[k+1]
+  consumer_offset: 1
+  simultaneous: Uop eop is complete lane coverage for one element, not last element of the macro instruction. No macro-wide FU lock and no busy-bit clear on partial WB. Final macro completion additionally requires all element/lane receipts and external service completion.
+  rule_refs: [r-packed, r-scoreboard-edge, r-lsu-response, r-commit]
+  resource_refs: [res-uop, res-hazards]
+  evidence: [packld::ibuf_r copy/bytesel, ibuffer::fu_lock/fu_unlock defaults, opc::simd_iter, lsu-slice::g_pid else/mem_rsp_eop_pkt, commit::eop/byteen]
+  rtl_anchors:
+  - 'packld::ibuf_r = ibuf_in;'
+  - 'packld::ibuf_r.bytesel = {byte_size, byte_off};'
+  - "ibuffer::1'b1, // fu_lock"
+  - "ibuffer::1'b1  // fu_unlock"
+  - 'lsu-slice::assign mem_rsp_eop_pkt = mem_rsp_eop;'
+  parameters:
+    release_scope: uop_eop
+    partial_wb_releases: false
+    packed_fu_lock: 1
+    packed_fu_unlock: 1
+- id: cc-commit-visibility
+  status: FROZEN
+  classification: rtl_fact
+  node: n-commit
+  condition: cfg-baseline; four class inputs; no reset
+  trigger: selected commit_if input fire at E[k]
+  sampled_state: lowest valid class index ALU=0, LSU=1, SFU=2, FPU=3
+  next_state: Register selected payload in b-commit; valid-only WB carries wb flag, eop, lane mask and shifted byte enables.
+  consumer: RF and Scoreboard sample WB at E[k+1]; pending consumes registered mask at E[k+2]
+  consumer_offset: 1
+  simultaneous: Old WB and next commit acceptance may coexist. wb=false still carries completion and special release; partial WB writes bytes but eop alone releases dependencies. No in-order retirement/ROB or total ordering with control sidebands is implied.
+  rule_refs: [r-commit, r-feedback]
+  boundary_refs: [b-commit, b-commit-feedback]
+  evidence: [commit::commit_arb/writeback_if/committed_warps, pkg::EX indices]
+  rtl_anchors:
+  - 'commit::.ARBITER    ("P"),'
+  - 'commit::.OUT_BUF    (1)'
+  - 'commit::assign commit_arb_if[i].ready    = 1;'
+- id: cc-control-visibility
+  status: FROZEN
+  classification: rtl_fact
+  node: n-schedule
+  condition: cfg-baseline; named producer handshake already accepted; control targets a stalled warp; no competing local assignment
+  trigger: INT branch result_fire/eop or WCTL execute_fire/eop at E[k]
+  sampled_state: registered producer identity and control result, old scheduler state and owner CSR context
+  next_state: Branch and ordinary WCTL notification consumed at E[k+1] updates PC/mask/stall; JOIN adds its own register and reaches scheduler at E[k+2]; a local BAR request producing unlock at its receiver edge also reaches scheduler at E[k+2], otherwise it waits for later arrival/event/phase release. WSPAWN first latches pending, then uses registered single-active gate.
+  consumer: scheduler branch/TMC/SPLIT/WSYNC receiver at E[k+1]; newly enabled selection earliest E[k+2]
+  consumer_offset: 1
+  simultaneous: BAR requires LSU drained; WSYNC requires pending almost-empty. FFLAGS separately reaches CSR owner one edge after qualified FPU response; do not release special busy early. WSPAWN activation earliest E[k+2] only when old single-active gate is true; no fixed wait if others active.
+  rule_refs: [r-feedback, r-simt-barrier-detail, r-scheduler-edge, r-csr-detail]
+  boundary_refs: [b-branch-feedback, b-wctl-feedback, b-simt-feedback, b-barrier-unlock, b-fpu-csr-feedback]
+  evidence: [integer::br_enable/branch register, wctl::wctl_reg/drain, schedule::join/wspawn, simt::OUT_REG, barrier::unlock_valid_r, fpu::fpu_csr_reg]
+  rtl_anchors:
+  - 'integer::wire br_enable = result_fire && is_br_op_r && result_if.data.header.eop;'
+  - 'wctl::assign wctl_valid = execute_fire && execute_if.data.header.eop;'
+  - 'schedule::if (wspawn_valid && is_single_warp) begin'
+- id: cc-control-collisions
+  status: UNRESOLVED
+  classification: unresolved_pair
+  node: n-schedule
+  condition: overlapping same-warp controls, or controls plus buffered schedule acceptance; no invented reachability
+  trigger: multiple feedbacks target overlapping PC/mask/stall/CSR at E[k]
+  sampled_state: common old scheduler registers and full set of valid producer identities
+  next_state: Local field overwrite order is known via r-scheduler-edge; legal cross-module event combinations and owner batching need directed validation.
+  consumer: no universal combined-event latency or software priority assigned
+  consumer_offset: null
+  simultaneous: Preserve RTL local equations; reject unsupported overlapping owner events before effects rather than let Go traversal order choose a winner. Nonoverlapping warp updates can compose.
+  unknown_ref: u-feedback
+  rule_refs: [r-scheduler-edge, r-csr-detail]
+  evidence: [schedule::always_comb and CSR always posedge, csr-data::fcsr_n]
+- id: cc-software-context-flush
+  status: PROVISIONAL
+  classification: software_interface
+  node: n-schedule
+  condition: T10 concurrent adapter and four-owner runner implemented; branch/SIMT/WSYNC recovery connected; explicit Barrier release, bound spawn, selective cancellation and recovery implemented; full coordinator orchestration excluded
+  trigger: explicit caller initialization, accepted token context, redirect or cancellation event
+  sampled_state: detached token identity (epoch/warp/instruction/uop/PC/mask), explicit references to existing functional owners
+  next_state: Keep frontend PC/mask transient and distinct from immutable token context and canonical WarpState; evaluate using locked context and captured operands. Deliver each effect once against live owner; never install a delayed whole-Warp snapshot. EffectStream uses per-residency instruction order for canonical control visibility; late ordinary sequential completion cannot overwrite a newer control PC/mask, while stale nonsequential controls are errors. This is software policy, not an RTL retirement order. Selective flush invalidates younger identities and service work while preserving older and other-warp work.
+  consumer: software event API; no extra RTL pipeline latency assigned
+  consumer_offset: 0
+  simultaneous: Prevalidate identities and overlapping effects before mutation. Cancellation cannot undo visible register/CSR/store effects. Normal wstall prevents younger wrong-path fetch; frozen RTL has no general branch squash input on IBuffer/Scoreboard. Explicit software recovery is not an RTL flush timing fact.
+  unknown_ref: u-visibility
+  rule_refs: [r-software-edge, r-software-effect-delivery-foundation, r-software-program-runner]
+  evidence: [functional::canonical ownership and stale gate, functional-effect-stream::controlOrder and fresh stageInstructionEffects, functional-instruction-context::explicit token PC/mask, concurrent-effects::Observe old-edge snapshots and Reap, concurrent-runner::Decode admission and service queues, concurrent-implementation::acceptance and remaining control boundaries, multiwarp-contract::software boundary and follow-up work, ibuffer::reset-only FIFO clearing, scoreboard::reset-only pipeline clearing]

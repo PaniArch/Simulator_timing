@@ -77,3 +77,7 @@ BAR 的地址预读必须早于注册请求；barrier state/phase 的 RAM、同�
 每个资源通过 `Residents()` 返回 detached value，含 Token、位置、局部 Remaining 与 readiness 原因；runner 不访问组件队列。CoreReport.Resources 是旧边沿，ResourcesAfter 是本次统一提交后状态。Events 的 enter/leave 对应本周期提交的转移，stay/advance 表示资源仍持有该对象；tag/context alias 保持独立资源身份，不能累加为指令数量。FIFO 中的 queue-order、输出 awaiting-transfer、执行 execution-latency、tag response-coverage 与外部 backpressure/control-drain 明确区分；这些原因不宣称解析全部 RTL 仲裁信号。Services 列出原 byte owner 服务队列及显式 due cycle。
 
 程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求队列填满四项后恢复且每 uop 只 WB 一次；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。
+
+### Task10 四 Warp 事件契约
+
+`cycle_contracts/cc-*` 细化上述源级规则，完整说明见 [multiwarp-contract.md](multiwarp-contract.md)。特别注意 `cc-ibuffer-accounting` 的 L1 all-full 例外、`cc-reserve-release` 的替换输入选择、`cc-fu-credit-lock` 的旧 goingfull/next lock、`cc-issue-arbitration` 的 sticky 请求保持，以及 `cc-packed-release` 的逐 uop WAW 序列化。Task9 无完整 hazard 的 packed queue 测试不构成 Task10 调度吞吐证据；所有未知同时事件继续由 `cc-control-collisions/u-feedback` 管理。

@@ -70,3 +70,37 @@ func TestMergeSparseRoundRobin(t *testing.T) {
 		t.Fatal("masked request fallback")
 	}
 }
+
+func TestMergeStickyRetainsOnlyAcceptedWinner(t *testing.T) {
+	m, err := NewMerge("b-scoreboard-out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A retained winner must not reset/rotate the masked search frontier.
+	for edge, want := range []int{2, 2, 3, 3, 3, 0} {
+		in := []Signal{valid(1), valid(2), valid(3), valid(4)}
+		if edge == 0 {
+			in[0], in[1] = Signal{}, Signal{}
+		}
+		if edge >= 2 {
+			in[2] = Signal{}
+		}
+		if edge == 5 {
+			in[3] = Signal{}
+		}
+		p, err := m.Evaluate(in, edge >= 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Selected != want {
+			t.Fatalf("E%d selected%d want%d", edge, p.Selected, want)
+		}
+		if (edge == 2 || edge == 3) && p.Accepted {
+			t.Fatal("full skid borrowed a slot")
+		}
+		if edge == 3 && (!p.Completed || p.Output.Token.ID != 3) {
+			t.Fatal("accepted payload unstable under backpressure")
+		}
+		commit(t, p.Transition)
+	}
+}

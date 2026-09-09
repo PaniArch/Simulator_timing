@@ -7,12 +7,14 @@ import (
 
 // Merge owns its result storage and arbitration cursor. The cursor advances on
 // input acceptance, not output consumption. R is VX_rr_arbiter MODEL=1,
-// STICKY=0: lowest masked request, then lowest unmasked request on wrap.
+// Lowest masked request, then lowest unmasked request on wrap. STICKY=1
+// retains the previous accepted winner while it requests, without moving the mask.
 type Merge struct {
-	spec timing.ArbiterSpec
-	out  *Buffer
-	next int
-	rev  revision
+	spec     timing.ArbiterSpec
+	out      *Buffer
+	next     int
+	previous int
+	rev      revision
 }
 type MergeTransition struct {
 	Transition
@@ -32,7 +34,7 @@ func NewMerge(id string) (*Merge, error) {
 	if out.Capacity() == 0 {
 		return nil, fmt.Errorf("%s: merge requires registered output", id)
 	}
-	return &Merge{spec: spec, out: out}, nil
+	return &Merge{spec: spec, out: out, previous: -1}, nil
 }
 func (m *Merge) ID() string     { return m.out.ID() }
 func (m *Merge) Capacity() int  { return m.out.Capacity() }
@@ -53,25 +55,32 @@ func (m *Merge) Evaluate(inputs []Signal, downstream bool) (MergeTransition, err
 			break
 		}
 	}
+	retained := m.spec.Sticky && m.previous >= 0 && inputs[m.previous].Valid
+	if retained {
+		selected = m.previous
+	}
 	input := Signal{}
 	if selected >= 0 {
 		input = inputs[selected]
 	}
 	t := m.out.Evaluate(input, downstream)
 	ready := make([]bool, len(inputs))
-	next := m.next
+	next, previous := m.next, m.previous
 	if selected >= 0 {
 		ready[selected] = t.InputReady
 	}
 	if t.Accepted && m.spec.Policy == "R" {
-		next = (selected + 1) % len(inputs)
+		if !retained {
+			next = (selected + 1) % len(inputs)
+		}
+		previous = selected
 	}
-	t.edits = append(t.edits, m.rev.propose(func() { m.next = next }))
+	t.edits = append(t.edits, m.rev.propose(func() { m.next, m.previous = next, previous }))
 	return MergeTransition{Transition: t, Ready: ready, Selected: selected}, nil
 }
 func (m *Merge) Flush() Transition {
 	t := m.out.Flush()
-	t.edits = append(t.edits, m.rev.propose(func() { m.next = 0 }))
+	t.edits = append(t.edits, m.rev.propose(func() { m.next, m.previous = 0, -1 }))
 	return t
 }
 

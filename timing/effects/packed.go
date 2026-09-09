@@ -23,18 +23,15 @@ type packedInstruction struct {
 	control   *state.EffectDelivery
 }
 
-func (a *Adapter) observePacked(cycle uint64, r model.CoreReport, context state.ReadContext) error {
+func (a *Adapter) observePacked(cycle uint64, r model.CoreReport, context state.ReadContext, snapshot state.WarpSnapshot) error {
 	i := a.current
 	p := i.packed
-	snapshot, err := a.owner.Snapshot()
-	if err != nil {
-		return err
-	}
+	var err error
 	if r.Read.Valid {
 		id := r.Read.Token.Uop
 		u := p.uops[id]
 		if u == nil {
-			capture, err := state.NewOperandCapture(snapshot, i.token.Word, context)
+			capture, err := a.newCapture(snapshot, context)
 			if err != nil {
 				return err
 			}
@@ -163,7 +160,7 @@ func (a *Adapter) servicePacked(cycle uint64, token model.Token, mask uint8) (mo
 	if len(complete.Faults) != 0 {
 		return model.Response{}, architecturalFault(i.token.PC, complete.Faults, serviceErr)
 	}
-	delivery, err := a.owner.NewEffectDelivery(complete)
+	delivery, err := a.newDelivery(complete)
 	if err != nil {
 		return model.Response{}, err
 	}
@@ -184,7 +181,7 @@ func (a *Adapter) servicePacked(cycle uint64, token model.Token, mask uint8) (mo
 		if err != nil {
 			return model.Response{}, err
 		}
-		p.control, err = a.owner.NewEffectDelivery(isa.InstructionEffects{Control: full.Control})
+		p.control, err = a.newDelivery(isa.InstructionEffects{Control: full.Control})
 		if err != nil {
 			return model.Response{}, err
 		}

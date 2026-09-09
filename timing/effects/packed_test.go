@@ -42,15 +42,14 @@ func TestPackedServiceByteVisibility(t *testing.T) {
 		fetch, response := model.Response{}, model.Response{}
 		requests := map[uint8]model.Token{}
 		pending, fragments := 0, 0
+		finalWB := map[uint8]bool{}
 		done := false
 		for cycle := uint64(0); cycle < 220; cycle++ {
-			// Accumulate all requests, then respond in reverse uop order with disjoint lanes.
-			if cycle >= 70 && !response.Valid && fragments < int(entry.Memory.Packed)*2 {
-				uop := entry.Memory.Packed - 1 - uint8(fragments/2)
-				req, ok := requests[uop]
-				if !ok {
-					t.Fatal("missing packed request", uop)
-				}
+			// Same-rd packed uops are WAW serialized by Scoreboard. Return
+			// disjoint lane fragments as each uop becomes service-visible.
+			uop := uint8(fragments / 2)
+			req, available := requests[uop]
+			if cycle >= 70 && !response.Valid && fragments < int(entry.Memory.Packed)*2 && available {
 				mask := uint8(5)
 				if fragments%2 == 1 {
 					mask = 10
@@ -104,8 +103,14 @@ func TestPackedServiceByteVisibility(t *testing.T) {
 			if response.Valid && p.Report.MemoryResponseReady {
 				response = model.Response{}
 			}
+			if p.Report.Writeback.Valid && p.Report.Writeback.Token.End {
+				finalWB[p.Report.Writeback.Token.Uop] = true
+			}
 			if p.Report.MemoryAccepted {
 				r := p.Report.MemoryRequest.Token
+				if r.Uop > 0 && !finalWB[r.Uop-1] {
+					t.Fatal("packed request bypassed preceding final WB", r.Uop)
+				}
 				requests[r.Uop] = r
 			}
 			if p.Report.PendingRelease.Valid {

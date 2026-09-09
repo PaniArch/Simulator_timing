@@ -98,4 +98,22 @@ T9 第三轮的 `Frontend` 已实现上述前端的瞬态连接；`ALU`、`SFU` 
 
 每个资源通过 `Residents()` 返回 detached value，含 Token、位置、局部 Remaining 与 readiness 原因；runner 不访问组件队列。CoreReport.Resources 是旧边沿，ResourcesAfter 是本次统一提交后状态。Events 的 enter/leave 对应本周期提交的转移，stay/advance 表示资源仍持有该对象；tag/context alias 保持独立资源身份，不能累加为指令数量。FIFO 中的 queue-order、输出 awaiting-transfer、执行 execution-latency、tag response-coverage 与外部 backpressure/control-drain 明确区分；这些原因不宣称解析全部 RTL 仲裁信号。Services 列出原 byte owner 服务队列及显式 due cycle。
 
-程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求队列填满四项后恢复且每 uop 只 WB 一次；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。
+程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求背压后按逐 uop WAW 恢复且每 uop 只 WB 一次（独立 LSU 组件另测队列容量）；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。
+
+### Task10 timing-contract
+
+新增 [四 Warp 周期契约](multiwarp-contract.md) 与 `ir.yaml/cycle_contracts`，将旧态采样、next-state、具名 consumer、边沿差和同时事件明确分开。事实带冻结 RTL 逐字锚点，软件上下文/选择性 flush 接口保持 PROVISIONAL，控制碰撞通过 `u-feedback` 保持 UNRESOLVED。Scoreboard reserve 明确为 staging 输出握手，packed 的释放按单 uop eop 而非宏指令结束；pending 另按 Scoreboard 输出握手注册记账。本轮没有实现并发 Scheduler 或改变原 canonical owner。
+
+### Task10 multiwarp-scheduling
+
+`model.NewScheduledCore(backend, [4]WarpContext)` 从调用者显式前端上下文启动四 Warp 取指，复用四套 IBuffer/Sequencer、共享 Scoreboard/Collector/Dispatch 与原执行组件；`Core.Evaluate` 将实际 Commit writeback 接回 Scoreboard。所有注册更新由同一 CommitEdge 安装。取指上下文与 canonical owner 分离，单指令功能 runner 保留显式 token admission。实施、具体周期测试与剩余控制/功能边界见 [实施记录](task10-progress.md)。
+
+### Task10 当前完整运行接口
+
+`runner.NewMulti` 驱动四个显式功能 owner，`effects.Concurrent` 按完整身份管理
+在途 receipt 并统一采样旧边沿；`EffectStream` 即时交付，迟到普通完成不回退
+较新控制上下文。已接入 branch/SIMT/WSYNC、显式 Barrier Release、绑定 WSPAWN
+原子事务、取消/Restart/Flush 及逐 Warp/资源 trace。上述各阶段说明保留历史
+验收背景；当前能力、边沿、软件限制与 AC-017 至 AC-023 映射以
+[最终控制实施记录](control-observability-progress.md) 为准。单活动策略仅属于
+保留的旧 Runner 诊断 API；Task10 普通指令不等待整 Core Idle。

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"vortex.local/simulator/emu/state"
 	"vortex.local/simulator/isa"
+	"vortex.local/simulator/timing/model"
 )
 
 // BindSpawn supplies the original target owners and pre-issue snapshots. The
@@ -25,4 +26,21 @@ func (a *Adapter) BindSpawn(active isa.WarpMask, targets []state.WarpSpawnTarget
 	a.spawnTargets = append([]state.WarpSpawnTarget(nil), targets...)
 	a.spawnBound = true
 	return nil
+}
+
+// SpawnBinding explicitly supplies existing owners and their pre-issue images.
+type SpawnBinding struct {
+	Active  isa.WarpMask
+	Targets []state.WarpSpawnTarget
+}
+
+func (c *Concurrent) BeginSpawn(token model.Token, binding SpawnBinding) error {
+	decoded, err := isa.Decode(token.Word)
+	if err != nil {
+		return err
+	}
+	if decoded.Control != isa.ControlWarpSpawn {
+		return fmt.Errorf("binding requires WSPAWN")
+	}
+	return c.begin(token, &binding)
 }

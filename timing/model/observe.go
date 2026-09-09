@@ -1,5 +1,7 @@
 package model
 
+import "fmt"
+
 // ResourceState is an old-edge value snapshot, detached from component state.
 // Different resources can hold aliases of one token; do not sum their entries
 // to infer instruction concurrency. Context pools are identified separately.
@@ -38,7 +40,14 @@ func (d *Dispatch) Resources() []ResourceState {
 	return r
 }
 func (f *Frontend) Resources() []ResourceState {
-	r := []ResourceState{observed(f.schedule, f.schedule.Output(Signal{})), observed(f.ibuf, f.ibuf.Output(Signal{})), observed(f.seq, f.seq.Output(f.ibuf.Output(Signal{})))}
+	r := []ResourceState{observed(f.schedule, f.schedule.Output(Signal{}))}
+	for w := range f.ibuf {
+		b := observed(f.ibuf[w], f.ibuf[w].Output(Signal{}))
+		q := observed(f.seq[w], f.seq[w].Output(f.ibuf[w].Output(Signal{})))
+		b.ID += fmt.Sprintf("/warp%d", w)
+		q.ID += fmt.Sprintf("/warp%d", w)
+		r = append(r, b, q)
+	}
 	r = append(r, f.fetch.Resources()...)
 	r = append(r, f.issue.Resources()...)
 	r = append(r, f.opc.Resources()...)

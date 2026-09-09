@@ -16,16 +16,21 @@ type Token struct {
 	Word   uint32
 	// Sources use RTL register IDs (GPR 0..31, FPR 32..63). Used marks
 	// actual reads; FPR f0 is not the suppressed integer zero register.
-	Sources  [3]uint8
-	Used     uint8
-	ReadMask uint8
-	LastRead bool
-	Mask     uint8
-	End      bool
-	Class    uint8
-	Pack     uint8
-	Uops     uint8
-	Path     Path
+	Destination               uint8 // RTL register ID; Writeback suppresses integer x0
+	Writeback                 bool
+	ReadSpecial, WriteSpecial uint8 // bit 0 FFLAGS, bit 1 FRM
+	FULock, FUUnlock          bool  // 11 ordinary/packed-load uop, 10 acquire, 01 release
+	WarpStall                 bool  // decode scheduler unlock is !WarpStall
+	Sources                   [3]uint8
+	Used                      uint8
+	ReadMask                  uint8
+	LastRead                  bool
+	Mask                      uint8
+	End                       bool
+	Class                     uint8
+	Pack                      uint8
+	Uops                      uint8
+	Path                      Path
 }
 
 type Signal struct {

@@ -177,12 +177,12 @@ func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (response
 	}
 	// Validate detached completion before any byte mutation, using current owner.
 	partEffects := isa.InstructionEffects{RegisterWrites: completed.RegisterWrites}
-	delivery, err := a.owner.NewEffectDelivery(partEffects)
+	delivery, err := a.newDelivery(partEffects)
 	if err != nil {
 		return response, err
 	}
 	if m.control == nil {
-		m.control, err = a.owner.NewEffectDelivery(isa.InstructionEffects{Control: completed.Control})
+		m.control, err = a.newDelivery(isa.InstructionEffects{Control: completed.Control})
 		if err != nil {
 			return response, err
 		}

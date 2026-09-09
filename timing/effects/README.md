@@ -31,3 +31,9 @@ store 的 LSU 完成可以早于字节服务；服务通过原 owner 的单次 W
 在 Begin 之前 `BindSpawn(activeMask, targets)` 绑定原 target owner 与 pre-issue Expected 快照；只接受 source 为唯一 active warp 的条件。调用者仍负责 CTA membership 和 slot residency，不会因绑定而创建 scheduler。注册 WCTL 反馈调用 `EffectDelivery.DeliverWarpSpawn`：当场构造 control stage，经原 `StageWarpSpawn` 同时校验并提交 source/targets，成功记录一次 control receipt；不调用普通 external callback 修改 source。过期 target、非 inactive target、source MScratch 不一致均由原事务拒绝。Finish/Reset 清除绑定。
 
 每边沿用同一 ReadContext 调用 `ControlAllowed` 和 `Observe`。BAR 等待 PendingLSU，WSYNC 等待 PendingPriorWork，等待期间停在 SFU 执行接收前；错误放行 wait-only effects 会显式报错。owner 回调在 drain 完成后的注册通知才执行。跨指令测试使用同一 Akita clock/Core/Adapter，显式等待 store tail，连续执行整数、访存、浮点、CSR 与 branch，并逐条对照原功能 owner。
+
+Task10 新增 `Concurrent`：四个显式 owner、按 epoch/warp/instruction/uop 路由、
+统一 old-edge snapshot 与每 Warp EffectStream。单指令 Adapter 仍作为各在途
+指令的 receipt 引擎复用。接口、并发测试和保留边界见
+[并发效果实施记录](../concurrent-effects-progress.md)。冻结 catalog 的 packed
+指令仅为 load；上文 load/store 泛指普通内存路径，不表示存在 packed store ISA。

@@ -656,3 +656,102 @@ Task9 WSPAWN 控制交付使用 `EffectDelivery.DeliverWarpSpawn`，在当前可
 每个资源通过 `Residents()` 返回 detached value，含 Token、位置、局部 Remaining 与 readiness 原因；runner 不访问组件队列。CoreReport.Resources 是旧边沿，ResourcesAfter 是本次统一提交后状态。Events 的 enter/leave 对应本周期提交的转移，stay/advance 表示资源仍持有该对象；tag/context alias 保持独立资源身份，不能累加为指令数量。FIFO 中的 queue-order、输出 awaiting-transfer、执行 execution-latency、tag response-coverage 与外部 backpressure/control-drain 明确区分；这些原因不宣称解析全部 RTL 仲裁信号。Services 列出原 byte owner 服务队列及显式 due cycle。
 
 程序 trace 测试验证驻留记录闭合、除法 33 周期占用、packed 请求队列填满四项后恢复且每 uop 只 WB 一次；增加 memory 服务延迟或请求背压会延长完整运行，功能结果不变。重复运行记录确定；快照修改不会改变组件 owner。基础注册边界与满队列同时接收/释放继续由 timing/model 门禁覆盖。
+
+## 16. T10 四 Warp 并发周期 Core（最终实现）
+
+`PROVISIONAL（Task10 软件接口）`：本节增量记录 Task10 当前实现。第 1–15 节
+保留原功能契约、T1–T9 实施证据与 UNRESOLVED/RESOLVED 审计；其中“未完成”、
+“尚待适配”等阶段描述是当时的实施记录，不表示本节所述 Task10 功能仍未实现。
+旧 `runner.New` / `cmd/timing-run` 保留单活动诊断策略；当前四 Warp 接口为
+`runner.NewMulti` / `cmd/timing-multi`，普通指令准入不等待整 Core Idle。
+
+### 16.1 唯一 owner 与锁存指令上下文
+
+`WarpState`、寄存器、CSR、divergence/trap 数据与 memory bytes 仍由既有功能
+owner 持有；timing 不新增架构状态写源。`NewMulti` 接受四个显式 Warp owner，
+不调用原 Core.Step 的逐条完成调度，也不创建 CTA 或 Kernel owner。
+
+Scheduler 的前端 PC/mask 是瞬态取指上下文；Token 锁存 epoch/warp/instruction/
+uop/PC/mask，背压期间保持稳定；canonical WarpState 只在定义的效果事件更新。
+`InstructionContext` 与 `NewLatchedOperandCapture` 显式使用 Token PC/mask，
+逐银行读取旧边沿实际操作数，执行时复用原 ISA evaluator 和 state API。
+`NewOperandCapture` 的旧 canonical PC/mask 相等校验继续保留。
+
+四套 IBuffer/Sequencer 与共享 Scoreboard、Collector/Dispatch、FU、Commit
+通过统一 Evaluate/CommitEdge 更新。Scoreboard 按真实解码依赖、寄存器类型、
+零寄存器和特殊状态维护资格；WB release、staging reserve 与下一周期注册
+eligibility 分开。packed 按每个 uop 的最终 lane WB 释放，部分 WB 不提前释放；
+宏指令完成另等待全部元素/服务 receipt。因此 T9 历史 packed 队列演示不能被
+解释为当前 Scoreboard 允许同目的寄存器的 packed uop 无 WAW 等待。
+
+### 16.2 并发效果的交付规则
+
+`effects.Concurrent` 按完整身份索引独立在途 receipt，每 Warp 共用一个
+`EffectStream`。同边沿先校验全部事件身份、采样各 owner 的旧边沿 snapshot，
+再进行读/执行和可见效果交付；不因 Go map 遍历顺序产生隐式 WB 旁路。
+
+每次交付从 live owner 构造并同步提交事务，保持原 StageEffects stale 检查；
+不保存可在未来覆盖 owner 的整状态候选。控制顺序 frontier 仅是软件可见性
+规则：较新控制成功后，迟到的普通顺序 PC receipt 不再回退 canonical PC；其
+WB/flags 仍独立交付。mask/lifecycle 只由实际控制效果改变，旧顺序完成不能
+恢复旧 mask。越过 frontier 的非顺序控制报错，不静默选择优先级，也不宣称
+RTL 存在 ROB 或统一 retirement 顺序。
+
+Fetch/Memory 服务按身份匹配，使用显式正延迟和响应背压；分片与 packed load
+保留覆盖、去重和单次交付。冻结 ISA 只有 packed load，无 packed store 指令。
+失败边沿停止，不重试部分成功的效果；外部 owner 仍须遵守同步 all-or-error
+契约，不能回滚此前已可见的寄存器、CSR 或 store。
+
+### 16.3 控制恢复、pending 与外部协作
+
+`SchedulerFeedback` 来自执行时锁存的效果，不从交付后的最新 WarpState 猜测
+分支结果。branch/TMC/SPLIT 与原 sideband 同边沿更新，下一周期参与取指；JOIN
+额外保留一拍注册；WSPAWN 先注册 pending，再使用注册 SingleActive 门控。
+同 Warp 未确认的同时反馈显式拒绝，旧 epoch、重复反馈不产生架构效果。
+
+pending 汇总在途资源、部分 uop、效果 receipt、服务尾部和外部等待，按完整
+宏指令身份去重。WSYNC/BAR 的内部 drain 与调用者外部谓词做 OR；共享 SFU
+队首阻塞保留。inactive、blocked 或暂时无 runnable Warp 都不等于整体完成。
+
+Barrier 效果通过原外部 owner 交付，`Release(token)` 只排队明确的注册唤醒，
+成员计数/phase 由原 coordinator 决定。WSPAWN 通过 `MultiOptions.Spawn` 显式
+绑定原 owner 与 pre-issue target snapshot，复用 `StageWarpSpawn/Commit` 的
+源/目标原子事务。未绑定保持阻塞；并发适配要求源较老工作先 drain，以满足
+原严格 source PC/mask 契约，这是软件接口限制，不是新增 RTL drain 事实。
+目标旧在途工作或 stale image 被拒绝，不进行部分激活或 CTA admission/reclaim。
+
+正常 wstall 阻止错误路径继续取指。防御性重定向清理在 byte service 之前按
+Warp/epoch/有界指令年龄取消年轻资源、依赖预留和服务，保留较老及其他 Warp
+工作。`Cancel` 暂停 Warp，`Restart` 接受显式前端上下文并避开取消身份；残留
+同 Warp 前端/控制工作时拒绝恢复。`Flush` 取消全部未交付工作、增加 epoch，
+从 live canonical owner 重建前端，不撤销已可见效果或保证重放放弃的指令。
+这些是软件恢复边界，不等价于冻结 RTL 有通用 branch squash 输入。
+
+### 16.4 观测、验收与范围
+
+`MultiRecord.Warps` 给出旧边沿 active/stalled/runnable、PC/mask/epoch、pending
+及 stall reason。IssueCandidates 区分注册资格和当前依赖/credit/lock 输入，
+IssueSelected/Issued 与 Offered/InstructionAccepted 分别记录 issue/fetch
+选择和握手。Resources/Events 关联完整身份的驻留、读、执行、WB、release、
+wakeup、取消与恢复，返回值与内部可变状态隔离；资源别名不能累加为指令数。
+
+可复现入口（仓库根目录）：
+
+```bash
+source env/env.sh
+go run ./cmd/timing-multi -cycles 1000 -fetch-cycles 2 -memory-cycles 60
+go run ./cmd/timing-multi -trace -cycles 1000 -fetch-cycles 2 -memory-cycles 60
+bash scripts/verify-timing.sh
+bash scripts/verify-all.sh
+```
+
+[周期契约](../../timing/multiwarp-contract.md)、
+[并发效果实施](../../timing/concurrent-effects-progress.md) 与
+[最终验收映射](../../timing/control-observability-progress.md) 给出可复查 RTL
+证据、具体周期测试和完整 owner/RAM 功能对比。Timing IR 的 `functional` 来源
+继续引用本文第 2/4/5/10/11 节，本文不被 Timing IR 替代。
+
+`UNRESOLVED`：原第 10/11 节问题与闭合证据不因 Task10 测试通过而改写；同 Warp
+部分同时反馈、CSR 背压、跨 Warp memory ordering 和外部效果故障继续保留证据
+边界。Task10 不新增 CTA/Kernel orchestration、Cache、DRAM timing、多 Core，
+也不宣称 RTLSIM trace 精度等价。所有冻结 RTL 输入保持不变。

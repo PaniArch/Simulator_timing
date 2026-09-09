@@ -11,7 +11,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-var collections = []string{"config", "nodes", "resources", "boundaries", "ports", "channels", "rules", "unknowns", "audit", "timing_measurements"}
+var collections = []string{"config", "nodes", "resources", "boundaries", "ports", "channels", "rules", "unknowns", "audit", "timing_measurements", "cycle_contracts"}
 var references = map[string]string{"node": "nodes", "nodes": "nodes", "from": "ports", "to": "ports", "resource_refs": "resources", "boundary_refs": "boundaries", "rule_refs": "rules", "unknown_ref": "unknowns", "affected": "nodes", "config_ref": "config", "encoding_ref": "buffer_encoding"}
 
 func fields(n *yaml.Node) map[string]*yaml.Node {
@@ -101,6 +101,9 @@ func validate(data []byte, root string) error {
 	}
 	contract, err := os.ReadFile(filepath.Join(root, "emu/docs/architecture.md"))
 	if err != nil {
+		return err
+	}
+	if err := validateFunctionalContract(contract); err != nil {
 		return err
 	}
 	var walk func(*yaml.Node, bool) error
@@ -232,7 +235,7 @@ func validate(data []byte, root string) error {
 			return err
 		}
 	}
-	return nil
+	return validateCycleContracts(top, root)
 }
 func main() {
 	root := "."

@@ -71,7 +71,7 @@ func TestFrontendALUCommitCommonEdge(t *testing.T) {
 			// Deliberately evaluate this read-only probe in the opposite traversal order.
 			// It must not consume state or alter the subsequent common-edge proposal.
 			if reverse {
-				if _, err := f.Evaluate(offered, response, true, true, [4]bool{}); err != nil {
+				if _, err := f.Evaluate(offered, response, true, true, [4]bool{}, c.Output()); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -80,7 +80,7 @@ func TestFrontendALUCommitCommonEdge(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fp, err := f.Evaluate(offered, response, true, true, [4]bool{ap.InputReady, false, false, false})
+			fp, err := f.Evaluate(offered, response, true, true, [4]bool{ap.InputReady, false, false, false}, cp.Writeback)
 			if err != nil {
 				t.Fatal(err)
 			}

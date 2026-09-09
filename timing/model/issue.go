@@ -6,9 +6,9 @@ import (
 	"vortex.local/simulator/timing"
 )
 
-// Issue implements one active warp's staging, registered eligibility and FU
-// credits. The external eligibility input will later come from a scoreboard;
-// this component does not fabricate multi-warp arbitration or register hazards.
+// Issue preserves the T9 isolated credit/eligibility diagnostic fixture.
+// Frontend and Core use Scoreboard; this legacy component is not a scheduler
+// and must not be used as the dependency authority for a connected pipeline.
 type Issue struct {
 	staging, out *Buffer
 	ready        bool
@@ -18,25 +18,9 @@ type Issue struct {
 }
 
 func NewIssue() (*Issue, error) {
-	for i, name := range []string{"ALU", "LSU", "SFU", "FPU"} {
-		index, err := timing.Number("config", "cfg-baseline", "values", "execution_class_indices", name)
-		if err != nil {
-			return nil, err
-		}
-		if index != i {
-			return nil, fmt.Errorf("execution class mapping drift")
-		}
-	}
-	limit, err := timing.Number("resources", "res-credits", "capacity")
+	limit, err := issueCreditLimit()
 	if err != nil {
 		return nil, err
-	}
-	queue, err := timing.Number("resources", "res-dispatch", "capacity")
-	if err != nil {
-		return nil, err
-	}
-	if limit < 2 || limit != queue {
-		return nil, fmt.Errorf("FU credit/dispatch capacity drift")
 	}
 	staging, err := NewBuffer("b-scoreboard-staging")
 	if err != nil {
@@ -95,4 +79,29 @@ func (i *Issue) Flush() Transition {
 	t := Transition{edits: append(a.edits, b.edits...)}
 	t.edits = append(t.edits, i.rev.propose(func() { i.ready = false; i.credits = [4]int{} }))
 	return t
+}
+
+// issueCreditLimit validates the shared frozen execution class/queue profile.
+func issueCreditLimit() (int, error) {
+	for i, name := range []string{"ALU", "LSU", "SFU", "FPU"} {
+		index, err := timing.Number("config", "cfg-baseline", "values", "execution_class_indices", name)
+		if err != nil {
+			return 0, err
+		}
+		if index != i {
+			return 0, fmt.Errorf("execution class mapping drift")
+		}
+	}
+	limit, err := timing.Number("resources", "res-credits", "capacity")
+	if err != nil {
+		return 0, err
+	}
+	queue, err := timing.Number("resources", "res-dispatch", "capacity")
+	if err != nil {
+		return 0, err
+	}
+	if limit < 2 || limit != queue {
+		return 0, fmt.Errorf("FU credit/dispatch capacity drift")
+	}
+	return limit, nil
 }

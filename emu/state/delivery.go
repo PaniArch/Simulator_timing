@@ -26,11 +26,14 @@ const (
 // later by a stale whole-instruction replacement. Cancellation never rolls back
 // already-visible effects. The timing adapter owns residency/epoch validation.
 type EffectDelivery struct {
-	owner     *WarpState
-	effects   isa.InstructionEffects
-	delivered [visibilityEventCount]bool
-	writes    isa.LaneMask
-	cancelled bool
+	stream      *EffectStream
+	order       uint64
+	instruction InstructionContext
+	owner       *WarpState
+	effects     isa.InstructionEffects
+	delivered   [visibilityEventCount]bool
+	writes      isa.LaneMask
+	cancelled   bool
 }
 
 func (w *WarpState) NewEffectDelivery(effects isa.InstructionEffects) (*EffectDelivery, error) {
@@ -102,7 +105,13 @@ func (d *EffectDelivery) Deliver(event VisibilityEvent, lanes isa.LaneMask, exte
 	case FaultEvent:
 		part.Faults = e.Faults
 	}
-	stage, err := d.owner.StageEffects(part)
+	var stage *EffectStage
+	var err error
+	if d.stream != nil && event == ControlEvent {
+		stage, err = d.stageStreamControl(part)
+	} else {
+		stage, err = d.owner.StageEffects(part)
+	}
 	if err != nil {
 		return err
 	}
@@ -120,6 +129,9 @@ func (d *EffectDelivery) Deliver(event VisibilityEvent, lanes isa.LaneMask, exte
 	if err != nil {
 		return err
 	}
+	if d.stream != nil && event == ControlEvent && e.Control != nil && d.order > d.stream.controlOrder {
+		d.stream.controlOrder = d.order
+	}
 	if event == WritebackEvent {
 		d.writes |= lanes
 		d.delivered[event] = d.writes == expected
@@ -133,6 +145,11 @@ func (d *EffectDelivery) Deliver(event VisibilityEvent, lanes isa.LaneMask, exte
 // the existing atomic owner transaction. Target Expected images must come from
 // before instruction issue. No source candidate survives across timing edges.
 func (d *EffectDelivery) DeliverWarpSpawn(targets []WarpSpawnTarget) error {
+	if d != nil && d.stream != nil {
+		if d.order <= d.stream.controlOrder || d.owner.pc != d.instruction.PC || d.owner.activeMask != d.instruction.Mask {
+			return fmt.Errorf("concurrent spawn requires drained source context")
+		}
+	}
 	if d == nil || d.owner == nil || d.cancelled || d.delivered[ControlEvent] || d.effects.WarpSpawn == nil {
 		return fmt.Errorf("inactive, repeated or non-spawn control delivery")
 	}
@@ -154,5 +171,8 @@ func (d *EffectDelivery) DeliverWarpSpawn(targets []WarpSpawnTarget) error {
 		return err
 	}
 	d.delivered[ControlEvent] = true
+	if d.stream != nil {
+		d.stream.controlOrder = d.order
+	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 type ArbiterSpec struct {
 	Inputs int
 	Policy string
+	Sticky bool
 }
 
 func Arbiter(id string) (ArbiterSpec, error) { return arbiter(document, id) }
@@ -32,10 +33,10 @@ func arbiter(data []byte, id string) (ArbiterSpec, error) {
 			continue
 		}
 		a := b.Arbitration
-		if a.Inputs == nil || *a.Inputs < 1 || a.Sticky == nil || *a.Sticky != 0 || (a.Policy != "P" && a.Policy != "R") || (a.Policy == "R" && (a.Model == nil || *a.Model != 1)) {
+		if a.Inputs == nil || *a.Inputs < 1 || a.Sticky == nil || (*a.Sticky != 0 && *a.Sticky != 1) || (*a.Sticky == 1 && a.Policy != "R") || (a.Policy != "P" && a.Policy != "R") || (a.Policy == "R" && (a.Model == nil || *a.Model != 1)) {
 			return ArbiterSpec{}, fmt.Errorf("%s: missing or unsupported arbitration profile", id)
 		}
-		return ArbiterSpec{Inputs: *a.Inputs, Policy: a.Policy}, nil
+		return ArbiterSpec{Inputs: *a.Inputs, Policy: a.Policy, Sticky: *a.Sticky == 1}, nil
 	}
 	return ArbiterSpec{}, fmt.Errorf("unknown arbitration boundary %q", id)
 }

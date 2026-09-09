@@ -70,7 +70,7 @@ func TestResidentTraceAndLocalLatency(t *testing.T) {
 	}
 }
 
-func TestPackedProgramFillsRequestCapacityAndRecovers(t *testing.T) {
+func TestPackedProgramWAWBackpressureAndRecovery(t *testing.T) {
 	owner, ram := setup(t)
 	pack, tmc := uint32(0), uint32(0)
 	for _, entry := range isa.Catalog() {
@@ -95,7 +95,8 @@ func TestPackedProgramFillsRequestCapacityAndRecovers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	full := false
+	heldRequest := false
+	lastWB := map[uint8]uint64{}
 	requests := 0
 	wb := map[uint8]int{}
 	err = r.Run(400, func(record runner.Record) {
@@ -103,25 +104,40 @@ func TestPackedProgramFillsRequestCapacityAndRecovers(t *testing.T) {
 			if resource.Occupancy > resource.Capacity {
 				t.Fatal("capacity overflow", resource)
 			}
-			if resource.ID == "b-lsu-req" && resource.Occupancy == resource.Capacity {
-				full = true
+			if resource.ID == "b-lsu-req" {
+				if resource.Occupancy > 1 {
+					t.Fatal("same-rd packed WAW allowed multiple outstanding requests")
+				}
+				if resource.Occupancy == 1 && record.Cycle < 100 {
+					heldRequest = true
+				}
 			}
 		}
 		if record.Report.MemoryAccepted {
 			if record.Cycle < 100 {
 				t.Fatal("request bypassed backpressure")
 			}
+			tok := record.Report.MemoryRequest.Token
+			if tok.Uop > 0 {
+				previous, ok := lastWB[tok.Uop-1]
+				if !ok || previous >= record.Cycle {
+					t.Fatal("request before prior final WB")
+				}
+			}
 			requests++
 		}
 		if record.Report.Writeback.Valid && record.Report.Writeback.Token.ID == 1 {
 			wb[record.Report.Writeback.Token.Uop]++
+			if record.Report.Writeback.Token.End {
+				lastWB[record.Report.Writeback.Token.Uop] = record.Cycle
+			}
 		}
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.Completed() || !full || requests != 4 || len(wb) != 4 {
-		t.Fatal("capacity/recovery", full, requests, wb, r.Completed())
+	if !r.Completed() || !heldRequest || requests != 4 || len(wb) != 4 {
+		t.Fatal("WAW/backpressure recovery", heldRequest, requests, wb, r.Completed())
 	}
 	for _, count := range wb {
 		if count != 1 {

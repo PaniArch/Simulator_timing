@@ -1,4 +1,4 @@
-// Package runner supplies conservative single-active-warp program execution.
+// Package runner supplies concurrent four-warp execution and a legacy single-active diagnostic runner.
 package runner
 
 import (

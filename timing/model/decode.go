@@ -53,9 +53,44 @@ func DecodeToken(input Signal) (Signal, error) {
 		if r.File == isa.Float {
 			t.Sources[i] += 32
 		}
-		t.Used |= 1 << i
+		t.Used |= 1 << i // VX_decode keeps used_rs for x0; WB/Collector suppress it.
 	}
 	t.Branch = d.Control == isa.ControlBranch || d.Control == isa.ControlJump || d.Control == isa.ControlTrap || d.Control == isa.ControlTrapReturn
+	t.Destination, t.Writeback = 0, false
+	if len(d.Destinations) > 1 {
+		return Signal{}, fmt.Errorf("unsupported destination count")
+	}
+	for _, r := range d.Destinations {
+		t.Destination = r.Index
+		if r.File == isa.Float {
+			t.Destination += 32
+		}
+		t.Writeback = t.Destination != 0
+	}
+	t.FULock, t.FUUnlock = true, true
+	t.ReadSpecial, t.WriteSpecial = 0, 0
+	if d.Category == isa.CategoryRV32F && d.Memory.Kind == isa.MemoryNone {
+		if d.Rounding == isa.Dynamic {
+			t.ReadSpecial = 2
+		}
+		if !strings.HasPrefix(d.Name, "fsgnj") && !strings.HasPrefix(d.Name, "fmv.") && d.Name != "fclass.s" {
+			t.WriteSpecial = 1
+		}
+	}
+	if d.CSR != isa.CSRNone {
+		switch d.CSRAddress {
+		case 1:
+			t.ReadSpecial = 1
+		case 2:
+			t.ReadSpecial = 2
+		case 3:
+			t.ReadSpecial = 3
+		}
+		// VX_decode.csr_write uses the encoded rs1/zimm field, never its value.
+		if d.CSR == isa.CSRRW || (d.Word>>15)&31 != 0 {
+			t.WriteSpecial = t.ReadSpecial
+		}
+	}
 	t.Class = 0
 	t.Path = INT
 	switch d.Memory.Kind {
@@ -109,5 +144,6 @@ func DecodeToken(input Signal) (Signal, error) {
 			return Signal{}, fmt.Errorf("unsupported timing category %s", d.Category)
 		}
 	}
+	t.WarpStall = t.Branch || (t.Path == WCTL && d.Barrier != isa.BarrierArrive)
 	return Signal{Valid: true, Token: t}, nil
 }
