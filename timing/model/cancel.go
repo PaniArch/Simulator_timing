@@ -153,6 +153,7 @@ func (f *Frontend) cancel(c Cancellation) Transition {
 		// Recovery owner supplies a future restart context; cancellation itself
 		// parks this warp without overwriting its canonical or frontend PC/mask.
 		next.Warps[c.Warp].Stalled = true
+		next.Parked[c.Warp] = true
 		t.edits = append(t.edits, s.rev.propose(func() { s.state = next }))
 	}
 	return t

@@ -31,8 +31,16 @@ func TestMultiRunnerCancelYoungerKeepsOldLoadAndOtherWarps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = r.Run(15, nil); err != nil {
-		t.Fatal(err)
+	accepted := false
+	for i := 0; i < 2000 && !accepted; i++ {
+		if err = r.Run(1, func(rec runner.MultiRecord) {
+			accepted = rec.Report.MemoryAccepted && rec.Report.MemoryRequest.Token.Warp == 0
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !accepted {
+		t.Fatal("old load not accepted")
 	}
 	scope := model.Cancellation{Warp: 0, Epoch: 1, After: 1, Through: 20}
 	before, _ := owners[0].Snapshot()
@@ -44,7 +52,7 @@ func TestMultiRunnerCancelYoungerKeepsOldLoadAndOtherWarps(t *testing.T) {
 		t.Fatal("cancel changed canonical owner")
 	}
 	seenCancel, oldWB := false, false
-	if err = r.Run(350, func(rec runner.MultiRecord) {
+	if err = r.Run(10000, func(rec runner.MultiRecord) {
 		for _, tok := range rec.Cancelled {
 			if tok.Warp == 0 && tok.ID > 1 {
 				seenCancel = true

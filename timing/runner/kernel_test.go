@@ -5,6 +5,7 @@ import (
 	"testing"
 	"vortex.local/simulator/emu/device"
 	"vortex.local/simulator/support/memory"
+	"vortex.local/simulator/timing/memsys"
 	"vortex.local/simulator/timing/runner"
 )
 
@@ -30,9 +31,12 @@ func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
 	}
 	write(0x800, 0x12345678)
 	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x800, GridDimensions: [3]uint32{4, 1, 1}, BlockDimensions: [3]uint32{1, 1, 1}, BlockSize: 1, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
-	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 11, Ready: func(c uint64) bool { return c%3 != 0 }})
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(11), Ready: func(c uint64) bool { return c%3 != 0 }})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := k.MakeVisible(1); err == nil {
+		t.Fatal("visibility accepted before execution completion")
 	}
 	maxResident := 0
 	for i := 0; i < 20 && !k.Status().Complete; i++ {
@@ -47,9 +51,23 @@ func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
 	if !k.Status().Complete || k.Status().Completed != 4 || maxResident < 2 {
 		t.Fatal(k.Status(), maxResident)
 	}
+	if k.Status().BackingVisible {
+		t.Fatal("execution completion implied visibility")
+	}
+	var stale [4]byte
+	if err := ram.Read(0x810, stale[:]); err != nil {
+		t.Fatal(err)
+	}
+	if binary.LittleEndian.Uint32(stale[:]) != 0 {
+		t.Fatal("store bypassed cache")
+	}
+	if done, err := k.MakeVisible(1); err != nil || done {
+		t.Fatal("flush skipped scan/writeback", done, err)
+	}
 	for c := uint32(0); c < 4; c++ {
 		for address, want := range map[uint32]uint32{0x810 + c*4: 0x12345678, 0x820 + c*4: 0xffff0000 + c*64} {
 			var b [4]byte
+			kernelVisible(t, k)
 			if err := ram.Read(address, b[:]); err != nil {
 				t.Fatal(err)
 			}
@@ -57,6 +75,18 @@ func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
 				t.Fatalf("address %#x got %#x want %#x", address, got, want)
 			}
 		}
+	}
+	if done, err := k.FlushCaches(1); err != nil || done {
+		t.Fatal("kernel cache flush skipped phases", done, err)
+	}
+	if _, err := k.MakeVisible(1); err == nil {
+		t.Fatal("kernel visibility stole cache flush")
+	}
+	if done, err := k.FlushCaches(4000); err != nil || !done {
+		t.Fatal("kernel combined flush", done, err)
+	}
+	if !k.Status().Complete || !k.Status().MemoryDrained {
+		t.Fatal("kernel cache flush tail", k.Status())
 	}
 }
 
@@ -89,7 +119,7 @@ func TestKernelReentryMultiWarpCoordinatesAndResourceWait(t *testing.T) {
 		put(0x200+uint32(i)*4, w)
 	}
 	launch := device.LaunchState{StartupPC: 0xfc, KernelEntryPC: 0x200, ParameterAddress: 0x800, GridDimensions: [3]uint32{6, 1, 1}, BlockDimensions: [3]uint32{3, 2, 1}, BlockSize: 6, WarpStep: [3]uint32{1, 1, 0}, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 8192}
-	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 80, Ready: func(c uint64) bool { return c%4 == 0 }})
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(80), Ready: func(c uint64) bool { return c%4 == 0 }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,12 +134,12 @@ func TestKernelReentryMultiWarpCoordinatesAndResourceWait(t *testing.T) {
 				generation[m.WarpID] = c.Launch.ID
 			}
 		}
-		if record.Report.MemoryAccepted {
+		if record.Report.MemoryRequest.Valid {
 			token := record.Report.MemoryRequest.Token
 			serviceCTA[token.ID] = generation[token.Warp]
 		}
 		for _, service := range record.Services {
-			if service.Resource == "memory-service" {
+			if service.Resource == "memory-system" {
 				if want, ok := serviceCTA[service.Token.ID]; !ok || want != generation[service.Token.Warp] {
 					t.Fatal("live service lost CTA identity", service)
 				}
@@ -147,6 +177,7 @@ func TestKernelReentryMultiWarpCoordinatesAndResourceWait(t *testing.T) {
 				return 0
 			}()} {
 				var b [4]byte
+				kernelVisible(t, k)
 				if err := ram.Read(addr, b[:]); err != nil {
 					t.Fatal(err)
 				}
@@ -178,7 +209,7 @@ func TestKernelClusterWindowPrewrap(t *testing.T) {
 		put(0x200+uint32(i)*4, w)
 	}
 	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x800, GridDimensions: [3]uint32{6, 1, 1}, BlockDimensions: [3]uint32{1, 1, 1}, BlockSize: 1, ClusterDimensions: [3]uint32{3, 1, 1}, LocalMemorySize: 4096}
-	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 100})
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(100)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,11 +235,46 @@ func TestKernelClusterWindowPrewrap(t *testing.T) {
 	}
 	for i := uint32(0); i < 6; i++ {
 		var b [4]byte
+		kernelVisible(t, k)
 		if err := ram.Read(0x800+i*4, b[:]); err != nil {
 			t.Fatal(err)
 		}
 		if binary.LittleEndian.Uint32(b[:]) != i {
 			t.Fatal(i, b)
 		}
+	}
+}
+
+func kernelMemoryConfig(latency uint64) *memsys.Config {
+	return &memsys.Config{Latency: latency, AcceptsPerCycle: 1, MaxInflight: 16, ReturnsPerCycle: 1}
+}
+func kernelVisible(t *testing.T, k *runner.Kernel) {
+	t.Helper()
+	done, err := k.MakeVisible(10000)
+	if err != nil || !done {
+		t.Fatal("kernel visibility", done, err)
+	}
+}
+
+func TestKernelDefaultsIgnoreLegacyServiceDelays(t *testing.T) {
+	ram, err := memory.New(1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var word [4]byte
+	binary.LittleEndian.PutUint32(word[:], 0x0000000b)
+	if err = ram.Write(0x100, word[:]); err != nil {
+		t.Fatal(err)
+	}
+	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x100, GridDimensions: [3]uint32{1, 1, 1}, BlockDimensions: [3]uint32{1, 1, 1}, BlockSize: 1, ClusterDimensions: [3]uint32{1, 1, 1}}
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 1000000, MemoryCycles: 1000000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = k.Run(1000, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !k.Status().Complete || k.Status().Cycle < 100 {
+		t.Fatal("default Kernel did not use IR cache/backend", k.Status())
 	}
 }

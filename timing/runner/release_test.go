@@ -36,7 +36,7 @@ func TestBarrierExternalReleaseAndDrain(t *testing.T) {
 	var tokens [4]model.Token
 	var pending [4]int
 	var loadResponse, barExecute [4]uint64
-	if err = r.Run(200, func(rec runner.MultiRecord) {
+	if err = r.Run(2000, func(rec runner.MultiRecord) {
 		// VX_mem_scheduler ibuf_pop is final response acceptance, not WB.
 		if p := rec.Report.MemoryResponse; p.Valid && rec.Report.MemoryResponseReady {
 			loadResponse[p.Warp] = rec.Cycle
@@ -72,8 +72,9 @@ func TestBarrierExternalReleaseAndDrain(t *testing.T) {
 			t.Fatal("duplicate coordinator wake queued")
 		}
 	}
-	if err = r.Run(300, func(rec runner.MultiRecord) {
-		if rec.Cycle == 200 {
+	releaseCycle := r.Cycle()
+	if err = r.Run(10000, func(rec runner.MultiRecord) {
+		if rec.Cycle == releaseCycle {
 			if len(rec.Report.Wakeups) != 4 || rec.Report.InstructionAccepted {
 				t.Fatal("release bypassed old-edge scheduler")
 			}
@@ -148,6 +149,9 @@ func TestBarrierReleaseDoesNotWaitForExternalStoreTail(t *testing.T) {
 	}
 	if !r.Completed() || calls != 4 || !stoppedWithTail {
 		t.Fatal("barrier/store scenario incomplete", calls, stoppedWithTail)
+	}
+	if done, err := r.MakeVisible(10000); err != nil || !done {
+		t.Fatal("store visibility", done, err)
 	}
 	for w, owner := range owners {
 		if accepted[w] == 0 || barrier[w] <= accepted[w] || finished[w] <= barrier[w] {

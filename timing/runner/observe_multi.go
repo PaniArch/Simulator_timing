@@ -4,6 +4,7 @@ import "vortex.local/simulator/timing/model"
 
 type WarpObservation struct {
 	Active, Stalled, Runnable bool
+	Parked                    bool // software cancellation, separate from hardware stall
 	PC                        uint32
 	Mask                      uint8
 	Epoch                     uint64
@@ -27,7 +28,7 @@ func (r *MultiRunner) observeWarps(s model.SchedulerState) (result [4]WarpObserv
 	}
 	hardware := r.core.HardwarePending()
 	for w, c := range s.Warps {
-		result[w] = WarpObservation{HardwarePending: hardware[w], Active: c.Active, Stalled: c.Stalled, Runnable: c.Active && !c.Stalled && (!s.IBufferFull[w] || s.AllIBuffersFull), PC: c.PC, Mask: c.Mask, Epoch: c.Epoch}
+		result[w] = WarpObservation{Parked: s.Parked[w], HardwarePending: hardware[w], Active: c.Active, Stalled: c.Stalled, Runnable: c.Active && !c.Stalled && !s.Parked[w] && (!s.IBufferFull[w] || s.AllIBuffersFull), PC: c.PC, Mask: c.Mask, Epoch: c.Epoch}
 		switch {
 		case !c.Active:
 			result[w].StallReason = "inactive"

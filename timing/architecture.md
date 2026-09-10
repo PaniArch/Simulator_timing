@@ -1,10 +1,19 @@
 # Timing IR 架构基线
 
-## T11 当前执行架构
+## T12 当前执行架构
+
+实际生产链为 Kernel/Runner → MultiRunner → scheduled Core + memsys.System。
+System 组合 I/D-cache、split/coalescer、word adapters、原 owner LMEM 和共享外部后端，
+以真实接受和返回驱动 Core；load 不绕过缓存，store dirty bytes 通过明确写回可见。
+CTA 回收与状态共用 observeCTA，保留每个 residency 的全部传输/效果尾部，
+不因有效或 dirty line 阻止执行完成。使用与抽象边界见 [T12 记录](t12-delivery.md)。
+下文 T9–T11 小节为历史背景，固定延迟及旧单活动 Runner 描述已被本节取代。
+
+## T11 orchestration 基础
 
 `runner.Kernel` → `MultiRunner` → scheduled timing Core 是实际推进链；`emu/device` 仅复用 LaunchState/GridWalker 值语义。CTA metadata/LMEM 由独立 ResidencyMemory 持有，架构效果留在 WarpState，流水线与注册控制留在 model，异步字节服务与效果收据分别跟踪。普通回收只检查相关 CTA 的所有成员和 Barrier 状态；Kernel 完成再汇总生成、驻留、票据和释放状态。
 
-完整 API、停止条件审计与 AC-019 至 AC-024 测试映射见 [kernel-usage.md](kernel-usage.md)。RTL 证据和周期控制见 [task11-cycle-control.md](task11-cycle-control.md)，launch/reentry 见 [task11-kernel.md](task11-kernel.md)，同步/身份见 [task11-kernel-sync.md](task11-kernel-sync.md)。以下章节保留静态 IR 的建模和维护依据，不表示当前仍仅有静态模型。
+完整 API、停止条件审计与 T12 生命周期测试映射见 [kernel-usage.md](kernel-usage.md)。RTL 证据和周期控制见 [task11-cycle-control.md](task11-cycle-control.md)，launch/reentry 见 [task11-kernel.md](task11-kernel.md)，同步/身份见 [task11-kernel-sync.md](task11-kernel-sync.md)。以下章节保留静态 IR 的建模和维护依据，不表示当前仍仅有静态模型。
 
 
 本阶段在完整阅读功能契约后，按 README → 配置 TOML → 生成头 → package 派生参数 → 实际实例/端口 → 缓冲封装的顺序核对。输入均来自仓库；未修改或重新生成冻结 RTL，未使用外部 reference。`ir.yaml` 的 `sources` 给出可定位路径及模块/信号/参数，证据引用采用 `source-id::symbol`。这里的节点是静态传输/资源边界，不预定未来 Go 对象。
@@ -77,7 +86,7 @@ scheduler 内的 CTA dispatch、split/join/IPDOM、barrier 以独立控制节点
 | 调度控制 | 持有 hazard/credit/warp eligibility 与 pending 记账；消费具名反馈 | `emu/core/core.go` 的 round-robin 和原子 Warp.Step 需重新组织，不直接复用为周期 scheduler |
 | 语义衔接 | 按真实 operand/read context 调用现有 decode/evaluator；以稳定指令/微操作身份保存 detached effects | `isa.Decode`、四类 Evaluate 和 CompleteMemory/CompletePackedLoad 可复用；不复制 ALU/FP/SIMT 方程 |
 | 可见性与 owner | 单一架构状态 owner 接受计划好的寄存器/CSR/PC/控制效果；区分 operand snapshot、执行结果和已可见 state | `emu/state/view.go`/`integration.go` 可借鉴最小 view；`apply.go` 的全 before-image stale gate 与整指令原子 replacement 不能直接用于重叠流水，需要适配 |
-| Memory/CTA/Barrier | byte owner 与请求时序分开；tag/response 队列不拥有第二份 bytes | `emu/warp/warp.go` 同步 Read/Write/WriteBatch 需异步适配；保留 caller backing identity、CTA scope 与 barrier key 原则。`emu/device/kernel.go` 的原子 admission/run 不定义硬件调度周期 |
+| Memory/CTA/Barrier | byte owner 与请求时序分开；tag/response 队列不建立第二个功能 backing owner；T12 cache 可持有合法 valid/dirty 数据副本，见 memory-contract.md | `emu/warp/warp.go` 同步 Read/Write/WriteBatch 需异步适配；保留 caller backing identity、CTA scope 与 barrier key 原则。`emu/device/kernel.go` 的原子 admission/run 不定义硬件调度周期 |
 
 `u-visibility` 是后续实现前的关键接口决策：不能提前执行 store，也不能在 WB 再次执行已经应用的副作用；不能延迟整个旧 WarpState replacement 覆盖其他已完成指令。功能严格 illegal decoder 与 RTL 宽松 default 的差异继续沿用功能契约，不在时序层补定 fault mapping。对 packed load、跨 owner control、FFLAGS 等必须分别定义功能 effect 身份与可见事件，再选择最小适配方案。
 
@@ -124,3 +133,5 @@ T9 第三轮的 `Frontend` 已实现上述前端的瞬态连接；`ALU`、`SFU` 
 验收背景；当前能力、边沿、软件限制与 AC-017 至 AC-023 映射以
 [最终控制实施记录](control-observability-progress.md) 为准。单活动策略仅属于
 保留的旧 Runner 诊断 API；Task10 普通指令不等待整 Core Idle。
+
+T12 里程碑 01 的结构化存储契约见 [memory-contract.md](memory-contract.md) 和 `ir.yaml:memory_contracts`。它扩充静态证据与接口，不宣称后续 cache/LMEM 运行时已接入。

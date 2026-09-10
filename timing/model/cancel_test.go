@@ -64,3 +64,38 @@ func TestCancelRejectsForeignSchedulerEpoch(t *testing.T) {
 		t.Fatal("foreign cancellation mutated scheduler")
 	}
 }
+
+// A retained old decode can arrive after cancellation during a cold I-cache
+// miss. Its RTL unlock must not undo the independent software recovery gate.
+func TestCancelParkSurvivesRetainedDecodeUnlock(t *testing.T) {
+	c, err := NewScheduledCore("std", [4]WarpContext{{Active: true, Epoch: 1, PC: 0x100, Mask: 15}, {Active: true, Epoch: 1, PC: 0x200, Mask: 15}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := c.front.scheduler
+	s.state.DecodeUnlock = Signal{Valid: true, Token: Token{ID: 1, Epoch: 1, Warp: 0, Mask: 15}}
+	p, err := c.Cancel(Cancellation{Warp: 0, Epoch: 1, After: 1, Through: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit(t, p)
+	p, err = s.Evaluate(false, Signal{}, [4]bool{}, Signal{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit(t, p)
+	if s.state.Warps[0].Stalled || !s.state.Parked[0] {
+		t.Fatal("decode unlock or recovery gate lost")
+	}
+	if out := s.Output(); !out.Valid || out.Token.Warp != 1 {
+		t.Fatal("cancelled warp fetched after old unlock", out)
+	}
+	p, err = c.Restart(0, WarpContext{Active: true, Epoch: 1, PC: 0x104, Mask: 15}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit(t, p)
+	if out := s.Output(); !out.Valid || out.Token.Warp != 0 || out.Token.ID <= 2 {
+		t.Fatal("explicit restart did not release gate", out)
+	}
+}

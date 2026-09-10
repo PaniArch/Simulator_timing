@@ -124,7 +124,7 @@ func (a *Adapter) observePacked(cycle uint64, r model.CoreReport, context state.
 	i.pending = all
 	return a.finishPackedControl()
 }
-func (a *Adapter) servicePacked(cycle uint64, token model.Token, mask uint8) (model.Response, error) {
+func (a *Adapter) servicePacked(cycle uint64, token model.Token, mask uint8, returned *MemoryResult) (model.Response, error) {
 	i := a.current
 	p := i.packed
 	u := p.uops[token.Uop]
@@ -142,7 +142,18 @@ func (a *Adapter) servicePacked(cycle uint64, token model.Token, mask uint8) (mo
 		}
 		bytes := make([]byte, request.Width)
 		r := isa.PackedLoadResponse{Request: request}
-		if readErr := a.memory.Read(request.Address, bytes); readErr != nil {
+		var readErr error
+		if returned != nil {
+			offset := request.Address - request.AlignedAddress
+			if offset+uint32(request.Width) > 4 {
+				return model.Response{}, fmt.Errorf("returned packed word does not cover request")
+			}
+			copy(bytes, returned.Data[request.Lane][offset:offset+uint32(request.Width)])
+			readErr = returned.Errors[request.Lane]
+		} else {
+			readErr = a.memory.Read(request.Address, bytes)
+		}
+		if readErr != nil {
 			serviceErr = errors.Join(serviceErr, readErr)
 			r.Fault, r.Reason = isa.FaultLoadAccess, isa.FaultReasonMemoryService
 		}

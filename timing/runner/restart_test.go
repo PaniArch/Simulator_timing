@@ -37,8 +37,23 @@ func TestMultiRunnerRecoveryAndFlush(t *testing.T) {
 			if flush {
 				budget = 5
 			}
-			if err = r.Run(budget, nil); err != nil {
-				t.Fatal(err)
+			if flush {
+				if err = r.Run(budget, nil); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				accepted := false
+				for i := 0; i < 2000 && !accepted; i++ {
+					if err = r.Run(1, func(rec runner.MultiRecord) {
+						accepted = rec.Report.MemoryAccepted && rec.Report.MemoryRequest.Token.Warp == 0
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if !accepted {
+					t.Fatal("old load not accepted")
+				}
+				budget = r.Cycle()
 			}
 			before := [4]state.WarpSnapshot{}
 			for w, o := range owners {
@@ -65,7 +80,7 @@ func TestMultiRunnerRecoveryAndFlush(t *testing.T) {
 				}
 			}
 			sawCancel, sawRestart, oldWB := false, false, false
-			if err = r.Run(800, func(rec runner.MultiRecord) {
+			if err = r.Run(10000, func(rec runner.MultiRecord) {
 				for _, e := range rec.Events {
 					if e.Kind == "cancel" {
 						sawCancel = true
@@ -110,6 +125,9 @@ func TestMultiRunnerRecoveryAndFlush(t *testing.T) {
 				if got != want {
 					t.Fatalf("warp%d final state differs", w)
 				}
+			}
+			if done, err := r.MakeVisible(10000); err != nil || !done {
+				t.Fatal("visibility", done, err)
 			}
 			got, _ := ram.ReadBytes(0, 4096)
 			want, _ := referenceRAM.ReadBytes(0, 4096)

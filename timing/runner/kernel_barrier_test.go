@@ -52,14 +52,15 @@ func kernelExchange(t *testing.T, delay, period uint64, startup, entry uint32) {
 	}
 	launch := device.LaunchState{StartupPC: startup, KernelEntryPC: entry, ParameterAddress: 0x7f0, GridDimensions: [3]uint32{4, 1, 1}, BlockDimensions: [3]uint32{8, 1, 1}, BlockSize: 8, WarpStep: [3]uint32{4, 0, 0}, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
 	put(0x7f0, 10)
-	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: delay, Ready: func(c uint64) bool { return c%period == 0 }})
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(delay), Ready: func(c uint64) bool { return c%period == 0 }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wakeCount := 0
 	overlap := false
+	memoryOverlap := false
 	tail := false
-	lastDue := map[uint32]uint64{}
+	lastService := map[uint32]uint64{}
 	counts := map[string]map[uint32]int{}
 	collect := func(events []runner.KernelEvent, record runner.MultiRecord) {
 		for _, event := range events {
@@ -67,12 +68,13 @@ func kernelExchange(t *testing.T, delay, period uint64, startup, entry uint32) {
 				counts[event.Kind] = map[uint32]int{}
 			}
 			counts[event.Kind][event.CTA]++
-			if event.Kind == "reclaimed" && event.Cycle < lastDue[event.CTA] {
-				t.Fatal("CTA reclaimed before byte service", event, lastDue[event.CTA])
+			if event.Kind == "reclaimed" && event.Cycle <= lastService[event.CTA] {
+				t.Fatal("CTA reclaimed before byte service", event, lastService[event.CTA])
 			}
 			if event.Kind == "admitted" && event.CTA >= 2 {
 				for _, other := range k.Status().Resident {
 					if other.Launch.ID < event.CTA {
+						memoryOverlap = memoryOverlap || other.MemoryPending
 						for _, member := range other.Resident.Members {
 							overlap = overlap || record.Warps[member.WarpID].HardwarePending != 0
 							for _, service := range record.Services {
@@ -88,8 +90,8 @@ func kernelExchange(t *testing.T, delay, period uint64, startup, entry uint32) {
 		for _, cta := range k.Status().Resident {
 			for _, member := range cta.Resident.Members {
 				for _, service := range r.Services {
-					if service.Resource == "memory-service" && service.Token.Warp == member.WarpID {
-						lastDue[cta.Launch.ID] = max(lastDue[cta.Launch.ID], service.Due)
+					if service.Resource == "memory-system" && service.Token.Warp == member.WarpID {
+						lastService[cta.Launch.ID] = max(lastService[cta.Launch.ID], r.Cycle)
 						tail = tail || !r.Warps[member.WarpID].Active
 					}
 				}
@@ -111,6 +113,9 @@ func kernelExchange(t *testing.T, delay, period uint64, startup, entry uint32) {
 		t.Fatal(k.Status(), wakeCount)
 	}
 	collect(k.TakeEvents(), runner.MultiRecord{})
+	if delay >= 120 && !memoryOverlap {
+		t.Fatal("CTA reuse never overlapped another CTA memory tail")
+	}
 	if delay >= 120 && !tail {
 		t.Fatal("long-delay case missed store tail")
 	}
@@ -130,6 +135,7 @@ func kernelExchange(t *testing.T, delay, period uint64, startup, entry uint32) {
 				for round := uint32(0); round < 2; round++ {
 					address := uint32(0x800) + c*64 + rank*16 + lane*4 + round*256
 					var b [4]byte
+					kernelVisible(t, k)
 					if err := ram.Read(address, b[:]); err != nil {
 						t.Fatal(err)
 					}

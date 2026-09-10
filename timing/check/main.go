@@ -11,7 +11,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-var collections = []string{"config", "nodes", "resources", "boundaries", "ports", "channels", "rules", "unknowns", "audit", "timing_measurements", "cycle_contracts"}
+var collections = []string{"config", "nodes", "resources", "boundaries", "ports", "channels", "rules", "unknowns", "audit", "timing_measurements", "cycle_contracts", "memory_contracts"}
 var references = map[string]string{"node": "nodes", "nodes": "nodes", "from": "ports", "to": "ports", "resource_refs": "resources", "boundary_refs": "boundaries", "rule_refs": "rules", "unknown_ref": "unknowns", "affected": "nodes", "config_ref": "config", "encoding_ref": "buffer_encoding"}
 
 func fields(n *yaml.Node) map[string]*yaml.Node {
@@ -234,6 +234,9 @@ func validate(data []byte, root string) error {
 		if err := required(fields(m["measurement"]), "unit", "start", "end"); err != nil {
 			return err
 		}
+	}
+	if err := validateMemoryContracts(top); err != nil {
+		return err
 	}
 	return validateCycleContracts(top, root)
 }

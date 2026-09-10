@@ -8,7 +8,7 @@ import (
 	"vortex.local/simulator/emu/state"
 	"vortex.local/simulator/isa"
 	"vortex.local/simulator/support/memory"
-	"vortex.local/simulator/timing/model"
+
 	"vortex.local/simulator/timing/runner"
 )
 
@@ -28,8 +28,8 @@ func TestMultiCTAMemoryRoutesThroughTiming(t *testing.T) {
 	}
 	manager := core.NewCTAManager()
 	var owners [4]*state.WarpState
-	options := runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 7,
-		Ready: func(c uint64) bool { return c%5 == 0 }}, MemoryDelay: func(token model.Token) uint64 { return 11 + uint64(token.Warp)*9 }}
+	options := runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1,
+		MemoryConfig: kernelMemoryConfig(30), Ready: func(c uint64) bool { return c%5 == 0 }}}
 	for w := uint8(0); w < 4; w++ {
 		_, err := manager.Admit(core.CTAConfig{ID: uint32(w), WarpIDs: []uint8{w}, StartupPC: 0x100,
 			BlockID: [3]uint32{uint32(w), 0, 0}, BlockDimensions: [3]uint32{4, 1, 1}, GridDimensions: [3]uint32{4, 1, 1},
@@ -63,6 +63,9 @@ func TestMultiCTAMemoryRoutesThroughTiming(t *testing.T) {
 	}
 	if !r.Completed() {
 		t.Fatal("timing execution did not complete")
+	}
+	if done, err := r.MakeVisible(10000); err != nil || !done {
+		t.Fatal("global visibility", done, err)
 	}
 	for w := uint8(0); w < 4; w++ {
 		for lane := uint8(0); lane < 4; lane++ {

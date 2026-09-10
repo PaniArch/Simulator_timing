@@ -59,15 +59,16 @@ Task10 `runner.NewMulti` 与 `effects.NewConcurrent` 已接入四个显式 owner
 
 ```bash
 source env/env.sh
-go run ./cmd/timing-multi -cycles 1000 -fetch-cycles 2 -memory-cycles 60
-go run ./cmd/timing-multi -trace -cycles 1000 -fetch-cycles 2 -memory-cycles 60
+go run ./cmd/timing-multi -cycles 2000 -backend-cycles 60
+go run ./cmd/timing-multi -trace -cycles 2000 -backend-cycles 60
 bash scripts/verify-timing.sh
 bash scripts/verify-all.sh
 ```
 
 示例显式构造四个 Warp owner，混合整数乘法、AUIPC、FADD/FMUL、普通 load/store、
 packed byte load 和 TMC。trace 为逐边沿 JSON，摘要输出到 stderr；预算不足返回
-非零。库 Run 可按预算续跑。原 timing-run 保留单活动诊断入口。
+非零。库 Run 可按预算续跑。timing-run 使用同一个 scheduled Core/System，仅初始激活一个 Warp；
+其 backend-cycles 参数配置外部后端，执行完成与显式 MakeVisible 分离。
 
 `MultiRecord.Warps` 记录旧边沿前端 active/stalled/runnable、PC/mask、pending
 宏指令数与 LSU receipt 数；inactive 也可能仍有待完成效果。`IssueCandidates`
@@ -85,3 +86,11 @@ restart。资源别名不能累加为指令数，外部服务延迟不代表 Cac
 Barrier owner 可调用 `Release(token)` 排队注册唤醒；WSPAWN 通过
 `MultiOptions.Spawn` 显式绑定目标 owner。未绑定或未释放保持阻塞，不扩展 CTA
 或 Kernel orchestration。具体边沿和保留限制见最终验收映射。
+
+T12 存储层级的参数推导、请求/响应、可见性与未决缺口见 [memory-contract.md](memory-contract.md)，结构化记录位于 `ir.yaml:memory_contracts`。
+
+
+T12 当前运行与生命周期见 [交付记录](t12-delivery.md) 和 [Kernel 使用说明](kernel-usage.md)。
+两个程序 CLI 使用 `-backend-cycles`；`-visibility-cycles 4000` 在执行完成后显式写回，
+零预算默认不请求输出可见性。输出分别报告 execution_cycles、cycles、backing_visible。
+执行预算或显式可见性预算不足均非零退出；库 API 则可保存状态继续调用。

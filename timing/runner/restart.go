@@ -10,6 +10,9 @@ import (
 // Restart resumes a previously cancelled Warp with explicit frontend context.
 // It changes no canonical state and preserves older work and other Warps.
 func (r *MultiRunner) Restart(warp uint8, context model.WarpContext) error {
+	if r.cacheFlush != nil {
+		return fmt.Errorf("finish FlushCaches before changing residency")
+	}
 	if r.failed || warp >= 4 || !r.parked[warp] {
 		return fmt.Errorf("restart requires cancelled healthy warp")
 	}
@@ -31,10 +34,28 @@ func (r *MultiRunner) Restart(warp uint8, context model.WarpContext) error {
 	return nil
 }
 
-// Flush abandons all un-delivered work, advances the residency epoch, and
+// Flush abandons undelivered architectural work, advances the residency epoch, and
 // restarts from each live canonical owner. Visible effects are not rolled back.
+// Exposed memory transfers and cache data survive. Failed edges are reconciled
+// with System before execution resumes; protocol faults cannot be recovered.
 // This explicit software reset does not promise replay of abandoned instructions.
 func (r *MultiRunner) Flush() error {
+	if r.cacheFlush != nil {
+		return fmt.Errorf("finish FlushCaches before epoch reset")
+	}
+	advanceClock := r.failed
+	if r.hierarchy != nil {
+		next, err := r.hierarchy.system.NextCycle()
+		if err != nil {
+			return fmt.Errorf("memory protocol cannot recover: %w", err)
+		}
+		cycle := r.clock.Cycle()
+		if next != cycle && (cycle == math.MaxUint64 || next != cycle+1) {
+			return fmt.Errorf("memory/core clock alignment lost")
+		}
+		advanceClock = next != cycle
+	}
+
 	if r.epoch == math.MaxUint64 {
 		return fmt.Errorf("epoch overflow")
 	}
@@ -50,11 +71,7 @@ func (r *MultiRunner) Flush() error {
 	if err != nil {
 		return err
 	}
-	if r.failed {
-		if err = r.clock.Run(1, func(uint64) (bool, error) { return true, nil }); err != nil {
-			return err
-		}
-	}
+
 	events := r.cancellationEvents(func(model.Token) bool { return true }, "epoch-flush")
 	pending := r.effects.Pending()
 	if err = r.effects.Reset(r.epoch + 1); err != nil {
@@ -64,6 +81,22 @@ func (r *MultiRunner) Flush() error {
 		r.cancelled = append(r.cancelled, entry.Token)
 	}
 	r.recoveryEvents = append(r.recoveryEvents, events...)
+	if r.hierarchy != nil {
+		for w := uint8(0); w < 4; w++ {
+			r.hierarchy.cancel(model.Cancellation{Warp: w, Epoch: r.epoch, Through: math.MaxUint64})
+		}
+	}
+	// A failed callback leaves Clock at the attempted edge. Skip that number
+	// only if memory already committed it; never Step memory twice or skip an
+	// edge when failure occurred while consuming an old response.
+	if advanceClock {
+		if err = r.clock.Run(1, func(uint64) (bool, error) { return true, nil }); err != nil {
+			return err
+		}
+	}
+	r.visibilitySent = false // old explicit flush continues in System; its reply is discarded
+	r.memoryVisible = false
+	r.visibilityID = 0
 	r.core = core
 	r.epoch++
 	r.fetch = nil

@@ -60,11 +60,13 @@ func memoryInitial(t *testing.T, word uint32) (state.WarpInitial, *byteOwner) {
 }
 func TestMemoryServiceAndPartialWBVisibility(t *testing.T) {
 	for _, test := range []struct {
-		word uint32
-		fail bool
+		word             uint32
+		fail             bool
+		returnedOrdering bool
 	}{
-		{0x0000a183, false}, {0x00008183, false}, {0x0020a023, false}, {0x0000000f, false},
-		{0x0000a183, true}, {0x0020a023, true},
+		{0x0000a183, false, false}, {0x00008183, false, false}, {0x0020a023, false, false}, {0x0000000f, false, false},
+		{0x0000000f, false, true}, {0x0000000f, true, true},
+		{0x0000a183, true, false}, {0x0020a023, true, false},
 	} {
 		word := test.word
 		isFence := word == 0x0000000f
@@ -123,10 +125,19 @@ func TestMemoryServiceAndPartialWBVisibility(t *testing.T) {
 					mask = 15
 				}
 				ram.failRead = test.fail
-				response, e = adapter.Service(cycle, request, mask)
+				if test.returnedOrdering {
+					ram.failRead = true
+					var orderingError error
+					if test.fail {
+						orderingError = errService
+					}
+					response, e = adapter.AcceptOrderingResult(cycle, request, orderingError)
+				} else {
+					response, e = adapter.Service(cycle, request, mask)
+				}
 				if test.fail {
 					var fault *warp.Fault
-					if !errors.As(e, &fault) || fault.Kind != warp.FaultArchitectural || !errors.Is(e, errService) || len(fault.Architectural) == 0 {
+					if !errors.Is(e, errService) || (!isFence && (!errors.As(e, &fault) || fault.Kind != warp.FaultArchitectural || len(fault.Architectural) == 0)) {
 						t.Fatal("untyped service fault", e)
 					}
 					if !reflect.DeepEqual(beforeService, snap(t, owner)) || response.Valid || ram.batches != 0 || ram.writes != 0 {
@@ -220,7 +231,11 @@ func TestMemoryServiceAndPartialWBVisibility(t *testing.T) {
 			}
 			continue
 		}
-		if isFence && orderingCalls != 1 {
+		expectedOrdering := 1
+		if test.returnedOrdering {
+			expectedOrdering = 0
+		}
+		if isFence && orderingCalls != expectedOrdering {
 			t.Fatal("ordering receipt", orderingCalls)
 		}
 		if !done || !reflect.DeepEqual(snap(t, owner), snap(t, reference)) {

@@ -149,12 +149,7 @@ func TestMultiRunnerWSYNCDrainsOwnWarp(t *testing.T) {
 			callbacks[d.WarpID]++
 		}
 		return nil
-	}}, MemoryDelay: func(tok model.Token) uint64 {
-		if tok.Warp == 0 {
-			return 100
-		}
-		return 10
-	}}
+	}}}
 	r, err := runner.NewMulti(owners, ram, options)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +176,7 @@ func TestMultiRunnerWSYNCDrainsOwnWarp(t *testing.T) {
 		t.Fatal("WSYNC did not finish exactly once", callbacks)
 	}
 	for w := range owners {
-		if release[w] == 0 || execute[w] < release[w]+1 || execute[w] != release[0]+1+uint64(w) {
+		if release[w] == 0 || execute[w] != release[w]+1 {
 			t.Fatal("drain boundary", w, release, execute)
 		}
 		s, _ := owners[w].Snapshot()
@@ -192,7 +187,9 @@ func TestMultiRunnerWSYNCDrainsOwnWarp(t *testing.T) {
 		if v != (isa.LaneValues{7, 7, 7, 7}) {
 			t.Fatal(v)
 		}
-		if w != 0 && release[w] >= release[0] {
+		// The real bank/backend order leaves Warp 3 pending last. Earlier
+		// Warps must execute WSYNC while that unrelated load still waits.
+		if w != 3 && (release[w] >= release[3] || execute[w] >= release[3]) {
 			t.Fatal("other Warp LSU failed to progress", release)
 		}
 		if finish[w] <= execute[w] {

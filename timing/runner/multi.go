@@ -1,18 +1,19 @@
 package runner
 
 import (
-	"encoding/binary"
 	"fmt"
 	akita "github.com/sarchlab/akita/v5/timing"
-	"math"
 	"vortex.local/simulator/emu/state"
 	"vortex.local/simulator/emu/warp"
 	"vortex.local/simulator/isa"
 	"vortex.local/simulator/timing/effects"
+	"vortex.local/simulator/timing/memsys"
 	"vortex.local/simulator/timing/model"
 )
 
 type MultiOptions struct {
+	MemorySystem *MemorySystemOptions // nil selects IR defaults with lifetime-stable per-Warp routes
+
 	// DataMemory supplies optional Warp-specific data routes. Nil entries use
 	// the global memory argument. Fetch always uses that global argument.
 	// Routes must retain their CTA binding while requests/effects remain live.
@@ -20,8 +21,7 @@ type MultiOptions struct {
 	Spawn      func(model.Token) (effects.SpawnBinding, error) // explicit pre-issue owner binding
 	Options
 	Contexts func() [4]state.ReadContext
-	// MemoryDelay selects an explicit external service delay, never cache timing.
-	// Nil uses MemoryCycles. A response remains stable until accepted.
+	// MemoryDelay is a deprecated compatibility field; real memory ignores it.
 	MemoryDelay func(model.Token) uint64
 }
 type MultiRecord struct {
@@ -42,6 +42,11 @@ type MultiRecord struct {
 // and data services are queues keyed by token identity, not a single current
 // instruction. Only final completion uses Core.Idle; ordinary admission never does.
 type MultiRunner struct {
+	controlSequence, visibilityID uint64
+	cacheFlush                    *cacheFlush
+	hierarchy                     *runnerMemory
+	visibilitySent, memoryVisible bool
+
 	blocked                 map[uint8]model.Token
 	releases                []model.Token
 	epoch                   uint64
@@ -62,8 +67,36 @@ type MultiRunner struct {
 }
 
 func NewMulti(owners [4]*state.WarpState, memory warp.MemoryService, options MultiOptions) (*MultiRunner, error) {
-	if memory == nil || options.FetchCycles == 0 || options.MemoryCycles == 0 {
-		return nil, fmt.Errorf("owners and explicit positive service delays required")
+	if memory == nil {
+		return nil, fmt.Errorf("memory owner required")
+	}
+	if options.MemorySystem == nil {
+		config, err := memsys.DefaultConfig()
+		if err != nil {
+			return nil, err
+		}
+		if options.MemoryConfig != nil {
+			config = *options.MemoryConfig
+		}
+		// Static standalone bindings retain the supplied routes for this runner's
+		// lifetime. Dynamic CTA allocation must use explicit MemorySystem callbacks.
+		routes := options.DataMemory
+		options.MemorySystem = &MemorySystemOptions{
+			Config: config,
+			Bind: func(t model.Token) memsys.Identity {
+				return memsys.Identity{Kernel: 1, CTA: uint64(t.Warp), WarpGeneration: 1}
+			},
+			LocalOwner: func(id memsys.Identity) (warp.AtomicMemoryService, error) {
+				if id.Kernel != 1 || id.Warp >= 4 || id.CTA != uint64(id.Warp) || id.WarpGeneration != 1 {
+					return nil, fmt.Errorf("invalid static local binding")
+				}
+				owner, ok := routes[id.Warp].(warp.AtomicMemoryService)
+				if !ok {
+					return nil, fmt.Errorf("local access requires an explicit lifetime-stable atomic data route")
+				}
+				return owner, nil
+			},
+		}
 	}
 	var warps [4]model.WarpContext
 	for w, owner := range owners {
@@ -98,13 +131,23 @@ func NewMulti(owners [4]*state.WarpState, memory warp.MemoryService, options Mul
 	if err != nil {
 		return nil, err
 	}
-	return &MultiRunner{blocked: map[uint8]model.Token{}, epoch: 1, owners: owners, memory: memory, core: core, clock: clock, effects: adapter, options: options}, nil
+	r := &MultiRunner{blocked: map[uint8]model.Token{}, epoch: 1, owners: owners, memory: memory, core: core, clock: clock, effects: adapter, options: options}
+	if options.MemorySystem != nil {
+		r.hierarchy, err = newRunnerMemory(memory, options.MemorySystem)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return r, nil
 }
 func (r *MultiRunner) Cycle() uint64      { return r.clock.Cycle() }
 func (r *MultiRunner) Completed() bool    { return r.stopped && !r.failed }
 func (r *MultiRunner) Retired() [4]uint64 { return r.retired }
 func (r *MultiRunner) InFlight() int      { return r.effects.InFlight() }
 func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
+	if r.cacheFlush != nil {
+		return fmt.Errorf("finish FlushCaches before Run")
+	}
 	if r.failed {
 		return fmt.Errorf("multi-warp runner stopped after failed edge")
 	}
@@ -123,42 +166,17 @@ func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
 	}
 	return err
 }
-func dueRequest(queue []request, cycle uint64) int {
-	found := -1
-	for n, p := range queue {
-		if p.due <= cycle && (found < 0 || p.due < queue[found].due) {
-			found = n
-		}
-	}
-	return found
-}
 func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
+	r.memoryVisible = false
 	if err := r.cleanupRedirects(cycle); err != nil {
 		return MultiRecord{Cycle: cycle}, err
 	}
 	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Events: append([]StageEvent(nil), r.recoveryEvents...), Cycle: cycle, Cancelled: append([]model.Token(nil), r.cancelled...)}
 	r.cancelled = nil
 	r.recoveryEvents = nil
-	if !r.fetchResponse.Valid {
-		if n := dueRequest(r.fetch, cycle); n >= 0 {
-			token := r.fetch[n].token
-			var data [4]byte
-			if err := r.memory.Read(token.PC, data[:]); err != nil {
-				return record, &warp.Fault{Kind: warp.FaultInstructionAccess, PC: token.PC, Cause: err}
-			}
-			r.fetchResponse = model.Response{Valid: true, ID: token.ID, Epoch: token.Epoch, Warp: token.Warp, Mask: token.Mask, Word: binary.LittleEndian.Uint32(data[:])}
-			r.fetch = append(r.fetch[:n], r.fetch[n+1:]...)
-		}
-	}
-	if !r.response.Valid {
-		if n := dueRequest(r.loads, cycle); n >= 0 {
-			token := r.loads[n].token
-			response, err := r.effects.Service(cycle, token, token.Mask)
-			if err != nil {
-				return record, err
-			}
-			r.response = response
-			r.loads = append(r.loads[:n], r.loads[n+1:]...)
+	if r.hierarchy != nil {
+		if err := r.hierarchy.receive(r, cycle); err != nil {
+			return record, err
 		}
 	}
 	var contexts [4]state.ReadContext
@@ -197,7 +215,23 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		return record, err
 	}
 	feedback = append(feedback, r.externalFeedback()...)
-	p, err := r.core.Evaluate(model.CoreInputs{Feedback: feedback, FetchResponse: r.fetchResponse, MemoryResponse: r.response, FetchReady: ready, MemoryReady: ready, ControlAllowed: r.effects.ControlAllowed(control, context)})
+	inputs := model.CoreInputs{Feedback: feedback, FetchResponse: r.fetchResponse, MemoryResponse: r.response, FetchReady: ready, MemoryReady: ready, ControlAllowed: r.effects.ControlAllowed(control, context)}
+	if r.hierarchy != nil {
+		inputs.FetchReady = false
+		inputs.MemoryReady = false
+	}
+	p, err := r.core.Evaluate(inputs)
+	if err == nil && r.hierarchy != nil {
+		var edgeErr error
+		edge, e := r.hierarchy.step(r, cycle, p.Report)
+		edgeErr = e
+		if edgeErr != nil {
+			return record, edgeErr
+		}
+		inputs.FetchReady = edge.FetchAccepted
+		inputs.MemoryReady = edge.MemoryAccepted
+		p, err = r.core.Evaluate(inputs)
+	}
 	if err != nil {
 		return record, err
 	}
@@ -246,23 +280,6 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 	if r.response.Valid && p.Report.MemoryResponseReady {
 		r.response = model.Response{}
 	}
-	if p.Report.FetchAccepted {
-		if r.options.FetchCycles > math.MaxUint64-cycle {
-			return record, fmt.Errorf("fetch due overflow")
-		}
-		r.fetch = append(r.fetch, request{p.Report.FetchRequest.Token, cycle + r.options.FetchCycles})
-	}
-	if p.Report.MemoryAccepted {
-		token := p.Report.MemoryRequest.Token
-		delay := r.options.MemoryCycles
-		if r.options.MemoryDelay != nil {
-			delay = r.options.MemoryDelay(token)
-		}
-		if delay == 0 || delay > math.MaxUint64-cycle {
-			return record, fmt.Errorf("invalid memory service delay")
-		}
-		r.loads = append(r.loads, request{token, cycle + delay})
-	}
 	record.Finished, err = r.effects.Reap()
 	if err != nil {
 		return record, err
@@ -283,6 +300,9 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 	for _, entry := range r.loads {
 		record.Services = append(record.Services, ServiceState{"memory-service", entry.token, entry.due})
 	}
+	if r.hierarchy != nil {
+		record.Services = append(record.Services, r.hierarchy.services()...)
+	}
 	allStopped := true
 	for _, owner := range r.owners {
 		s, err := owner.Snapshot()
@@ -291,6 +311,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		}
 		allStopped = allStopped && (s.ActiveMask() == 0 || s.Lifecycle() != state.WarpRunning)
 	}
-	r.stopped = allStopped && r.effects.InFlight() == 0 && r.core.Idle(len(r.fetch) == 0 && len(r.loads) == 0 && !r.fetchResponse.Valid && !r.response.Valid)
+	memoryDrained := r.hierarchy == nil || (r.hierarchy.system.Drained() && len(r.hierarchy.stores) == 0)
+	r.stopped = memoryDrained && allStopped && r.effects.InFlight() == 0 && r.core.Idle(len(r.fetch) == 0 && len(r.loads) == 0 && !r.fetchResponse.Valid && !r.response.Valid)
 	return record, nil
 }

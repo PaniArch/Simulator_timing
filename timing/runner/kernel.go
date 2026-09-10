@@ -5,14 +5,20 @@ import (
 	"vortex.local/simulator/emu/core"
 	"vortex.local/simulator/emu/device"
 	"vortex.local/simulator/emu/state"
+	"vortex.local/simulator/emu/warp"
 	"vortex.local/simulator/isa"
 	"vortex.local/simulator/timing/effects"
+	"vortex.local/simulator/timing/memsys"
 	"vortex.local/simulator/timing/model"
 )
 
 // Kernel owns a resumable launch, CTA residency and the actual timing runner.
 // Program, parameter and output bytes remain in the caller's backing memory.
 type Kernel struct {
+	visibilityID            uint64
+	generations             [4]uint64
+	visibilitySent, visible bool
+
 	events           []KernelEvent
 	barrierEvents    map[BarrierEvent]bool
 	nextBarrierEvent uint64
@@ -29,10 +35,17 @@ type Kernel struct {
 	failed           error
 }
 type KernelCTA struct {
-	Launch   device.CTA
-	Resident core.CTASnapshot
+	// Detached lifecycle observations; StoppedWarps describes canonical TMC state,
+	// while MultiRecord.Warps.Active reports the registered fetch scheduler state.
+	Generation                 uint64
+	StoppedWarps               isa.WarpMask
+	MemoryPending, Reclaimable bool
+	Launch                     device.CTA
+	Resident                   core.CTASnapshot
 }
 type KernelStatus struct {
+	MemoryDrained, BackingVisible bool
+
 	Cycle                uint64
 	Generated, Completed uint32
 	Resident             []KernelCTA
@@ -59,6 +72,35 @@ func NewKernel(input device.LaunchState, memory device.BackingMemory, options Op
 	var owners [4]*state.WarpState
 	opts := MultiOptions{Options: options}
 	opts.External = k.control
+	config, err := memsys.DefaultConfig()
+	if err != nil {
+		return nil, err
+	}
+	if options.MemoryConfig != nil {
+		config = *options.MemoryConfig
+	}
+	opts.MemorySystem = &MemorySystemOptions{Config: config}
+	opts.MemorySystem.Bind = func(t model.Token) memsys.Identity {
+		view, e := k.memory.ViewForWarp(t.Warp)
+		if e != nil {
+			return memsys.Identity{}
+		}
+		return memsys.Identity{Kernel: 1, CTA: uint64(view.ID), WarpGeneration: k.generations[view.ID]}
+	}
+	opts.MemorySystem.LocalOwner = func(id memsys.Identity) (warp.AtomicMemoryService, error) {
+		if id.Kernel != 1 || id.CTA >= 4 || id.Warp >= 4 || k.resident[id.CTA] == nil || id.WarpGeneration != k.generations[id.CTA] {
+			return nil, fmt.Errorf("stale kernel local residency")
+		}
+		view, e := k.memory.ViewForWarp(uint8(id.Warp))
+		if e != nil || uint64(view.ID) != id.CTA {
+			return nil, fmt.Errorf("local warp/CTA binding mismatch")
+		}
+		owner, ok := opts.DataMemory[id.Warp].(warp.AtomicMemoryService)
+		if !ok {
+			return nil, fmt.Errorf("local route requires atomic owner")
+		}
+		return owner, nil
+	}
 	for w := uint8(0); w < 4; w++ {
 		initial := state.WarpInitial{Topology: state.FrozenTopology(), WarpID: w, Lifecycle: state.WarpInactive}
 		for lane := uint8(0); lane < 4; lane++ {
@@ -110,10 +152,10 @@ func NewKernel(input device.LaunchState, memory device.BackingMemory, options Op
 	return k, nil
 }
 func (k *Kernel) Status() KernelStatus {
-	s := KernelStatus{Cycle: k.runner.Cycle(), Generated: k.launch.TotalCTAs - k.walker.Remaining(), Completed: k.completed, Waiting: k.pending != nil}
-	for _, c := range k.resident {
+	s := KernelStatus{MemoryDrained: k.runner.hierarchy.system.Drained(), BackingVisible: k.visible, Cycle: k.runner.Cycle(), Generated: k.launch.TotalCTAs - k.walker.Remaining(), Completed: k.completed, Waiting: k.pending != nil}
+	for slot, c := range k.resident {
 		if c != nil {
-			copy := *c
+			copy := k.observeCTA(slot, c)
 			copy.Resident.Members = append([]core.WarpMembership(nil), c.Resident.Members...)
 			s.Resident = append(s.Resident, copy)
 		}
@@ -125,6 +167,9 @@ func (k *Kernel) Status() KernelStatus {
 // Run advances at most budget actual pipeline edges. Budget exhaustion is
 // resumable. Allocation waits leave all already-resident Warps running.
 func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
+	if k.runner.cacheFlush != nil {
+		return fmt.Errorf("finish FlushCaches before Run")
+	}
 	if k.failed != nil {
 		return k.failed
 	}
@@ -156,10 +201,7 @@ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
 func (k *Kernel) residency() error {
 	for slot, c := range k.resident {
 		if c != nil {
-			done := !k.memory.BarrierPending(uint32(slot))
-			for _, m := range c.Resident.Members {
-				done = done && k.runner.WarpQuiescent(m.WarpID)
-			}
+			done := k.observeCTA(slot, c).Reclaimable
 			if done {
 				if err := k.memory.Release(uint32(slot)); err != nil {
 					return err
@@ -220,6 +262,10 @@ func (k *Kernel) residency() error {
 	if err != nil {
 		return err
 	}
+	if k.generations[base] == ^uint64(0) {
+		return fmt.Errorf("CTA generation overflow")
+	}
+	k.generations[base]++
 	k.resident[base] = &KernelCTA{Launch: *c, Resident: snapshot}
 	for _, m := range snapshot.Members {
 		if err := k.runner.DispatchWarp(m.WarpID, c.StartupPC, c.ParameterAddress, m.ActiveMask, !k.used[m.WarpID]); err != nil {
@@ -281,4 +327,52 @@ func (k *Kernel) releaseBarriers() error {
 	}
 	k.barrierReleases = 0
 	return nil
+}
+
+// MakeVisible explicitly writes dirty D-cache data to the original backing.
+// It is resumable and only legal after execution/CTA reclamation completes.
+// These post-execution memory edges do not execute or retire instructions.
+func (k *Kernel) MakeVisible(budget uint64) (bool, error) {
+	if k.runner.cacheFlush != nil {
+		return false, fmt.Errorf("finish FlushCaches before MakeVisible")
+	}
+	if k.failed != nil {
+		return false, k.failed
+	}
+	if !k.Status().Complete {
+		return false, fmt.Errorf("visibility requires completed kernel execution")
+	}
+	if k.visible {
+		return true, nil
+	}
+	if k.visibilityID == 0 {
+		id, err := k.runner.nextControlTransaction()
+		if err != nil {
+			return false, err
+		}
+		k.visibilityID = id
+	}
+	err := k.runner.clock.Run(budget, func(cycle uint64) (bool, error) {
+		e, err := k.runner.hierarchy.system.Step(cycle, memsys.SystemInput{FetchReady: true, MemoryReady: true, DataFlush: memsys.FlushOffer{Valid: !k.visibilitySent, Identity: memsys.Identity{Kernel: 1, Transaction: k.visibilityID}, Tag: k.visibilityID}, DataFlushReady: true})
+		if err != nil {
+			return false, err
+		}
+		k.visibilitySent = k.visibilitySent || e.DataFlushAccepted
+		for _, r := range e.WritebackErrors {
+			if r.Err != nil {
+				return false, r.Err
+			}
+		}
+		if e.DataFlush.Delivered {
+			if e.DataFlush.Err != nil {
+				return false, e.DataFlush.Err
+			}
+			k.visible = true
+		}
+		return k.visible, nil
+	})
+	if err != nil {
+		k.failed = err
+	}
+	return k.visible, err
 }

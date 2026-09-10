@@ -15,7 +15,8 @@ type WarpContext struct {
 }
 
 type SchedulerState struct {
-	SingleActive    bool // registered old active-warp count for pending spawn
+	Parked          [4]bool // software cancellation gate, independent of RTL decode/control unlock
+	SingleActive    bool    // registered old active-warp count for pending spawn
 	Warps           [4]WarpContext
 	IBufferCount    [4]uint8 // schedule acceptance through physical IBuffer pop
 	IBufferFull     [4]bool
@@ -62,7 +63,7 @@ func NewScheduler(warps [4]WarpContext) (*Scheduler, error) {
 func (s *Scheduler) State() SchedulerState { return s.state }
 func (s *Scheduler) Output() Signal {
 	for w, c := range s.state.Warps {
-		if c.Active && !c.Stalled && (s.state.AllIBuffersFull || !s.state.IBufferFull[w]) {
+		if c.Active && !c.Stalled && !s.state.Parked[w] && (s.state.AllIBuffersFull || !s.state.IBufferFull[w]) {
 			return Signal{Valid: true, Token: Token{ID: s.nextID, Epoch: c.Epoch, Warp: uint8(w), PC: c.PC, Mask: c.Mask}}
 		}
 	}
@@ -175,6 +176,7 @@ func (s *Scheduler) Flush() Transition {
 		next.Warps[w].Stalled = false
 	}
 	next.SingleActive = false
+	next.Parked = [4]bool{}
 	next.IBufferCount = [4]uint8{}
 	next.IBufferFull = [4]bool{}
 	next.AllIBuffersFull = false

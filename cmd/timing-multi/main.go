@@ -9,6 +9,7 @@ import (
 	"os"
 	"vortex.local/simulator/emu/state"
 	"vortex.local/simulator/support/memory"
+	"vortex.local/simulator/timing/memsys"
 	"vortex.local/simulator/timing/runner"
 )
 
@@ -19,11 +20,16 @@ func main() {
 	}
 }
 func run() error {
+	config, err := memsys.DefaultConfig()
+	if err != nil {
+		return err
+	}
 	budget := flag.Uint64("cycles", 1000, "cycle budget")
-	fetch := flag.Uint64("fetch-cycles", 2, "explicit external fetch delay")
-	mem := flag.Uint64("memory-cycles", 60, "explicit external memory delay, not cache timing")
+	mem := flag.Uint64("backend-cycles", config.Latency, "external backend latency measured from request acceptance")
+	visibility := flag.Uint64("visibility-cycles", 0, "explicit post-execution writeback budget; zero skips backing visibility")
 	trace := flag.Bool("trace", false, "emit detached per-edge JSON records")
 	flag.Parse()
+	config.Latency = *mem
 	ram, err := memory.New(4096)
 	if err != nil {
 		return err
@@ -64,7 +70,7 @@ func run() error {
 			}
 		}
 	}
-	r, err := runner.NewMulti(owners, ram, runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: *fetch, MemoryCycles: *mem}})
+	r, err := runner.NewMulti(owners, ram, runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config}})
 	if err != nil {
 		return err
 	}
@@ -80,9 +86,21 @@ func run() error {
 	if traceErr != nil {
 		return traceErr
 	}
+	executionCycles := r.Cycle()
+	visible := false
+	if r.Completed() && *visibility != 0 {
+		visible, err = r.MakeVisible(*visibility)
+	}
+	fmt.Fprintf(os.Stderr, "execution_cycles=%d cycles=%d backing_visible=%t\n", executionCycles, r.Cycle(), visible)
+	if err != nil {
+		return err
+	}
 	fmt.Fprintf(os.Stderr, "cycles=%d retired=%v inflight=%d completed=%t\n", r.Cycle(), r.Retired(), r.InFlight(), r.Completed())
 	if !r.Completed() {
 		return fmt.Errorf("cycle budget exhausted; blocked/pending work is not completion")
+	}
+	if *visibility != 0 && !visible {
+		return fmt.Errorf("visibility budget exhausted; backing output is not guaranteed visible")
 	}
 	return nil
 }

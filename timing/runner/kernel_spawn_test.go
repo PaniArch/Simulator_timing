@@ -31,7 +31,7 @@ func TestKernelSpawnRetainsCTAMembership(t *testing.T) {
 		put(0x300+uint32(i)*4, w)
 	}
 	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x300, ParameterAddress: 0x800, GridDimensions: [3]uint32{1, 1, 1}, BlockDimensions: [3]uint32{4, 4, 1}, BlockSize: 16, WarpStep: [3]uint32{0, 1, 0}, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
-	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 70})
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(70)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,6 +49,7 @@ func TestKernelSpawnRetainsCTAMembership(t *testing.T) {
 		t.Fatal(k.Status(), activated)
 	}
 	var b [4]byte
+	kernelVisible(t, k)
 	if err := ram.Read(0x800, b[:]); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestKernelSpawnRetainsCTAMembership(t *testing.T) {
 	launch.BlockDimensions = [3]uint32{8, 1, 1}
 	launch.BlockSize = 8
 	launch.WarpStep = [3]uint32{4, 0, 0}
-	invalid, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 20})
+	invalid, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(20)})
 	if err != nil {
 		t.Fatal(err)
 	}

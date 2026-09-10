@@ -10,7 +10,7 @@ func (c *Core) Restart(warp uint8, context WarpContext, after uint64) (Transitio
 	if s == nil || warp >= 4 || after == ^uint64(0) {
 		return Transition{}, fmt.Errorf("invalid restart target")
 	}
-	if context.Epoch != s.state.Warps[warp].Epoch || !s.state.Warps[warp].Stalled || context.Stalled || context.PC&3 != 0 || context.Mask&^uint8(15) != 0 || context.Active && context.Mask == 0 {
+	if context.Epoch != s.state.Warps[warp].Epoch || !s.state.Parked[warp] || context.Stalled || context.PC&3 != 0 || context.Mask&^uint8(15) != 0 || context.Active && context.Mask == 0 {
 		return Transition{}, fmt.Errorf("invalid restart context")
 	}
 	if s.state.IBufferCount[warp] != 0 || s.state.DecodeUnlock.Valid && s.state.DecodeUnlock.Token.Warp == warp {
@@ -25,6 +25,7 @@ func (c *Core) Restart(warp uint8, context WarpContext, after uint64) (Transitio
 	}
 	next := s.state
 	next.Warps[warp] = context
+	next.Parked[warp] = false
 	nextID := s.nextID
 	if nextID <= after {
 		nextID = after + 1

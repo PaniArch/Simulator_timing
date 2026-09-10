@@ -10,7 +10,9 @@ import (
 	"vortex.local/simulator/timing/model"
 )
 
-func TestPackedServiceByteVisibility(t *testing.T) {
+func TestPackedServiceByteVisibility(t *testing.T)  { testPackedService(t, false) }
+func TestPackedReturnedByteVisibility(t *testing.T) { testPackedService(t, true) }
+func testPackedService(t *testing.T, returned bool) {
 	for _, entry := range isa.Catalog() {
 		if entry.Memory.Packed == 0 {
 			continue
@@ -55,7 +57,24 @@ func TestPackedServiceByteVisibility(t *testing.T) {
 					mask = 10
 				}
 				before := snap(t, owner)
-				response, err = adapter.Service(cycle, req, mask)
+				if returned {
+					result := effects.MemoryResult{Mask: mask}
+					_, requests, e := adapter.MemoryRequests(req)
+					if e != nil {
+						t.Fatal(e)
+					}
+					for _, r := range requests {
+						if mask&(1<<r.Lane) != 0 {
+							if e := ram.Memory.Read(r.AlignedAddress, result.Data[r.Lane][:]); e != nil {
+								t.Fatal(e)
+							}
+						}
+					}
+					ram.failRead = true // The adapter must never re-read this owner.
+					response, err = adapter.AcceptMemoryResult(cycle, req, result)
+				} else {
+					response, err = adapter.Service(cycle, req, mask)
+				}
 				if err != nil {
 					t.Fatal("service", cycle, err)
 				}

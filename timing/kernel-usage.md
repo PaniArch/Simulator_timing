@@ -1,4 +1,4 @@
-# 周期 Kernel 使用与 T11 验收
+# 周期 Kernel 使用与 T12 存储生命周期
 
 `runner.NewKernel` 接收已加载的全局内存和硬件可见 launch state，不创建 host runtime，也不调用功能 Core.Step/Warp.Run。程序、参数和输出均保留在调用者提供的 `device.BackingMemory` 中。以下示例假定已经加载测试兼容的 startup 和 kernel 程序：
 
@@ -7,6 +7,7 @@ import (
     "fmt"
     "vortex.local/simulator/emu/device"
     "vortex.local/simulator/timing/runner"
+    "vortex.local/simulator/timing/memsys"
 )
 
 func execute(memory device.BackingMemory) (runner.KernelStatus, error) {
@@ -17,15 +18,21 @@ func execute(memory device.BackingMemory) (runner.KernelStatus, error) {
         WarpStep: [3]uint32{4, 0, 0},
         ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64,
     }
+    config, err := memsys.DefaultConfig()
+    if err != nil { return runner.KernelStatus{}, err }
+    config.Latency = 40
     k, err := runner.NewKernel(launch, memory, runner.Options{
-        Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 40,
+        Backend: "std", PeriodPS: 1, MemoryConfig: &config,
         Ready: func(cycle uint64) bool { return cycle%3 == 0 },
     })
     if err != nil { return runner.KernelStatus{}, err }
     if err = k.Run(5000, nil); err != nil { return k.Status(), err }
     status := k.Status()
     if !status.Complete { return status, fmt.Errorf("cycle budget exhausted") }
-    return status, nil
+    visible, err := k.MakeVisible(5000)
+    if err != nil { return k.Status(), err }
+    if !visible { return k.Status(), fmt.Errorf("visibility budget exhausted; resume MakeVisible") }
+    return k.Status(), nil
 }
 ```
 
@@ -40,20 +47,21 @@ func execute(memory device.BackingMemory) (runner.KernelStatus, error) {
 - GridWalker 拥有生成次序；Kernel 拥有 pending CTA、固定步长 slot/window、成员绑定和回收；ResidencyMemory 拥有 CTA CSR 元数据及一个 16 KiB LMEM 字节数组。
 - WarpState 拥有架构寄存器、PC、mask；model 拥有流水线和调度状态；effects 拥有尚未交付的效果；byte service 队列保存已接收请求的稳定身份。
 - BAR 使用硬件 LSU scheduler 排空条件，WSYNC 使用本 Warp 硬件 pending，WSPAWN 使用注册 single-active 条件。资源回收另检查目标 CTA 的所有流水线、效果、服务与 Barrier 状态，不要求无关 CTA 排空。
-- 服务延迟从请求接收开始；load 在服务边沿读取字节，store 在服务边沿写入字节，结果保持到接收。Kernel 使用固定正延迟和可配置请求背压；内部 cache/bank/DRAM 时序未实现。
+- I/D-cache、访存合并与 LMEM 使用 IR 的有限资源和真实字节；external backend 延迟从实际接受开始，load 使用返回数据，store 更新 cache 或原 LMEM owner。DRAM 内部时序未建模。Ready 只限制新请求，不能撤销已展示请求。
+- Status().Complete 表示执行和 CTA 回收完成，不保证 dirty 输出对 backing 可见。MakeVisible 通过 D-cache 扫描、写回及后端完成获得可见性，不复制 cache 数据。MemoryDrained 与 BackingVisible 单独报告。
+- Resident 中 Generation 标识物理位置的本次绑定；StoppedWarps 是 canonical TMC 停止状态，实际注册取指状态见 MultiRecord.Warps.Active。MemoryPending 包含组件和传输身份引用；Reclaimable 与实际回收使用同一判定，另需该 CTA Barrier 与全部成员流水线/effects 已释放。
+- FlushCaches 执行独立的 D→I 联合刷新，适合同址代码更新。它、MakeVisible、ISA FENCE 和软件 epoch Flush 语义不同，见 runner/README.md。
 - 正常 CTA 接纳在 edge 前执行 whole-CTA 事务，未复现 RTL 的逐 Warp dispatcher/context pipeline。CSR、control 和 completion 的已实现周期事件见 cycle-control 文档；本项目不宣称 RTLSIM 周期精度已收敛。
 
-## 完成标准到验证的映射
+## T12 生命周期验证
 
-| 验收项 | 证据 |
+| 验收项 | 当前证据 |
 | --- | --- |
-| AC-019 完整 launch、参数、多 Warp 协作、超过驻留容量 | `TestKernelRepeatedBarrierLocalExchange`：4 CTA、每 CTA 2 Warp、2 个驻留位置、2 轮 local exchange；不同 startup/entry；真实参数 load；逐 lane 独立预期值 |
-| AC-020 有限延迟、背压、尾部和保持 | 同一 Kernel 的 fast/backpressure/store-tail 三场景：MemoryCycles=4/40/120，请求端分别每 1/3/5 周期接收；每场景 5000 edge 上限；回收周期不得早于该 CTA 最晚服务 due；120 场景必须观察 inactive Warp 的有效服务尾部 |
-| AC-020 响应保持与延迟反馈补充 | `TestWaitPoolPartialOutOfOrderBackpressureAndEpoch`、`TestLSUResponseIdentityAndBackpressure`、`TestCSRRequestWindowHeldUntilResultAcceptance`；`TestKernelBarrierEventRejectsOldGeneration` 在外部完成前运行有限预算但不得报告完成；Spawn 等待回归覆盖延迟控制 |
-| AC-021 结果与事件分别验证 | exchange 检查所有输出，另检查 32 次 wake、每 CTA 各一次 generated/admitted/reclaimed，以及新接纳时旧 CTA 的 pending/service 仍存在 |
-| AC-022 正常路径与停止审计 | 下表和 `task11-cycle-control.md`、`task11-kernel-sync.md` 的身份/完成审计 |
-| AC-023 文档与 IR | 本说明、`architecture.md`、三个 T11 文档及 `ir.yaml` 的 cc-kernel-*、cc-software-control-merge 契约 |
-| AC-024 冻结输入及完整验证 | `verify-all.sh` 检查 RTL manifest、环境、格式、build/test/vet 和空缓存离线回归；另运行 `verify-timing.sh`、`git diff --check` |
+| AC-026/027 | CTA 观察与实际回收共用 observeCTA；检查同 slot 的 System residency、各 Warp 传输、Core/effects 及 Barrier；dirty cache line 不构成活动引用 |
+| AC-028 | Kernel MakeVisible 分预算扫描/写回，Complete 与 BackingVisible 分离；FlushCaches 另检查先 D 后 I |
+| AC-029 | TestKernelRepeatedBarrierLocalExchange 覆盖多 Warp、重复 Barrier、原 LMEM owner 和跨 CTA 尾部重叠；TestKernelMixedMemoryLifecycle 覆盖单请求 mixed 路径、generation 复用及最终写回 |
+| AC-030 | mixed Kernel 对比 baseline/slow/dense/throttled/repeat 的输出、寄存器、周期、stall、refill 和背压；全量证据见 t12-delivery.md |
+| AC-031/032 | 使用既有 Scheduler、Scoreboard、执行流水和 Kernel orchestration；固定环境、RTL manifest、离线 build/test/vet 通过 verify-all.sh 验证。最终门禁结果见 t12-delivery.md |
 
 ## 正常停止条件审计
 
@@ -68,4 +76,4 @@ func execute(memory device.BackingMemory) (runner.KernelStatus, error) {
 | 预算耗尽 | 可恢复，同一 Kernel 再调用 Run；不是 Kernel completion |
 | 仍保留的拒绝 | 非法/不受冻结 ISA 支持的指令、未加载内存、非法 launch、跨 CTA Spawn/Barrier 地址、旧/重复身份、无对应请求响应：均有具体输入契约，不能当正常推进手段 |
 
-未决项限定为未建模 dispatcher pipeline 的延迟、cache/LMEM bank 与更低层访存内部、非冻结扩展/多 Core/全局 Barrier 和完整 RTL 周期等价。既有 `u-feedback` 的未来 producer 精度问题不阻止当前 Kernel 的 staged dispatch；正常 baseline branch/control/CSR 合并已实现并测试。以上不把软件抽象标为 RTL 已证明事实。
+保留边界包括未建模的逐 Warp dispatcher pipeline、抽象 Barrier RAM/coordinator、mixed once-only 软件契约、跨组不同值重叠写的 UNRESOLVED 拒绝、非冻结扩展/多 Core/全局 Barrier 和完整 RTL 周期等价。L2/L3、DRAM 内部、VM/TLB、coherence 和 host runtime 不在范围内。既有 `u-feedback` 的未来 producer 精度问题不阻止当前 Kernel 的 staged dispatch；正常 baseline branch/control/CSR 合并已实现并测试。以上不把软件抽象标为 RTL 已证明事实。

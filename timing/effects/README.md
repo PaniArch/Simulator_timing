@@ -37,3 +37,8 @@ Task10 新增 `Concurrent`：四个显式 owner、按 epoch/warp/instruction/uop
 指令的 receipt 引擎复用。接口、并发测试和保留边界见
 [并发效果实施记录](../concurrent-effects-progress.md)。冻结 catalog 的 packed
 指令仅为 load；上文 load/store 泛指普通内存路径，不表示存在 packed store ISA。
+
+T12 新增 `MemoryRequests` 和 `AcceptMemoryResult`，支持将真实 cache/LMEM 返回的对齐
+word 与逐 lane store 应用事件交给 effects，不在完成时再次读取或写入 backing。
+普通及 packed load 的寄存器写仍发生在匹配 WB；完整 Runner 接线尚未完成。
+详见 [../memory-integration-progress.md](../memory-integration-progress.md)。

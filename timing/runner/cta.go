@@ -13,6 +13,9 @@ func (r *MultiRunner) WarpQuiescent(warp uint8) bool {
 	if r == nil || r.failed || warp >= 4 || !r.core.WarpQuiescent(warp) {
 		return false
 	}
+	if r.hierarchy != nil && r.hierarchy.warpPending(warp) {
+		return false
+	}
 	if _, ok := r.blocked[warp]; ok {
 		return false
 	}
@@ -46,6 +49,9 @@ func (r *MultiRunner) WarpQuiescent(warp uint8) bool {
 // Call between Run intervals, or from the observer after an edge. This is a
 // normal residency boundary and preserves every unrelated pipeline/service.
 func (r *MultiRunner) DispatchWarp(warp uint8, startupPC, parameter uint32, mask isa.LaneMask, firstUse bool) error {
+	if r.cacheFlush != nil {
+		return fmt.Errorf("finish FlushCaches before changing residency")
+	}
 	if !r.WarpQuiescent(warp) || r.parked[warp] {
 		return fmt.Errorf("CTA dispatch requires available Warp slot")
 	}

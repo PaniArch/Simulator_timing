@@ -31,11 +31,11 @@ func TestKernelBarrierEventRejectsOldGeneration(t *testing.T) {
 		put(0x200+uint32(i)*4, w)
 	}
 	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x800, GridDimensions: [3]uint32{2, 1, 1}, BlockDimensions: [3]uint32{1, 1, 1}, BlockSize: 1, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 16384}
-	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 20})
+	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(20)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := k.Run(250, nil); err != nil {
+	if err := k.Run(1000, nil); err != nil {
 		t.Fatal(err)
 	}
 	tickets := k.PendingBarrierEvents()
@@ -49,7 +49,7 @@ func TestKernelBarrierEventRejectsOldGeneration(t *testing.T) {
 	if err := k.CompleteBarrierEvent(old); err == nil {
 		t.Fatal("duplicate accepted")
 	}
-	if err := k.Run(300, nil); err != nil {
+	if err := k.Run(1000, nil); err != nil {
 		t.Fatal(err)
 	}
 	tickets = k.PendingBarrierEvents()
@@ -71,7 +71,7 @@ func TestKernelBarrierEventRejectsOldGeneration(t *testing.T) {
 	if err := k.CompleteBarrierEvent(tickets[0]); err != nil {
 		t.Fatal(err)
 	}
-	if err := k.Run(300, nil); err != nil {
+	if err := k.Run(1000, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !k.Status().Complete || k.Status().Completed != 2 || len(k.PendingBarrierEvents()) != 0 {
@@ -91,6 +91,7 @@ func TestKernelBarrierEventRejectsOldGeneration(t *testing.T) {
 	}
 	for i := uint32(0); i < 2; i++ {
 		var b [4]byte
+		kernelVisible(t, k)
 		if err := ram.Read(0x800+i*4, b[:]); err != nil {
 			t.Fatal(err)
 		}

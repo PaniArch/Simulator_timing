@@ -1,6 +1,9 @@
 package runner
 
-import "vortex.local/simulator/isa"
+import (
+	"vortex.local/simulator/emu/state"
+	"vortex.local/simulator/isa"
+)
 
 // KernelEvent records residency boundaries separately from pipeline edges.
 // Slot is -1 for generation; CTA is always the immutable GridWalker ID.
@@ -21,4 +24,25 @@ func (k *Kernel) TakeEvents() []KernelEvent {
 }
 func (k *Kernel) event(kind string, cta uint32, slot int, warps isa.WarpMask) {
 	k.events = append(k.events, KernelEvent{Kind: kind, Cycle: k.runner.Cycle(), CTA: cta, Slot: slot, Warps: warps})
+}
+
+// observeCTA is also the actual release predicate, so status cannot advertise
+// reuse while a cache/coalescer/adapter or architectural token retains residency.
+func (k *Kernel) observeCTA(slot int, c *KernelCTA) KernelCTA {
+	out := *c
+	out.Generation = k.generations[slot]
+	out.StoppedWarps = 0
+	out.MemoryPending = k.runner.hierarchy.system.HasResidency(1, uint64(slot))
+	out.Reclaimable = !k.memory.BarrierPending(uint32(slot))
+	for _, member := range c.Resident.Members {
+		w := member.WarpID
+		snapshot, err := k.runner.owners[w].Snapshot()
+		if err == nil && (snapshot.ActiveMask() == 0 || snapshot.Lifecycle() != state.WarpRunning) {
+			out.StoppedWarps |= 1 << w
+		}
+		out.MemoryPending = out.MemoryPending || k.runner.hierarchy.warpPending(w)
+		out.Reclaimable = out.Reclaimable && k.runner.WarpQuiescent(w)
+	}
+	out.Reclaimable = out.Reclaimable && !out.MemoryPending
+	return out
 }

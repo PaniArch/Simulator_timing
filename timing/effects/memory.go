@@ -111,7 +111,11 @@ func (a *Adapter) memoryFinished() bool {
 // entire SIMT store once. A returned response must be held until the core accepts
 // it; retries use that value, not a second Service call. Load masks are disjoint.
 // Errors are fatal model/service errors until Reset; fault routing is separate.
-func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (response model.Response, err error) {
+func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (model.Response, error) {
+	return a.serviceMemory(cycle, token, mask, nil)
+}
+
+func (a *Adapter) serviceMemory(cycle uint64, token model.Token, mask uint8, returned *MemoryResult) (response model.Response, err error) {
 	if a.failed {
 		return response, fmt.Errorf("effect adapter requires reset")
 	}
@@ -125,7 +129,7 @@ func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (response
 	}
 	i := a.current
 	if i.packed != nil {
-		return a.servicePacked(cycle, token, mask)
+		return a.servicePacked(cycle, token, mask, returned)
 	}
 	m := i.memory
 	if m == nil || !m.sent || cycle <= m.sentCycle || cycle <= a.lastCycle {
@@ -134,7 +138,7 @@ func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (response
 	if mask == 0 || mask & ^i.token.Mask != 0 || mask&m.served != 0 {
 		return response, fmt.Errorf("invalid or repeated service coverage")
 	}
-	if i.token.Path == model.STORE && mask != i.token.Mask {
+	if returned == nil && i.token.Path == model.STORE && mask != i.token.Mask {
 		return response, fmt.Errorf("SIMT store requires one atomic full-mask service")
 	}
 	responses := []isa.MemoryResponse{}
@@ -148,7 +152,18 @@ func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (response
 			return response, fmt.Errorf("unsupported memory width")
 		}
 		bytes := make([]byte, request.Width)
-		if readErr := a.memory.Read(request.Address, bytes); readErr != nil {
+		var readErr error
+		if returned != nil {
+			offset := request.Address - request.AlignedAddress
+			if offset+uint32(request.Width) > 4 {
+				return response, fmt.Errorf("returned word does not cover request")
+			}
+			copy(bytes, returned.Data[request.Lane][offset:offset+uint32(request.Width)])
+			readErr = returned.Errors[request.Lane]
+		} else {
+			readErr = a.memory.Read(request.Address, bytes)
+		}
+		if readErr != nil {
 			serviceErr = errors.Join(serviceErr, readErr)
 			r.Fault, r.Reason = isa.FaultLoadAccess, isa.FaultReasonMemoryService
 			if request.Kind == isa.MemoryStore {
@@ -188,16 +203,29 @@ func (a *Adapter) Service(cycle uint64, token model.Token, mask uint8) (response
 		}
 	}
 	if i.token.Path == model.STORE {
-		err = i.delivery.Deliver(state.MemoryEvent, 0, func(isa.InstructionEffects) error { return writeRequests(a.memory, m.requests) })
+		if returned == nil {
+			err = i.delivery.Deliver(state.MemoryEvent, 0, func(isa.InstructionEffects) error { return writeRequests(a.memory, m.requests) })
+		} else if m.served|mask == i.token.Mask {
+			// Every fragment has already been applied by cache/LMEM. Retire the
+			// functional receipt exactly once without repeating any byte mutation.
+			err = i.delivery.Deliver(state.MemoryEvent, 0, func(isa.InstructionEffects) error { return nil })
+		}
 		if err != nil {
 			return response, err
 		}
-	} else if i.token.Path == model.FENCE {
-		// The service caller authorizes completion only once its previous tail drained.
-		if a.external == nil {
+	} else if i.token.Path == model.FENCE && m.served|mask == i.token.Mask {
+		// The caller supplies the corresponding ordering completion; this
+		// acknowledgement does not impose a whole-Core drain condition.
+		acknowledge := a.external
+		if returned != nil {
+			// The timing hierarchy already completed ordering. Retire only
+			// the functional event; never issue a second ordering operation.
+			acknowledge = func(isa.InstructionEffects) error { return nil }
+		}
+		if acknowledge == nil {
 			return response, fmt.Errorf("FENCE ordering owner required")
 		}
-		if err = i.delivery.Deliver(state.MemoryEvent, 0, a.external); err != nil {
+		if err = i.delivery.Deliver(state.MemoryEvent, 0, acknowledge); err != nil {
 			return response, err
 		}
 	}

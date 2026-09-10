@@ -34,7 +34,7 @@ func TestMultiRunnerArchitecturalCountersUseOldHardwareEvents(t *testing.T) {
 	}
 	var expected [4][3]uint32
 	var committed uint64
-	if err := r.Run(400, func(rec runner.MultiRecord) {
+	if err := r.Run(10000, func(rec runner.MultiRecord) {
 		if rec.Counters.Instret != committed {
 			t.Fatal("instret not driven by registered EOP", rec.Counters, committed)
 		}

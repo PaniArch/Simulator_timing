@@ -9,11 +9,15 @@ import (
 
 func TestResidentTraceAndLocalLatency(t *testing.T) {
 	owner, ram := setup(t)
-	r, err := runner.New(owner, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 7})
+	r, err := runner.New(owner, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(7)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	active := map[string]map[uint64]bool{}
+	type fragment struct {
+		id, epoch       uint64
+		warp, uop, mask uint8
+	}
+	active := map[string]map[fragment]bool{}
 	divider := 0
 	kinds := map[string]bool{}
 	err = r.Run(600, func(record runner.Record) {
@@ -31,22 +35,24 @@ func TestResidentTraceAndLocalLatency(t *testing.T) {
 				continue
 			}
 			if active[event.Resource] == nil {
-				active[event.Resource] = map[uint64]bool{}
+				active[event.Resource] = map[fragment]bool{}
 			}
 			resident := active[event.Resource]
+			tok := event.Token
+			identity := fragment{tok.ID, tok.Epoch, tok.Warp, tok.Uop, tok.Mask}
 			switch event.Kind {
 			case "enter":
-				if resident[event.Token.ID] {
+				if resident[identity] {
 					t.Fatal("duplicate resource entry", event)
 				}
-				resident[event.Token.ID] = true
+				resident[identity] = true
 			case "leave":
-				if !resident[event.Token.ID] {
+				if !resident[identity] {
 					t.Fatal("leave without enter", event)
 				}
-				delete(resident, event.Token.ID)
+				delete(resident, identity)
 			default:
-				if !resident[event.Token.ID] {
+				if !resident[identity] {
 					t.Fatal("residence without enter", event)
 				}
 			}
@@ -91,14 +97,14 @@ func TestPackedProgramWAWBackpressureAndRecovery(t *testing.T) {
 	if err := owner.WriteRegister(isa.Register{File: isa.Integer, Index: 2}, 15, isa.LaneValues{1, 1, 1, 1}); err != nil {
 		t.Fatal(err)
 	}
-	r, err := runner.New(owner, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 5, Ready: func(c uint64) bool { return c < 10 || c >= 100 }})
+	r, err := runner.New(owner, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(5), Ready: func(c uint64) bool { return c < 10 || c >= 100 }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	heldRequest := false
 	lastWB := map[uint8]uint64{}
 	requests := 0
-	wb := map[uint8]int{}
+	wb := map[uint8]uint8{}
 	err = r.Run(400, func(record runner.Record) {
 		for _, resource := range record.ResourcesAfter {
 			if resource.Occupancy > resource.Capacity {
@@ -127,7 +133,11 @@ func TestPackedProgramWAWBackpressureAndRecovery(t *testing.T) {
 			requests++
 		}
 		if record.Report.Writeback.Valid && record.Report.Writeback.Token.ID == 1 {
-			wb[record.Report.Writeback.Token.Uop]++
+			tok := record.Report.Writeback.Token
+			if tok.Mask == 0 || wb[tok.Uop]&tok.Mask != 0 {
+				t.Fatal("duplicate packed lane completion", tok)
+			}
+			wb[tok.Uop] |= tok.Mask
 			if record.Report.Writeback.Token.End {
 				lastWB[record.Report.Writeback.Token.Uop] = record.Cycle
 			}
@@ -140,8 +150,8 @@ func TestPackedProgramWAWBackpressureAndRecovery(t *testing.T) {
 		t.Fatal("WAW/backpressure recovery", heldRequest, requests, wb, r.Completed())
 	}
 	for _, count := range wb {
-		if count != 1 {
-			t.Fatal("duplicate packed completion")
+		if count != 15 {
+			t.Fatal("incomplete packed lane coverage", count)
 		}
 	}
 }

@@ -7,9 +7,14 @@ import (
 
 // Cancel is a software recovery boundary between clock edges. It parks the
 // selected Warp while preserving all other work and already-visible effects.
+// In the hierarchy path, exposed SIMD offers are irrevocable: remaining lanes
+// still transfer after cancellation, but their architectural results are dropped.
 // Through must bound identities already issued; it is not an open-ended ban.
 // A later explicit restart/owner coordination is separate from cancellation.
 func (r *MultiRunner) Cancel(scope model.Cancellation) error {
+	if r.cacheFlush != nil {
+		return fmt.Errorf("finish FlushCaches before changing residency")
+	}
 	if r.failed {
 		return fmt.Errorf("failed runner requires residency reset")
 	}
@@ -27,6 +32,9 @@ func (r *MultiRunner) Cancel(scope model.Cancellation) error {
 	tokens, err := r.effects.Cancel(scope)
 	if err != nil {
 		return err
+	}
+	if r.hierarchy != nil {
+		r.hierarchy.cancel(scope)
 	}
 	r.cancelled = append(r.cancelled, tokens...)
 	r.recoveryEvents = append(r.recoveryEvents, events...)

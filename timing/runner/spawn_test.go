@@ -3,7 +3,9 @@ package runner_test
 import (
 	"encoding/binary"
 	"testing"
+	"vortex.local/simulator/emu/core"
 	"vortex.local/simulator/emu/state"
+	"vortex.local/simulator/emu/warp"
 	"vortex.local/simulator/isa"
 	"vortex.local/simulator/support/memory"
 	"vortex.local/simulator/timing/effects"
@@ -60,7 +62,7 @@ func TestMultiRunnerExplicitSpawnOwners(t *testing.T) {
 				t.Fatal(err)
 			}
 			executed, sideband, activation := uint64(0), uint64(0), uint64(0)
-			if err = r.Run(300, func(rec runner.MultiRecord) {
+			if err = r.Run(10000, func(rec runner.MultiRecord) {
 				if e := rec.Report.Executed[2]; e.Valid && e.Token.Word == spawn {
 					executed = rec.Cycle
 				}
@@ -109,14 +111,35 @@ func TestMultiRunnerSpawnWaitAndOutstandingServiceTails(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var routes [4]warp.MemoryService
+			manager := core.NewCTAManager()
+			if waitForLoads {
+				for w := uint8(1); w < 4; w++ {
+					_, err := manager.Admit(core.CTAConfig{ID: uint32(w), WarpIDs: []uint8{w}, StartupPC: uint32(0x100 * (int(w) + 1)), BlockDimensions: [3]uint32{4, 1, 1}, GridDimensions: [3]uint32{1, 1, 1}, BlockSize: 4, WarpStep: [3]uint32{4, 0, 0}, LocalMemorySize: 64, ClusterDimensions: [3]uint32{1, 1, 1}, ClusterSize: 1})
+					if err != nil {
+						t.Fatal(err)
+					}
+					routes[w], err = core.NewCTAMemory(manager, w, ram)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
 			spawn := customWord(t, "wspawn", 0, 1) | 2<<20
 			for w := range owners {
 				init := state.WarpInitial{Topology: state.FrozenTopology(), WarpID: uint8(w), PC: uint32(0x100 * (w + 1)), ActiveMask: 15, Lifecycle: state.WarpRunning}
 				for lane := uint8(0); lane < 4; lane++ {
 					l := state.LaneInitial{ID: lane}
 					l.GPR[1], l.GPR[2], l.GPR[3], l.GPR[4] = 4, 0x600, 0x222, uint32(0x900+w*64+int(lane)*4)
+					if waitForLoads && w != 0 {
+						l.GPR[4] = isa.FrozenLocalMemBase + uint32(lane)*4
+					}
 					init.Lanes = append(init.Lanes, l)
-					if err := ram.Write(l.GPR[4], []byte{9, 0, 0, 0}); err != nil {
+					route := warp.MemoryService(ram)
+					if routes[w] != nil {
+						route = routes[w]
+					}
+					if err := route.Write(l.GPR[4], []byte{9, 0, 0, 0}); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -146,12 +169,7 @@ func TestMultiRunnerSpawnWaitAndOutstandingServiceTails(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			options := runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: 2, MemoryCycles: 70}, MemoryDelay: func(tok model.Token) uint64 {
-				if tok.Warp == 0 {
-					return 200
-				}
-				return 70
-			}, Spawn: func(model.Token) (effects.SpawnBinding, error) {
+			options := runner.MultiOptions{Options: runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(100)}, DataMemory: routes, Spawn: func(model.Token) (effects.SpawnBinding, error) {
 				b := effects.SpawnBinding{Active: 15}
 				for w := 1; w < 4; w++ {
 					s, _ := owners[w].Snapshot()
@@ -165,7 +183,7 @@ func TestMultiRunnerSpawnWaitAndOutstandingServiceTails(t *testing.T) {
 			}
 			var executed, committed, activation, storeFinished, lastOldStop uint64
 			var targetFinished [4]uint64
-			if err := r.Run(500, func(rec runner.MultiRecord) {
+			if err := r.Run(10000, func(rec runner.MultiRecord) {
 				if p := rec.Report.Executed[2]; p.Valid && p.Token.Word == spawn {
 					executed = rec.Cycle
 				}

@@ -11,6 +11,156 @@ units:
   rtl_parameters: verbatim or evaluated instance parameters, not end-to-end timing
   null: unknown or intentionally unassigned; never zero
 sources:
+  kernel-mixed-lifecycle:
+    path: timing/runner/kernel_mixed_lifecycle_test.go
+    locator: TestKernelMixedMemoryLifecycle
+  runtime-cache-flush:
+    path: timing/runner/cache_flush.go
+    locator: FlushCaches; flushCaches; nextControlTransaction
+  runtime-cache-flush-tests:
+    path: timing/runner/cache_flush_test.go
+    locator: TestRuntimeCacheFlushReplacesCachedInstructions
+  single-runner-entry:
+    path: timing/runner/runner.go
+    locator: New; Run; Flush; Release; MakeVisible
+  single-runner-regression:
+    path: timing/runner/runner_test.go
+    locator: TestProgramAndDeterminism; TestFlushPreservesAcceptedStoreTail; TestSingleRunnerPreservesWarpIdentityAndBarrierWake
+  single-runner-fragments:
+    path: timing/runner/trace_test.go
+    locator: TestResidentTraceAndLocalLatency; TestPackedProgramWAWBackpressureAndRecovery
+  failed-edge-recovery-tests:
+    path: timing/runner/fault_recovery_test.go
+    locator: TestMemoryFaultResetAlignsCommittedEdges
+  real-overlap-regression:
+    path: timing/runner/multi_test.go
+    locator: TestMultiRunnerConcurrentFunctionalResults; multiSetupMemory
+  recovery-model-tests:
+    path: timing/model/cancel_test.go
+    locator: TestCancelParkSurvivesRetainedDecodeUnlock
+  runner-visibility:
+    path: timing/runner/visibility.go
+    locator: MultiRunner.MakeVisible
+  partial-cancel-tests:
+    path: timing/runner/partial_cancel_test.go
+    locator: TestRealMemoryCancelPartiallyAppliedMixedStore
+  inline-flush-tests:
+    path: timing/memsys/inline_flush_test.go
+    locator: TestInlineFlushReleasesOriginalWord; TestInlineFlushDoesNotLockOuterNCBypass; TestCoalescerRetainsFlushAttribute
+  ordering-result-tests:
+    path: timing/effects/memory_test.go
+    locator: TestMemoryServiceAndPartialWBVisibility; returnedOrdering
+  runner-memory-system:
+    path: timing/runner/memory_system.go
+    locator: receive; step; identity; newRunnerMemory
+  runner-memory-system-tests:
+    path: timing/runner/memory_system_test.go
+    locator: TestMultiRunnerRealMemory; TestRealMemoryCancelLoadAndRestart
+  memory-system-model:
+    path: timing/memsys/system.go
+    locator: NewSystem; Responses; Step; Drained; HasResidency
+  memory-system-tests:
+    path: timing/memsys/system_test.go
+    locator: TestSystemFetchMixedDataAndFlush; TestSystemProtocolFaultIsTerminal
+  returned-memory-effects:
+    path: timing/effects/returned_memory.go
+    locator: MemoryRequests; AcceptMemoryResult; AcceptOrderingResult; Concurrent forwarding
+  returned-memory-tests:
+    path: timing/effects/returned_memory_test.go
+    locator: partial ordinary loads; applied store receipts; forbidden backing access
+  packed-returned-tests:
+    path: timing/effects/packed_test.go
+    locator: TestPackedReturnedByteVisibility; all catalog packed loads
+  memory-integration-progress:
+    path: timing/memory-integration-progress.md
+    locator: milestone 05 effects boundary and pending runtime wiring
+  local-adapter-model:
+    path: timing/memsys/local_adapter.go
+    locator: Offers; Preview; ReadReady; Step
+  local-adapter-tests:
+    path: timing/memsys/local_adapter_test.go
+    locator: per-lane buffering; old full credit; partial pack; stale responses
+  mixed-path-tests:
+    path: timing/memsys/mixed_path_test.go
+    locator: TestMixedPathCacheAndLMEM; real split/coalescer/adapters/cache/backend/CTAMemory composition
+  local-model:
+    path: timing/memsys/local_memory.go
+    locator: NewLocalMemory; Step; Responses; HasResidency
+  local-model-tests:
+    path: timing/memsys/local_memory_test.go
+    locator: bank conflict; exact read edges; byte writes; original CTAMemory; stale resolver
+  global-adapter-model:
+    path: timing/memsys/global_adapter.go
+    locator: Offers; Preview; ReadReady; Step
+  global-adapter-tests:
+    path: timing/memsys/global_adapter_test.go
+    locator: partial acceptance; response tag grouping; coalescer-cache-backend data composition
+  split-model:
+    path: timing/memsys/split.go
+    locator: NewSIMDSplit; Outputs; ReadReady; Step; completion ledger
+  split-model-tests:
+    path: timing/memsys/split_test.go
+    locator: asymmetric load/store backpressure; response arbitration; partial progress; duplicate rejection
+  coalescer-model:
+    path: timing/memsys/coalescer.go
+    locator: NewCoalescer; makeBatch; validateGlobal; Step
+  coalescer-model-tests:
+    path: timing/memsys/coalescer_test.go
+    locator: grouping; partial responses; full recovery; generation; byte enables
+  coalescer-index-allocator:
+    path: Vortex_rtl/hw/rtl/libs/VX_allocator.sv
+    locator: acquire_addr_r; free_slots_n; acquire_en or release_en and full_r
+  routing-progress:
+    path: timing/routing-progress.md
+    locator: milestone 04 partial implementation and remaining integration
+  cache-wrapper:
+    path: timing/memsys/cache.go
+    locator: NewCache; MemoryResponseReady; Step; State; public multi-port cache
+  cache-wrapper-tests:
+    path: timing/memsys/cache_test.go
+    locator: public cache links; bank/port contention; shared backend; flush visibility; errors
+  cache-outer-flush:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_init.sv
+    locator: STATE_FLUSH/STATE_WAIT2/STATE_DONE; lock_released; released flush request
+  cache-bank-model:
+    path: timing/memsys/cache_bank.go
+    locator: step; S0/S1; init/replay/fill/flush/core arbitration
+  cache-array-model:
+    path: timing/memsys/cache_array.go
+    locator: fill/write/flushWay; detached dirty victim
+  cache-mshr-model:
+    path: timing/memsys/cache_mshr.go
+    locator: step; registered allocation; finalize/dequeue late-chain update
+  cache-spec-model:
+    path: timing/memsys/cache_spec.go
+    locator: FrozenCacheSpec; DecodeAddress
+  cache-bank-tests:
+    path: timing/memsys/cache_bank_test.go
+    locator: cold miss; full MSHR; ordered replay; dirty eviction; flush and backpressure
+  cache-storage-tests:
+    path: timing/memsys/cache_storage_test.go
+    locator: FIFO geometry; slot generations; same-edge tail finalize/dequeue
+  cache-progress:
+    path: timing/cache-progress.md
+    locator: milestone 03 incremental bank implementation and remaining integration
+  external-backend:
+    path: timing/memsys/backend.go
+    locator: DefaultConfig; New; Step; accepted-cycle service and once-only responses
+  external-backend-tests:
+    path: timing/memsys/backend_test.go
+    locator: acceptance competition; capacity; held response; data and faults
+  memory-contract:
+    path: timing/memory-contract.md
+    locator: T12 memory contracts and explicit software boundary
+  cache-layout:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_define.vh
+    locator: CS_BANK_SEL_ADDR_START; CS_LINES_PER_BANK; sector geometry
+  cache-replacement:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_repl.sv
+    locator: g_fifo.fifo_store
+  cache-flush-fsm:
+    path: Vortex_rtl/hw/rtl/cache/VX_cache_flush.sv
+    locator: STATE_WAIT1; STATE_FLUSH; STATE_WAIT2; STATE_DONE
   kernel-acceptance-guide:
     path: timing/kernel-usage.md
     locator: API usage, AC-019 to AC-024 mapping, normal stop audit and explicit precision boundaries
@@ -498,6 +648,7 @@ config:
   - config::memory/l1cache/lmem
   - header::VX_CFG_DCACHE_WORD_SIZE
   - pkg::DCACHE_CHANNELS/DCACHE_NUM_REQS/LSU_QUEUE_OUT_SIZE
+  - pkg::ICACHE_WORD_SIZE/ICACHE_LINE_SIZE
   - socket::icache/dcache
   - mem::g_coalescing
   - types::memmap
@@ -509,9 +660,14 @@ config:
     dcache_word_bytes: 8
     dcache_channels: 2
     l1_memory_ports: 2
-    local_base_address: '0xffff0000'
+    local_base_address: 0xffff0000
     local_size_bytes: 16384
     local_banks: 4
+    icache_word_bytes: 4
+    icache_core_ports: 1
+    icache_memory_ports: 1
+    dcache_core_ports: 2
+    dcache_memory_ports: 2
     icache_instances: 1
     dcache_instances: 1
     icache_banks: 1
@@ -1816,11 +1972,18 @@ boundaries:
   status: FROZEN
   evidence:
   - mem::VX_lmem_switch.RSP_OUT_BUF
+  - lmem-switch::rsp_arb/ARBITER
+  - generic-arbiter::g_round_robin
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 1
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
   encoding_ref: b-encoding
   condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
   measurement:
@@ -1849,11 +2012,16 @@ boundaries:
   status: FROZEN
   evidence:
   - mem::local VX_lsu_adapter.RSP_OUT_BUF
+  - adapter::stream_pack/ARBITER
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 0
+  arbitration:
+    inputs: 4
+    policy: P
+    sticky: 0
   encoding_ref: b-encoding
   condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
   measurement:
@@ -1864,6 +2032,7 @@ boundaries:
   node: n-local-memory
   status: FROZEN
   evidence:
+  - local::req_xbar/rsp_xbar
   - mem::VX_local_mem.OUT_BUF
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
@@ -1872,6 +2041,10 @@ boundaries:
   rtl_parameters:
     OUT_BUF: 3
   encoding_ref: b-encoding
+  arbitration:
+    inputs: 4
+    policy: P
+    sticky: 0
   condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
   measurement:
     unit: RTL parameter encoding/stage count as named
@@ -1898,11 +2071,16 @@ boundaries:
   status: FROZEN
   evidence:
   - mem::global VX_lsu_adapter.RSP_OUT_BUF
+  - adapter::stream_pack/ARBITER
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   kind: output_buffer_encoding
   rtl_parameters:
     OUT_BUF: 0
+  arbitration:
+    inputs: 2
+    policy: P
+    sticky: 0
   encoding_ref: b-encoding
   condition: cfg-baseline; no reset; local boundary only, not enclosing path latency
   measurement:
@@ -2111,12 +2289,17 @@ boundaries:
   rtl_parameters:
     OUT_BUF: 3
     instances: 4
+  arbitration:
+    inputs: 4
+    policy: P
+    sticky: 0
   condition: cfg-baseline
   measurement:
     unit: RTL encoding and entries as named; local buffer only
     start: named buffer input fire
     end: named buffer output fire
   evidence:
+  - local::req_xbar/rsp_xbar
   - local::req_xbar
 - id: b-local-sram-tag
   node: n-local-memory
@@ -2199,6 +2382,11 @@ boundaries:
   kind: internal_instance_parameters
   rtl_parameters:
     OUT_BUF: 3
+  arbitration:
+    inputs: 1
+    policy: R
+    sticky: 0
+    model: 1
   condition: cfg-baseline
   measurement:
     unit: RTL encoding and entries as named; local buffer only
@@ -2287,6 +2475,11 @@ boundaries:
   kind: internal_instance_parameters
   rtl_parameters:
     OUT_BUF: 1
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
   condition: cfg-baseline
   measurement:
     unit: RTL encoding and entries as named; local buffer only
@@ -2315,6 +2508,11 @@ boundaries:
   kind: internal_instance_parameters
   rtl_parameters:
     OUT_BUF: 3
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
   condition: cfg-baseline
   measurement:
     unit: RTL encoding and entries as named; local buffer only
@@ -2328,6 +2526,11 @@ boundaries:
   kind: internal_instance_parameters
   rtl_parameters:
     OUT_BUF: 2
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
   condition: cfg-baseline
   measurement:
     unit: RTL encoding and entries as named; local buffer only
@@ -2408,6 +2611,40 @@ boundaries:
     end: named buffer output fire
   evidence:
   - barrier::unlock_valid_r/unlock_mask_r
+- id: b-icache-core-request-bank-xbar
+  node: n-icache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 0
+  arbitration:
+    inputs: 1
+    policy: R
+    sticky: 0
+    model: 1
+  condition: cfg-baseline; REQ_XBAR_BUF=(NUM_REQS>2)?2:0
+  measurement:
+    unit: physical request boundary; zero storage
+    start: core request valid
+    end: selected bank request fire
+  evidence: [cache::REQ_XBAR_BUF/core_req_xbar, generic-arbiter::g_round_robin]
+- id: b-dcache-core-request-bank-xbar
+  node: n-dcache
+  status: FROZEN
+  kind: internal_instance_parameters
+  rtl_parameters:
+    OUT_BUF: 0
+  arbitration:
+    inputs: 2
+    policy: R
+    sticky: 0
+    model: 1
+  condition: cfg-baseline; REQ_XBAR_BUF=(NUM_REQS>2)?2:0
+  measurement:
+    unit: physical request boundary; zero storage
+    start: core request valid
+    end: selected bank request fire
+  evidence: [cache::REQ_XBAR_BUF/core_req_xbar, generic-arbiter::g_round_robin]
 ports:
 - id: p-schedule-out
   node: n-schedule
@@ -4359,6 +4596,11 @@ rules:
   - mem::VX_dcr_flush
   statement: D-cache flush request follows DCR request; I-cache flush request is gated by D-cache done. Combined
     done is AND of both. VM-disabled wiring bypasses MMUs but retains both flush wrappers.
+- id: r-software-runtime-cache-flush
+  status: PROVISIONAL
+  nodes: [n-dcr, n-iflush, n-dflush, n-icache, n-dcache]
+  evidence: [core::dcr_flush_dcache_if/dcr_flush_icache_if/dcr_flush_if.done, runtime-cache-flush::FlushCaches/flushCaches, runtime-cache-flush-tests::TestRuntimeCacheFlushReplacesCachedInstructions]
+  statement: Runner, MultiRunner and Kernel expose an explicit resumable FlushCaches operation after execution completes. This software admission boundary rejects active execution instead of draining or cancelling the Core. The controller retains D completion, offers I only on an edge after D completion, and returns success only after both replies. Accepted child requests are not resubmitted. Runtime control transactions increase across MakeVisible, cache flushes and epoch resets. Run, epoch Flush, MakeVisible and residency-changing Dispatch/Cancel/Restart cannot steal a budget-paused cache flush. Errors do not report combined completion; ordinary recovery preserves System and drains abandoned control replies. This operation is distinct from ISA FENCE, software epoch Flush and D-only MakeVisible; component flush replies include the documented backend visibility boundary. Tests execute cached old code, modify the same address through a dirty D-cache store, demonstrate stale I data after MakeVisible and epoch reset, and observe updated code only after D-then-I completion, with unchanged architectural state during the sweep.
 - id: r-memory-fabric
   status: FROZEN
   nodes:
@@ -4831,6 +5073,116 @@ rules:
     full four-entry packed request queue under backpressure followed by exactly one WB per uop. Increased
     service delay changes run duration without changing functional results. External time and visibility
     unknowns remain unresolved.
+- id: r-software-cache-bank
+  status: PROVISIONAL
+  nodes: [n-icache, n-dcache]
+  config_ref: cfg-memory
+  resource_refs: [res-icache, res-dcache]
+  unknown_ref: u-t12-cache-hit-order
+  evidence: [cache-bank-model::step, cache-array-model::fill/write/flushWay, cache-mshr-model::step, cache-spec-model::FrozenCacheSpec, cache-bank-tests::TestCacheBankMSHRFullAndReplayStoreOrder/TestCacheBankNewHitDuringForwardChain/TestCacheBankFillAfterSingleForward, cache-bank::fwd_head/core_req_ready/g_no_fill_inflight, cache-storage-tests::TestMSHRTailFinalizeAndDequeueSameEdge, cache-progress::公开 cache 与外层资源]
+  statement: Private cache bank components implement IR-derived geometry and queues, S0/S1 advancement, per-request MSHR reservation, ordered same-line chains, read fill forwarding, FIFO replacement, byte updates, detached dirty writeback and bank-local init/flush scanning. Old response and memory queue credit gates pipeline progress. Resident valid/dirty lines do not count as outstanding requests. Frozen LATENCY=2 sets PIPE_EX=0 and fill_inflight=0, so no software pipeline-occupancy interlock delays a subsequent fill after the forwarding chain ends. New hits can be admitted while a plain read head forwards, using RTL creq_grant without an extra same-line guard; hits access array bytes before an older store still waiting in the miss chain and release rather than link their MSHR allocation. The public wrapper now composes these banks with physical outer buffers and the declared software external control boundary; see r-software-l1-cache.
+- id: r-software-l1-cache
+  status: PROVISIONAL
+  nodes: [n-icache, n-dcache]
+  config_ref: cfg-memory
+  resource_refs: [res-icache, res-dcache]
+  boundary_refs: [b-icache-core-request-bank-xbar, b-dcache-core-request-bank-xbar, b-icache-outer-core-response, b-dcache-outer-core-response, b-icache-outer-memory-request, b-dcache-outer-memory-request, b-icache-memory-response-queue, b-dcache-memory-response-queue, b-icache-memory-response-xbar, b-dcache-memory-response-xbar, b-dcache-nc-response, b-dcache-nc-memory-request]
+  evidence: [cache-wrapper::Step/MemoryResponseReady/State, cache-wrapper-tests::TestCacheFiniteQueuesMSHRFullAndRecovery/TestCacheConcurrentRefillWritebackCompetition, external-backend::PreviewResponses, cache::core_req_xbar/core_rsp_xbar, cache-bypass::core_bus_nc_switch/mem_bus_out_arb, cache-outer-flush::lock_released/STATE_WAIT2, cache-progress::公开 cache 与外层资源]
+  statement: NewCache reads frozen I/D geometry, queues and round-robin profiles from IR. Core ports compete independently per bank; bank responses compete per destination port. Bank MREQ passes through the outer memory buffer and D bypass arbiter buffer; read refills pass through per-port MRSQ (I bypass) and refill xbar buffers. NC words carry enabled-byte offsets and return through the cached/NC response arbiter without allocating lines. Backend headers are previewed without data service for path-specific ready. Request payloads and responses are detached and stable while stalled, with monotonic client/link transactions and generation-checked MSHR correlation. Software write acknowledgements propagate errors without consuming fictitious RTL load response entries. A cache-local flush controller pulses banks, gathers bank done, waits outgoing writes to be accepted and maps the released control request to one external Visibility ticket; this is a declared software adapter, not an exact RTL lower-level flush-response trace. Bank/transport/response work is distinct from valid/dirty residency, and new hits follow the bank grant rules rather than a software same-line guard; upstream instruction-order composition remains explicit in u-t12-cache-hit-order.
+- id: r-software-coalescer
+  status: PROVISIONAL
+  nodes: [n-coalescer]
+  config_ref: cfg-memory
+  resource_refs: [res-coalescer-tags]
+  evidence: [coalescer-model::makeBatch/Step/validateGlobal, coalescer-model-tests::TestCoalescerBatchesAndPartialResponses/TestCoalescerFullRecoveryAndStaleGeneration, coalescer::STATE_WAIT/STATE_SEND/g_seed_gen/g_data_merged/rsp_rem_mask, coalescer-index-allocator::acquire_addr_r, routing-progress::software boundary]
+  statement: The standalone coalescer validates the frozen 4x4-byte to 2x8-byte shape and reads index capacity from IR. WAIT chooses per-group lowest remaining seed; SEND registers a batch and accepts the input only on its last batch. Enabled bytes merge in ascending group-local lane order; no cache-line-wide merging occurs. Loads allocate an index per batch and retain original identity, tag, participating lanes and offsets until all channel masks return. WAIT observes old full even for stores, and the allocator updates its registered index on acquisition or a release while full. Responses pass through with downstream backpressure and are checked for per-channel sent state, remaining mask and software generation; unpack progress can authorize an early channel response before the entire batch output is accepted. Before any store subset is emitted, differing overlapping bytes across groups return an explicit UNRESOLVED error; this software failure boundary does not choose an RTL winner. The standalone local/global switch is implemented separately; the global adapter now maps partial word acceptance and store application receipts; local adapter and LMEM are now implemented and exercised in the mixed-path component test.
+- id: r-software-lmem-split
+  status: PROVISIONAL
+  nodes: [n-lmem-switch]
+  boundary_refs: [b-split-global_out_buf, b-split-local_out_buf, b-split-rsp_out_buf]
+  unknown_ref: u-t12-memory-order
+  evidence: [split-model::Step/ReadReady, split-model-tests::TestSplitAsymmetricAcceptanceAndCompletion/TestSplitPartialProgressBeforeChildInputRelease, lmem-switch::req_global_buf/req_local_buf/rsp_arb, routing-progress::software boundary]
+  statement: SIMDSplit uses the frozen single-entry child request buffers and round-robin single-entry response buffer. Per-input submitted bits suppress a child after buffer acceptance while the other child remains blocked; these software once-only bits address the documented mixed-valid RTL gap without claiming signal equivalence. Identity bookkeeping separately records queued lane masks, child input release, downstream partial progress, received fragments and delivered/applied lanes. Partial coalescer batches may report progress before releasing the child input. Completion waits all lanes and all child references; store application events do not occupy load-response buffers. Unresolved global overlap is rejected before either mixed subset can be accepted. The ledger adds no hardware queue or backpressure credit, and notification sorting does not choose byte winners. The global word adapter is implemented separately; local adapter and LMEM are exercised together in the mixed-path component test.
+- id: r-software-global-adapter
+  status: PROVISIONAL
+  nodes: [n-global-adapter, n-coalescer, n-dcache]
+  boundary_refs: [b-global-adapter-request, b-global-adapter-response]
+  evidence: [global-adapter-model::Offers/Preview/Step, global-adapter-tests::TestGlobalAdapterCacheCoalescerData/TestGlobalAdapterPartialAcceptAndPack, adapter::stream_unpack/stream_pack, coalescer-model::OutputAcceptedMask]
+  statement: The frozen global adapter has no request or response buffer. Each batch channel remains valid until independently accepted; delivered bits suppress resubmission and the input is released only when all enabled ports accept. Response pack selects the lowest valid port tag and includes only matching tags. A monotonically assigned software wire transaction/tag maps original batch identity and lane membership through cache words, preventing alias with reused coalescer indices. Software store application events expand channel ownership to participating lanes and retain errors without synthesizing load responses. The coalescer tracks per-channel progress so early responses do not wait for whole-batch acceptance. A public-API composition test drives actual cache/backend resources and checks returned lane bytes plus writeback visibility. The runtime socket/DCR and local-memory paths remain separate work.
+- id: r-software-local-memory
+  status: PROVISIONAL
+  nodes: [n-local-memory]
+  config_ref: cfg-memory
+  resource_refs: [res-local-storage]
+  boundary_refs: [b-local-request-xbar, b-local-sram-tag, b-local-result]
+  evidence: [local-model::NewLocalMemory/Step, local-model-tests::TestLocalMemoryByteWritesRDWHazardAndCTAScope/TestLocalMemoryHeldResponseAndStaleOwner, local::req_bank_idx/req_xbar/is_rdw_hazard/bram_buf/rsp_xbar, routing-progress::LMEM component]
+  statement: LocalMemory reads the frozen four-bank four-byte shape, local address window, request/response buffers and priority arbitration from IR. Each bank services one old request head into the original owner per edge. Two-entry request and destination response queues use old credit; one SRAM/tag pipe can replace a consumed response. A last-edge same-address write blocks a read for one edge; stores can apply while read response storage is occupied. Enabled-byte runs are applied with the original atomic owner, and reads retain detached data and faults through stalls. The software LocalOwner resolver must check the complete identity before returning the original CTAMemory owner; no local byte array is duplicated. Tests validate canonical CTA isolation, delayed stale-owner failure and distinct buffered residency. Local adapter and full split composition are covered by TestMixedPathCacheAndLMEM; Kernel scheduling and automatic residency binding remain subsequent integration work.
+- id: r-software-local-adapter
+  status: PROVISIONAL
+  nodes: [n-local-adapter, n-local-memory, n-lmem-switch]
+  boundary_refs: [b-local-adapter-request, b-local-adapter-response]
+  evidence: [local-adapter-model::Offers/Preview/Step, local-adapter-tests::TestLocalAdapterFiniteBuffersAndIndependentAcceptance/TestLocalAdapterTagPackAndStaleResponse, mixed-path-tests::TestMixedPathCacheAndLMEM, adapter::stream_unpack/stream_pack]
+  statement: LocalAdapter implements four independently accepted 4-byte lanes with two-entry per-lane request queues and a zero-buffer priority response pack. Old full queues do not borrow same-edge retirement credit. Software wire transactions preserve original SIMD identity/tag through separate word requests, partial responses and store application receipts; the ledger does not add hardware credit. The mixed-path regression connects split, both adapters, coalescer, D-cache, external backend and original CTA LMEM owner through public views and handshakes. It varies backend latency and response backpressure, verifies LMEM bank conflicts and all returned lane bytes, rejects duplicate completion, and distinguishes dirty cache visibility from local store application. Zero-buffer priority pack outputs may select a new tag or add matching lanes while stalled; constituent response ports and already visible same-tag bytes remain stable, and the split's registered output remains stable. Runtime FENCE/DCR, socket fabric and Kernel orchestration are subsequent milestones.
+- id: r-software-returned-memory-effects
+  status: PROVISIONAL
+  nodes: [n-lsu, n-commit]
+  evidence: [returned-memory-effects::MemoryRequests/AcceptMemoryResult, cycle-effects::serviceMemory, returned-memory-tests::TestReturnedMemoryPartialLoadsAndAppliedStores, packed-returned-tests::TestPackedReturnedByteVisibility, memory-integration-progress::returned byte contract]
+  statement: Effects now exports detached ordinary and packed address requests after execute, and accepts identity-checked lane fragments of actual aligned-word response data after scheduler acceptance. Ordinary and packed completion reuse the functional decoder and writeback receipts without reading the backing owner when MemoryResult is supplied. Store fragments report bytes already applied by cache/LMEM; only final coverage retires the functional MemoryEvent through a no-mutation acknowledgement, preserving earlier physical side effects on later failure. Concurrent dispatch routes these calls through existing instruction identity. Legacy Service remains for current Runner callers until runtime wiring is replaced; this interface increment alone does not satisfy complete T12 pipeline integration.
+- id: r-software-memory-system-composition
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-external-memory]
+  evidence: [memory-system-model::NewSystem/Responses/Step, memory-system-tests::TestSystemFetchMixedDataAndFlush/TestSystemProtocolFaultIsTerminal, memory-integration-progress::production component composition]
+  statement: System connects I-cache, mixed split, coalescer, global/local adapters, D-cache and original-owner LMEM using old-edge views and one Step per component. Concatenated I/D cache memory ports share the configured deterministic backend acceptance, capacity and return limits; this software external-memory boundary does not claim RTL socket-fabric timing. Consumers receive actual read bytes, store application events and separate cache flush replies. Per-input global progress bookkeeping is removed only on split completion. Protocol faults are terminal because a component may already have advanced or applied bytes; architectural memory errors remain response payloads. No fixed ISA service latency or new resource parameter is added by the composition. MultiRunner now has opt-in request integration including inline FENCE; Kernel now defaults to this path; single-Warp Runner defaults remain pending.
+- id: r-software-runner-memory-integration
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [runner-memory-system::receive/step/identity, runner-memory-system-tests::TestMultiRunnerRealMemory, memory-integration-progress::MultiRunner opt-in integration]
+  statement: MultiRunner has an explicit T12 MemorySystem option which transports real fetch and SIMD requests through System and completes effects with returned words and previous-edge store application events. It evaluates the same old Core state first with request ready false, steps the memory components once, then reevaluates with actual acceptance and commits once. It adds no fixed FetchCycles or MemoryCycles service delay. Software wire identities preserve token, uop, epoch and caller-bound residency. Four-warp ordinary and packed programs match functional state for backend latencies 1 and 30; store-followed-load reads dirty cache bytes while backing remains unchanged. Single-Warp default Runner migration is still pending; this opt-in increment is not milestone completion.
+- id: r-software-real-memory-overlap-regression
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [concurrent-runner::NewMulti, runner-memory-system::receive/step, real-overlap-regression::TestMultiRunnerConcurrentFunctionalResults/multiSetupMemory, spawn-wait-regression::TestMultiRunnerSpawnWaitAndOutstandingServiceTails, memory-integration-progress::Real overlap and spawn regression migration]
+  statement: Concurrent regression uses the original CTA LMEM owner for the packed-load Warp and global D-cache misses for the older ordinary load, preserving lane bytes and comparing complete architectural snapshots with the same functional routes. It waits for actual overlap rather than a fixed pre-fetch cycle and retains first-response reordering, simultaneous-stage, same-Warp overlap, independent-Warp progress and repeated-trace assertions. Spawn regressions retain global target-load tails in the target-tails case and use original-owner LMEM for dependency-bound targets in the other-warps-active case so spawn activation precedes the real global store application tail. Neither case uses MemoryDelay or predicted per-token service times; original activation, late-effect identity and register assertions remain.
+- id: r-software-default-multi-memory
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [concurrent-runner::NewMulti, single-runner-entry::New/Run/Flush/Release, single-runner-regression::TestProgramAndDeterminism/TestSingleRunnerPreservesWarpIdentityAndBarrierWake, single-runner-fragments::TestPackedProgramWAWBackpressureAndRecovery, runner-memory-system-tests::TestMultiRunnerRealMemory, runner-visibility::MakeVisible, memory-integration-progress::Default MultiRunner migration]
+  statement: NewMulti always creates System. Nil MemorySystem selects the IR backend defaults or an explicit MemoryConfig override and lifetime-stable per-Warp software identities. Only explicit atomic DataMemory routes service local requests; missing routes produce errors instead of using global backing. Dynamic CTA allocation requires explicit binding and resolver callbacks. Legacy FetchCycles, MemoryCycles and MemoryDelay do not affect this constructor's execution. Post-execution MakeVisible is an explicit resumable D-cache writeback boundary, separate from FENCE. Default-path ordinary and packed tests compare architectural states across backend latencies, forbid legacy delay callbacks and compare backing bytes only after visibility. Single-Warp New and timing-run now use the same scheduled memory path; fixed-delay service branches have been removed. Flush snapshots redirects before restarting and retains accepted transport. Protocol faults remain terminal rather than fabricating recovery.
+- id: r-software-kernel-reclaim-observation
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [kernel-launch-owner::Status/residency, kernel-residency-events::observeCTA, kernel-mixed-lifecycle::TestKernelMixedMemoryLifecycle]
+  statement: KernelCTA status exposes physical-slot generation, canonical stopped-Warp mask, outstanding memory references and reclaimability. Status and actual release share observeCTA. Reuse requires the slot's System residency references and member transport ledgers to drain, plus existing per-Warp Core/effects and CTA Barrier predicates, without requiring unrelated CTA drain. Dirty cache lines are not active residency references. Registered fetch activity remains independently visible in MultiRecord.Warps.Active. Kernel Complete, MemoryDrained and BackingVisible remain separate.
+- id: r-software-kernel-memory-integration
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [kernel-launch-owner::NewKernel/Status/MakeVisible, kernel-launch-regression::TestKernelDefaultsIgnoreLegacyServiceDelays/TestKernelLaunchExecutesStartupEntryAndCTAContexts, kernel-barrier-regression::TestKernelRepeatedBarrierLocalExchange, runner-memory-system::warpPending/services/step, memory-integration-progress::Kernel default integration]
+  statement: NewKernel always selects System with IR default external backend configuration or an explicit software override, ignoring legacy FetchCycles and MemoryCycles. Physical CTA slots carry increasing software generations and the local resolver validates live membership before returning the original residency owner. Warp reclamation waits for actual fetch, data and store receipt tails, not dirty cache lines. Ready throttles new offers only; held offers persist until real acceptance. Service traces have no predicted due cycle. Execution completion, memory drained and backing visibility are separate. Post-execution MakeVisible advances memory edges and performs the independent D-cache flush and backend visibility protocol with resumable budgets; it does not execute more ISA edges or replace FENCE. Kernel LMEM, barrier, spawn and reentry tests preserve their functional and identity assertions on this path. Standalone New now wraps scheduled NewMulti with only the original Warp active; failure recovery uses the same System.NextCycle alignment.
+- id: r-software-cancel-park-and-healthy-reset
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [selective-cancel-model::Frontend.cancel, recovery-restart::Core.Restart, recovery-runner::Flush, recovery-model-tests::TestCancelParkSurvivesRetainedDecodeUnlock, partial-cancel-tests::TestRealMemoryCancelPartiallyAppliedMixedStore, multiwarp-observation::observeWarps]
+  statement: Software cancellation has a separate per-Warp Parked gate on autonomous fetch selection. Older retained decode and control events still update the RTL stall state but cannot undo cancellation; explicit restart releases Parked only after the existing frontend and control guards pass. The gate is a software recovery condition, not an added RTL stall register. Healthy epoch Flush rebuilds Core and effects while retaining the complete memory System, dirty bytes, held requests and old transfer identities. Old identities are tombstoned and drained without architecture completion; the clock does not advance at reset. Failed-edge reset queries System.NextCycle and advances the software clock only if memory already committed the attempted edge. Old response-consumption failures do not skip a memory cycle. Protocol faults remain terminal because no common component edge can be established. Tests retain original old-load completion assertions by cancelling after actual LSU acceptance instead of a fixed early cycle.
+- id: r-software-failed-memory-edge-recovery
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache, n-commit]
+  evidence: [memory-system-model::NextCycle, recovery-runner::Flush, failed-edge-recovery-tests::TestMemoryFaultResetAlignsCommittedEdges, memory-system-tests::TestSystemProtocolFaultIsTerminal]
+  statement: NextCycle is a read-only software recovery interface returning the first uncommitted System edge, or the terminal protocol fault. MultiRunner Flush validates alignment before resetting effects and Core. An effects or decode error after successful System.Step skips only the attempted clock number; a fault while consuming an old response before Step retains that number. Neither path repeats a memory service or rebuilds backing/cache arrays. Old transport and explicit visibility replies are drained without completing cancelled architecture or claiming visibility success. Tests inject a refill read fault and a WSYNC external completion error, preserve owner snapshots across reset, resume real data flow, verify refill read counts and abandon a budgeted explicit flush without leaking its reply. This is a software fault boundary, not a hardware cache-reset assertion.
+- id: r-software-runner-cancelled-memory-tail
+  status: PROVISIONAL
+  nodes: [n-lsu, n-icache, n-dcache]
+  evidence: [runner-memory-system::cancel/receive/step, runner-memory-system-tests::TestRealMemoryCancelLoadAndRestart, partial-cancel-tests::TestRealMemoryCancelPartiallyAppliedMixedStore, memory-integration-progress::cancellation increment]
+  statement: For an admitted memory request MultiRunner cancellation retains transport and cache state, tombstones full wire identity and drains old responses without completing cancelled effects. Restart may run new tokens in the same epoch before the old miss returns; fresh instruction IDs and wire transactions distinguish them. Store application receipts are discarded architecturally without undoing or replaying applied bytes; writeback errors still surface. A cancelled held fetch later accepted by the cache cannot assert acceptance for the new frontend request. A partially submitted SIMD parent remains exposed with its complete original payload through cancellation and restart; every remaining lane still transfers, while its eventual acceptance is suppressed toward Core and all architectural results are discarded. This software boundary makes exposed offers irrevocable because the component interfaces have no abort signal. The mixed-store regression cancels after a local subset applies while the global path is backpressured, verifies no replay of local bytes and drains old identities after restart. Full error/reset and standalone default Runner integration remain incomplete. These are software recovery boundaries, not RTL squash signals.
+- id: r-software-ordering-result-effects
+  status: PROVISIONAL
+  nodes: [n-lsu, n-commit]
+  evidence: [returned-memory-effects::AcceptOrderingResult, cycle-effects::serviceMemory, ordering-result-tests::TestMemoryServiceAndPartialWBVisibility, cache-outer-flush::STATE_WAIT2/STATE_DONE/lock_released]
+  statement: Effects accepts an explicit completed FENCE ordering result separately from lane data. Successful completion retires the functional MemoryEvent without invoking the legacy ordering owner again and reuses the original accepted-cycle, identity, coverage and response/writeback lifecycle. It does not initiate a flush or authorize an unconditional drain. RTL cache_init first scans banks and then releases the held flush-marked core request; the existing public Cache Flush response additionally includes a software backend visibility ticket. These events must not be substituted for each other when wiring instruction FENCE. Runner now sends flush-marked SIMD words through the original request path and accepts partial ordering responses; the separate public visibility ticket is not used for instruction FENCE.
+- id: r-t12-inline-cache-flush
+  status: PROVISIONAL
+  nodes: [n-lsu, n-coalescer, n-dcache, n-icache]
+  evidence: [cache-outer-flush::flush_req_mask/lock_released/STATE_DONE, cache-wrap::cache_bypass/core_bus_cache_if, cache-wrapper::controlRelease/Step, inline-flush-tests::TestInlineFlushReleasesOriginalWord/TestInlineFlushDoesNotLockOuterNCBypass, decode::INST_FENCE, opc::src_valid/opd_buffer_st2, lsu-slice::g_mem_req_byteen_w/fence_lock, runner-memory-system-tests::TestRealMemoryFenceReturnsOriginalRequest]
+  statement: SIMD Flush propagates to coalesced and local-adapter words. Cache detects flush-marked cached inputs, scans banks, captures the currently held flush port mask when banks finish, and releases only those original requests until their acceptance. Normal cached inputs remain locked while a flush mask is present. The outer NC bypass is independent of this inline cache lock and does not initiate a bank scan. Inline flush produces no software Visibility ticket or independent flush reply; the original read carries address/tag and returns actual cache/refill data. FENCE has no source register reads in decode; the OPC operand accumulator clears on output fire, so its operands are zero, and LSU offset/pack zero and default full byte enable generate address-zero read words. Runner completes the original partial response masks through AcceptOrderingFragment, retiring the ordering event only on full coverage. BAR/WSYNC predicates are unchanged and no whole-Core drained predicate gates FENCE. Existing explicit Cache Flush retains its distinct software visibility protocol. This component integration does not establish full socket-fabric cycle equivalence.
 unknowns:
 - id: u-build
   functional_refs: []
@@ -4944,6 +5296,22 @@ unknowns:
   deadline: Before implementing cycle-accurate side effects for this path; do not silently patch frozen RTL.
   evidence:
   - lmem-switch::req_global_buf/req_local_buf/lsu_in_if.req_ready
+- id: u-t12-memory-order
+  status: UNRESOLVED
+  evidence: [lmem-switch::req_ready/req_global_buf/req_local_buf, mem::empty, coalescer::empty, memory-contract::unresolved gaps]
+  question: How are asymmetric split acceptance and simultaneous cross-path/store/control events made once-only and ordered?
+  known: Switch child valid is not gated by sibling ready and there is no accepted-subset register; coalescer empty excludes response slots and downstream adapter state.
+  missing: RTL proof of upstream/downstream invariant preventing duplicate child fire and exhaustive cross-path simultaneous-event ordering. Software once-only bookkeeping, store-tail retention, original-request FENCE routing and runtime D-to-I cache flush are implemented and tested; those tests do not prove all RTL composition invariants.
+  affected: [n-lmem-switch, n-coalescer, n-local-memory, n-dcache, n-icache]
+  deadline: T12 memory implementation before claiming ordering or RTL cycle equivalence
+- id: u-t12-cache-hit-order
+  status: UNRESOLVED
+  evidence: [cache-bank::fwd_head/creq_grant/amo_creq_path/lk_st0.is_hit, cache-mshr::finalize_is_release, cache-bank-model::step, cache-bank-tests::TestCacheBankNewHitDuringForwardChain]
+  question: Does the upstream instruction path prohibit new same-line hits while an older store remains in the refill replay chain, and what ordering is required across independent request producers?
+  known: Bank behavior is statically determined by fwd_head, replay_mux, creq_grant and core_req_ready; forwarding leaves input open to new core requests and plain hits do not wait for same-line pending stores. At LATENCY=2 a newcomer accepted one edge after fill accesses the array before the old store replays. A hit releases its MSHR without linking. Directed read/write newcomer tests assert acceptance edges and old/staged/final data; the model adds no ordering guard.
+  missing: Upstream instruction-level ordering and multi-producer composition proof; no unresolved bank admission rule is replaced by software serialization.
+  affected: [n-icache, n-dcache]
+  deadline: T12 upstream integration before instruction-level ordering or cycle-equivalence claims
 audit:
 - id: audit-csr-stall
   status: RESOLVED
@@ -6005,3 +6373,106 @@ cycle_contracts:
   simultaneous: non-source Warps may stop while spawn waits; no new allocation or cross-CTA target is introduced
   rule_refs: [r-scheduler-edge, r-simt-barrier-detail]
   evidence: [kernel-launch-owner::opts.Spawn owner pool, kernel-spawn-regression::TestKernelSpawnRetainsCTAMembership, kernel-sync-progress::Completion and identity audit]
+
+# T12 contracts refine existing resources; numeric defaults remain in cfg-memory
+# and the physical resource/boundary records above.
+memory_contracts:
+- id: mc-cache
+  status: FROZEN
+  origin: rtl
+  config_ref: cfg-memory
+  resource_refs: [res-icache, res-dcache]
+  boundary_refs: [b-icache-bank-mreq, b-dcache-bank-mreq, b-icache-bank-crsq, b-dcache-bank-crsq, b-icache-memory-response-queue, b-dcache-memory-response-queue]
+  evidence: [config::l1cache, header::VX_CFG_DCACHE_WRITEBACK, socket::icache/dcache, cache::cache_bank, cache-layout::CS_BANK_SEL_ADDR_START, cache-bank::MREQ_QUEUE_SIZE/CRSQ_QUEUE_SIZE, cache-replacement::g_fifo, cache-mshr::allocate/finalize/dequeue]
+  enabled: default I/D-cache and LMEM enabled; L2/L3 disabled; single Core makes D-cache writeback LLC; I WRITE_ENABLE=0 NC_ENABLE=0; D WRITE_ENABLE=1 NC_ENABLE=1 DIRTY_BYTES=0
+  geometry:
+    lane_bytes_ref: cfg-memory.lsu_word_bytes
+    coalesced_bytes_ref: cfg-memory.dcache_word_bytes
+    refill_bytes_ref: cfg-memory.line_and_sector_bytes
+    bank_select: floor(byte_address / line_and_sector_bytes) modulo banks
+    set_select: floor(byte_address / (line_and_sector_bytes * banks)) modulo sets_per_bank
+    sets_per_bank: cache_size_bytes / (banks * ways * line_and_sector_bytes)
+    service: one selected word request per bank per edge; same line does not imply one request
+  queues:
+    mshr_scope: MSHR_SIZE per bank; allocation at S0 even for candidate hits; finalize at S1; release hits or dequeue replay
+    mreq_depth: 'next_power_of_two(max(2 * LATENCY, WRITEBACK ? MSHR_SIZE : 0) + MREQ_SIZE)'
+    crsq_depth: next_power_of_two(2 + CRSQ_SIZE)
+    mrsq_scope: MRSQ_SIZE per memory port; zero is bypass
+    admission: core_req_ready requires creq_grant and no mreq_queue_alm_full, mshr_alm_full, pipe_stall or AMO conflict
+  ordering:
+    input_priority: init > replay > fill > flush > core request; gated by readiness, fill forwarding and pipeline stalls
+    replacement: per-set FIFO initialized to zero; increment on repl_valid fill; hits do not update FIFO
+    miss: pending same-line requests chain in MSHR; fill installs sector and resumes chain; leading plain reads may use fill forwarding until a write/AMO closes forwarding
+    store: writeback hit updates enabled bytes and dirty state; miss obtains sector then replays; dirty victim emits writeback at fill/flush commit
+    visibility: dirty cache data may differ from backing; valid or dirty resident lines alone are not outstanding requests
+- id: mc-coalescer
+  status: FROZEN
+  origin: rtl
+  config_ref: cfg-memory
+  resource_refs: [res-coalescer-tags]
+  evidence: [mem::g_coalescing, coalescer::g_seed_gen/g_data_merged/req_ibuf/rsp_rem_mask, adapter::stream_unpack/stream_pack]
+  grouping: fixed contiguous DATA_RATIO lane groups; choose seed among remaining active lanes; match output-word address within group; no cross-group line merge
+  bytes: ascending j assignments make later lane in the same batch win each overlapping enabled byte; disabled bytes never overwrite
+  acceptance: WAIT/SEND builds registered output; input ready only on final batch; caller holds input through all batches; output fire is independently valid and ready
+  response: load-only index slot saves original tag, participating mask and lane offsets; output tag carries UUID and slot; response mask expands only saved participants; release only after all output channels return
+  backpressure: ibuf_full blocks WAIT even for stores; held registered output prevents next batch; response ready propagates upstream
+  empty: WAIT and no registered output and no input valid; does not include ibuf_empty and is not load-response drain
+- id: mc-local
+  status: FROZEN
+  origin: rtl
+  config_ref: cfg-memory
+  resource_refs: [res-local-storage]
+  evidence: [mem::g_lmem_switches/g_lmem_adapters/local_mem, local::req_bank_idx/req_xbar/g_data_store, adapter::stream_unpack/stream_pack, lmem-switch::global_mask/local_mask]
+  routing: per-lane MEM_ATTR_LOCAL_OFFS partitions active mask; local AMO unsupported; local attr strips AMO
+  banking: low word-address bits select bank; remaining bits address word within bank; one LSU read or write per bank per edge
+  timing: priority request xbar OUT_BUF=3; synchronous SRAM OUT_REG=1 aligned with tag pipe; held response data latched against later SRAM reads; response xbar OUT_BUF=3; is_rdw_hazard blocks a read matching the previous-edge bank write address for one edge, while writes do not require response credit
+  adapter: local REQ_OUT_BUF=3 RSP_OUT_BUF=0; global REQ_OUT_BUF=0 RSP_OUT_BUF=0; DCR port-zero REQ_OUT_BUF=3; global adapter and local adapter preserve per-lane acceptance and tag-selected partial response masks
+  stores: SRAM enabled bytes update at accepted bank access; plain stores produce no read response
+- id: mc-interface
+  status: PROVISIONAL
+  origin: software_contract
+  evidence: [memory-contract::request/response and identity, mem::empty, coalescer::empty]
+  acceptance: accept only valid and ready at each boundary; retain payload while stalled; track accepted subsets exactly once; acceptance does not imply data delivery
+  request_fields: [identity, operation, lane_mask, word_address, byte_enable, store_data, attributes, tag]
+  response_fields: [identity, tag, response_mask, returned_data, completion_kind]
+  identity: retain kernel generation, CTA residency generation, warp slot generation, instruction token/epoch and subrequest ID until every dependent response or effect retires
+  load_completion: consume returned cache or LMEM bytes; never reread backing after response
+  store_completion: track accepted and applied subsets separately; no whole-SIMD atomic WriteBatch requirement; faults cannot silently retry already applied subsets
+  lifecycle: warp fetch stop, CTA reclaimable, kernel execution end, request drain and backing visibility are separate predicates; reclaim only owner-related tails
+  ownership: functional backing owner remains unique; cache valid/dirty copies are legal storage state with explicit writeback ownership
+- id: mc-control
+  status: FROZEN
+  origin: rtl
+  evidence: [lsu-slice::req_is_fence/fence_lock, core::busy/lsu_sched_drained, mem::empty, coalescer::empty, flush::flush_inflight_r/flush_done_r, cache-flush-fsm::STATE_WAIT1/STATE_FLUSH/STATE_WAIT2, cache-bank::no_pending_req]
+  predicates:
+    hardware_pending: issued instruction accounting until EOP commit; not memory visibility
+    lsu_scheduler_drained: AND of scheduler empty signals; not cache empty
+    core_busy: sched_busy or dcr_busy or not all lsu_sched_empty or not mem_unit_empty in frozen nongraphics build
+    mem_unit_empty: AND of per-block coalescer empty; does not directly count adapter output occupancy or LMEM tails
+    bank_empty: no pipeline valid and memory request queue empty; MSHR empty tested separately
+    software_complete: software effect receipt; not an RTL signal
+    backing_visible: external writes applied; not an RTL core busy signal
+  fence: LSU slice sets is_flush on fence requests; skips non-EOP packets; fence_lock sets on EOP request fire and clears on fence EOP response fire; blocks subsequent execute acceptance while locked
+  flush: DCR injects tagged flush once and holds done until req falls; bank waits MSHR and bank empty, walks sets/ways, nonzero bank waits bank empty before done; dirty data exits through normal memory requests
+- id: mc-backend
+  status: PROVISIONAL
+  origin: software_contract
+  evidence: [memory-contract::external backend, external-backend::Step, external-backend-tests::TestLatencyFromAcceptanceAndRoundRobin]
+  parameters:
+    latency_cycles: 100
+    accepts_per_cycle: 1
+    max_inflight: 16
+    returns_per_cycle: 1
+  timing: latency starts at actual backend acceptance; deterministic acceptance sequence orders equal due events; held response consumes inflight capacity until accepted
+  arbitration: rotating client priority from port zero; at most one acceptance per client per edge; old occupancy controls admission without same-edge retirement credit
+  returns: global acceptance order with head-of-line blocking; at most one response per client per edge within returns_per_cycle; due requests service independently of response readiness
+  protocol: contiguous Step edges; stalled offers retain all fields; per-client Transaction strictly increases; accepted request and returned payloads are detached values
+  errors: protocol errors precede all edge mutation; backing errors travel with original response; atomic enabled-byte runs prevent partial sector writes; visibility reports first earlier write error
+  visibility: apply enabled write bytes at service completion; reads sample at service completion; flush visibility ticket waits earlier accepted writes
+  scope: shared I/D external boundary; configurable software policy, not RTL DRAM timing; no added FetchCycles or MemoryCycles
+- id: mc-unresolved
+  status: UNRESOLVED
+  origin: unresolved
+  unknown_ref: u-t12-memory-order
+  evidence: [lmem-switch::req_ready/req_global_buf/req_local_buf, mem::empty, memory-contract::unresolved gaps]
+  gaps: asymmetric mixed acceptance, global/LMEM store-tail coverage, cross-group conflicts and concurrent control/backend events require explicit closure before cycle-equivalence claims

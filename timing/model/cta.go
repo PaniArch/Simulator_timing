@@ -62,6 +62,7 @@ func (c *Core) DispatchWarp(warp uint8, pc uint32, mask uint8) (Transition, erro
 	}
 	s := c.front.scheduler
 	next := s.state
+	next.Parked[warp] = false
 	next.Warps[warp].Active = true
 	next.Warps[warp].Stalled = false
 	next.Warps[warp].PC = pc

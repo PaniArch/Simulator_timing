@@ -10,6 +10,7 @@ import (
 	"vortex.local/simulator/emu/state"
 	"vortex.local/simulator/isa"
 	"vortex.local/simulator/support/memory"
+	"vortex.local/simulator/timing/memsys"
 	"vortex.local/simulator/timing/runner"
 )
 
@@ -22,8 +23,12 @@ func main() {
 func run() error {
 	program := flag.String("program", "", "raw little-endian image loaded at 0x100; empty runs built-in demo")
 	budget := flag.Uint64("cycles", 2000, "cycle budget")
-	fetch := flag.Uint64("fetch-cycles", 3, "explicit fetch service delay")
-	mem := flag.Uint64("memory-cycles", 19, "explicit memory service delay")
+	config, err := memsys.DefaultConfig()
+	if err != nil {
+		return err
+	}
+	mem := flag.Uint64("backend-cycles", config.Latency, "external backend latency in cycles")
+	visibility := flag.Uint64("visibility-cycles", 0, "explicit post-execution writeback budget; zero skips backing visibility")
 	trace := flag.Bool("trace", false, "emit per-cycle JSON records on stdout")
 	flag.Parse()
 	init := state.WarpInitial{Topology: state.FrozenTopology(), PC: 0x100, ActiveMask: 15, Lifecycle: state.WarpRunning}
@@ -65,7 +70,8 @@ func run() error {
 	if err = ram.Write(0x100, image); err != nil {
 		return err
 	}
-	r, err := runner.New(owner, ram, runner.Options{Backend: "std", PeriodPS: 1, FetchCycles: *fetch, MemoryCycles: *mem})
+	config.Latency = *mem
+	r, err := runner.New(owner, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config})
 	if err != nil {
 		return err
 	}
@@ -81,10 +87,22 @@ func run() error {
 	if traceErr != nil {
 		return traceErr
 	}
+	executionCycles := r.Cycle()
+	visible := false
+	if r.Completed() && *visibility != 0 {
+		visible, err = r.MakeVisible(*visibility)
+	}
+	fmt.Fprintf(os.Stderr, "execution_cycles=%d cycles=%d backing_visible=%t\n", executionCycles, r.Cycle(), visible)
+	if err != nil {
+		return err
+	}
 	snapshot, _ := owner.Snapshot()
 	fmt.Fprintf(os.Stderr, "cycles=%d retired=%d pc=%#x mask=%#x completed=%t\n", r.Cycle(), r.Retired(), snapshot.PC(), snapshot.ActiveMask(), r.Completed())
 	if !r.Completed() {
 		return fmt.Errorf("cycle budget exhausted with preserved pending state")
+	}
+	if *visibility != 0 && !visible {
+		return fmt.Errorf("visibility budget exhausted; backing output is not guaranteed visible")
 	}
 	return nil
 }
