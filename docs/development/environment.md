@@ -35,7 +35,7 @@ read-only archive in place; they do not copy, extract, or rebuild it.
 Every development shell starts with:
 
 ```bash
-cd /absolute/path/to/Simulator_dev1
+cd /absolute/path/to/Simulator_timing
 source env/env.sh
 ```
 

@@ -1,57 +1,89 @@
-# Vortex 周期级模拟器
+# Vortex 功能型与周期级模拟器
 
-本仓库是 Vortex GPU 周期级模拟器的开发仓库，用于实现和验证指令执行、
-流水线、调度、访存、缓存以及延迟和仲裁等周期行为。功能执行层提供语义参考，
-RTL 快照与配置文件用于约束周期模型的结构和参数。
+本仓库实现冻结单 Core Vortex 配置下的功能模拟器和周期级模拟器。功能层负责
+RV32/SIMT 架构语义，周期层依据仓库内 RTL 快照和 Timing IR 表达流水线、Multi-Warp、
+CTA/Kernel 生命周期、L1 Cache、LMEM、访存合并、背压及可见性。
 
-## 仓库结构
+原生 Vortex runtime 可通过同一 `simtiming` driver 选择两种后端：
 
-- `timing/`：周期模型的核心开发区域。
-- `isa/`：指令目录、译码规则、执行效果与 ISA 契约。
-- `emu/`：功能执行模型，包括 Warp、Core、CTA、Device 和状态管理。
-- `support/`：共享基础设施，包括内存模型和 Berkeley SoftFloat 封装。
-- `Vortex_rtl/`：RTL 参考快照、硬件配置和生成后的配置定义。
-- `internal/dependencycheck/`：第三方依赖的可用性和序列化往返测试。
-- `vendor/`：Go 依赖的离线副本。
-- `env/`：统一的开发环境入口。
-- `scripts/`：环境检查、构建与验证脚本。
-- `docs/`：架构、环境、依赖和开发约束文档。
-- `Task_timing/`：周期模型开发任务说明。
-- `logs/`：运行日志目录。
+```text
+Vortex host benchmark → native runtime → simtiming
+                                      ├─ functional → emu/
+                                      └─ timing     → timing/runner + timing/memsys
+```
 
-## 开发环境
+## 当前状态
 
-项目使用固定工具链和离线依赖：
+- T8–T12 的基础模型结构已经完成：Timing IR、周期流水线、四 Warp 调度、CTA/Kernel
+  执行闭环以及 L1/LMEM 存储路径均已接入。
+- 冻结拓扑为 RV32、1 Core、4 Warp、每 Warp 4 lane；当前配置关闭 L2/L3。
+- Timing 模型的 L1 miss 进入确定性的 external backend，默认从请求实际接受起延迟
+  100 cycles；它不是 DRAM 微架构模型。
+- 功能型与周期型后端均已连接原生 runtime。当前有 20 个不同 benchmark 获得 Timing
+  PASS，并完成同输入 RTLSIM 周期比较；等权 MAPE 为 22.10%。这表示功能链已闭合，
+  不表示已经达到逐周期 RTL 等价。
+- DRAM controller、L2/L3、多 Core coherence、VM/TLB 和 RTLSIM trace 精度收敛不在
+  当前基础模型范围内。
 
-- Go 1.26.2
-- GCC/G++ 9.4.0
-- Berkeley SoftFloat Release 3e
-- Akita v5.0.0-beta.10
-- `go.yaml.in/yaml/v3` v3.0.5
-- `github.com/pelletier/go-toml/v2` v2.4.3
+详细范围与证据从 [文档导航](docs/README.md) 开始阅读。
 
-本地环境胶囊位于 `.harness-environment/v1`；在 Harness 中可挂载为
-`/opt/simulator-environment`。所有开发命令应先加载统一环境：
+## 快速开始
+
+项目使用仓库内 vendor 和固定工具链。所有 Go 构建、测试及验证先加载环境：
 
 ```bash
 source env/env.sh
-```
-
-环境默认设置 `GOTOOLCHAIN=local`、`GOFLAGS=-mod=vendor`、`GOPROXY=off`
-和 `GOSUMDB=off`。正常构建与测试仅使用固定工具链和仓库内的 `vendor/`，
-不需要网络访问。
-
-## 验证
-
-运行完整验证：
-
-```bash
 ./scripts/verify-all.sh
 ```
 
-该命令检查 RTL 快照、固定环境、Go 模块、构建、测试、静态分析、格式以及
-空缓存离线构建。仅验证离线依赖可用性时运行：
+仅验证 Timing IR 和周期契约：
 
 ```bash
-./scripts/verify-offline.sh
+./scripts/verify-timing.sh
 ```
+
+构建原生 runtime backend 并运行小型 benchmark：
+
+```bash
+./scripts/build-vortex-runtime.sh
+module load compilers/gcc-12.2.0
+./scripts/run-vortex-benchmark.sh --mode timing vecadd -n16
+./scripts/run-vortex-benchmark.sh --mode functional vecadd -n16
+./scripts/test-vortex-runtime-smoke.sh
+```
+
+默认从仓库相邻的 `../vortex` 和 `../build` 查找 Vortex 源码与构建产物，也可通过
+`VORTEX_HOME`、`VORTEX_BUILD` 指定。完整使用和可见性语义见
+[runtime 接入说明](docs/runtime/vortex-runtime-integration.md)。
+
+## 仓库结构
+
+| 路径 | 职责 |
+| --- | --- |
+| `emu/` | 功能执行、Warp/Core/CTA/Device 状态与唯一架构 owner |
+| `timing/` | Timing IR、周期组件、调度、effects、runner 与 memory system |
+| `isa/` | 指令目录、译码和功能效果 |
+| `integration/` | 原生 Vortex runtime 到两种模拟器后端的适配 |
+| `cmd/` | timing 诊断、示例和 runtime C ABI 入口 |
+| `support/` | 内存与 SoftFloat 等共享基础设施 |
+| `Vortex_rtl/` | 冻结 RTL、配置和来源清单；作为只读建模证据 |
+| `docs/` | 项目、开发、runtime 和历史任务文档索引 |
+| `scripts/` | 环境、验证、runtime 构建和 benchmark/Slurm 工具 |
+| `vendor/` | 离线 Go 依赖 |
+| `logs/` | 需要入库的实验日志说明；临时产物位于忽略的 `.cache/` |
+
+## 文档入口
+
+- [完整文档导航](docs/README.md)
+- [功能模拟器架构契约](emu/docs/architecture.md)
+- [周期模型与 Timing IR](timing/README.md)
+- [周期 Kernel 使用说明](timing/kernel-usage.md)
+- [runtime 接入说明](docs/runtime/vortex-runtime-integration.md)
+- [benchmark 与 RTLSIM 周期评估](docs/runtime/runtime-error-diagnosis-20260910.md)
+
+## 验证原则
+
+`scripts/verify-all.sh` 检查冻结 RTL manifest、功能与周期代码、离线依赖、测试和静态
+分析。Timing PASS 还必须结合 host oracle、launch/finish、CTA 生命周期及 backing
+visibility 判断；Slurm 状态或单独的进程退出码不能替代这些证据。不能静态确认的 RTL
+行为继续在 Timing IR 中保留为 `UNRESOLVED`，不得为实现方便自行补定。

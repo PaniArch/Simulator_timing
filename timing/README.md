@@ -1,27 +1,57 @@
 # 周期执行与 Timing IR
 
-T11 已提供从 launch 到 CTA 回收的周期 Kernel 入口。使用与最终验收映射见 [kernel-usage.md](kernel-usage.md)；状态职责见 [architecture.md](architecture.md)。支持多 Warp Barrier/local memory 协作、跨容量驻留复用、事件身份与完成观测，不宣称 RTL 周期等价。
+本目录同时保存周期模型实现、结构化 Timing IR、当前使用说明以及 T8–T12 的里程碑
+证据。T12 已完成冻结单 Core 配置下从 Multi-Warp pipeline 到 L1/LMEM/external backend
+的执行闭环；当前实现不宣称逐周期 RTL 等价。
 
-下文保留按 [Task/T8.md](../Task/T8.md) 建立的静态基线和后续阶段历史记录。
+## 权威事实与当前接口
 
-T9 当前增量进度见 [implementation.md](implementation.md)：已建立 IR 参数读取、Akita 统一边沿及前端、操作数、执行资源、Commit 组件；完整连接、effects、程序运行器和驻留观测均已实现。下述 T8 交付记录是历史基线。
+| 文档 | 职责 |
+| --- | --- |
+| [ir.yaml](ir.yaml) | 配置、RTL 来源、节点、资源、端口、边界、周期规则和未知项的结构化权威来源 |
+| [architecture.md](architecture.md) | 周期层级、状态职责、实现边界与维护原则 |
+| [rules.md](rules.md) | 周期计量、阻塞、反馈和事件规则 |
+| [integration.md](integration.md) | 功能 owner 与周期事件的衔接边界 |
+| [kernel-usage.md](kernel-usage.md) | 当前 Kernel API、停止条件、回收和可见性 |
+| [t12-delivery.md](t12-delivery.md) | 当前 T12 存储/Kernel 交付和最终验证证据 |
+| [功能架构契约](../emu/docs/architecture.md) | 指令结果、canonical state owner 与 effect 语义的唯一权威来源 |
 
-- [architecture.md](architecture.md)：抽象层级、维护约定、结构解释、功能衔接与未知项。
-- [rules.md](rules.md)：周期计量边界、复杂阻塞/反馈与可追溯示例。
-- [ir.yaml](ir.yaml)：配置、来源、节点、资源、端口、通道、缓冲边界与规则索引，结构化数值的唯一维护位置。
-- [功能契约](../emu/docs/architecture.md)：指令结果、canonical state ownership、effect 与已有 `RESOLVED` 审计的唯一契约。
+阅读当前实现时依次阅读功能架构契约、`architecture.md`、`ir.yaml`、`rules.md`、
+`kernel-usage.md` 和 `t12-delivery.md`。修改结构化事实时先更新 YAML 的值、状态与
+evidence，再同步相应 Markdown；不得把未启用 RTL 分支或功能 Step 顺序当成周期事实。
 
-T8 历史交付覆盖 `timing-baseline`、`timing-rules` 与 `timing-integration-validation`：可审查的静态结构和局部周期规则，不包含周期执行器、Scheduler、cache 实现或 RTLSIM 对齐。定量条目均限定起止事件；剩余外部后端、变量等待与完整跨组件同时事件验证仍为未决；YAML 中未定值显式为 `null` 并关联未知项。离线 Akita 依赖可供后续实现使用，本阶段不固定其调用组织。
+## 子系统说明
 
-修改结构化事实时，在 YAML 更新值、状态与证据，再更新 Markdown 中对应稳定 ID 的解释。不得把未启用 RTL 分支或功能 Step 次序当作时序事实。
+- [model](model/)：前端、调度、Scoreboard、执行、Commit 和周期状态组件。
+- [effects](effects/README.md)：周期事件到唯一功能 owner 的交付。
+- [runner](runner/README.md)：单/多 Warp 和 Kernel 运行、取消、恢复、flush 与可见性。
+- [memsys](memsys/README.md)：split、coalescer、LMEM、I/D-cache 和 external backend。
 
-阅读顺序：先完整阅读功能契约，再读 architecture → ir.yaml 的来源/结构 → rules → [integration.md](integration.md) 的职责、复用评估与未决索引。三个静态 IR 里程碑均已形成交付；后续实现仍须按 unknowns 的 deadline 闭合相关缺口。
+## 历史里程碑证据
 
-在仓库根运行 `bash scripts/verify-timing.sh`：脚本加载 `env/env.sh`，使用固定 Go 工具链及 vendor 中的 `go.yaml.in/yaml/v3`，运行 [专用检查器](check/main.go) 和 [无效样例测试](check/main_test.go)。检查 YAML 语法/重复键、重复 ID、类型化引用、来源文件、状态、定量单位与起止事件、null 未知项及功能问题引用；失败返回非零。样例从真实 IR 内存副本分别破坏单一约束，不修改冻结输入、不下载依赖。
+- T8：`architecture.md`、`rules.md`、`integration.md` 和初始 `ir.yaml`；原始任务见
+  [T8](../docs/history/tasks/T8.md)。
+- T9：[implementation.md](implementation.md)。
+- T10：[multiwarp-contract.md](multiwarp-contract.md)、
+  [task10-progress.md](task10-progress.md)、
+  [concurrent-effects-progress.md](concurrent-effects-progress.md) 和
+  [control-observability-progress.md](control-observability-progress.md)。
+- T11：[task11-cycle-control.md](task11-cycle-control.md)、
+  [task11-kernel.md](task11-kernel.md) 和 [task11-kernel-sync.md](task11-kernel-sync.md)。
+- T12：[memory-contract.md](memory-contract.md)、[cache-progress.md](cache-progress.md)、
+  [routing-progress.md](routing-progress.md)、
+  [memory-integration-progress.md](memory-integration-progress.md) 和
+  [t12-delivery.md](t12-delivery.md)。
 
-完整回归另运行 `bash scripts/verify-all.sh`，最后运行 `git diff --check`。现有完整门禁保持原范围，Timing 专用门禁单独执行；结构检查与功能回归都不能证明动态时序等价或所有 RTL 结论正确。
+历史 progress 文档保存当时的验收映射，不应覆盖上表中的当前接口。T8–T12 原始任务
+统一归档在 [docs/history/tasks](../docs/history/tasks/)。
 
-本次交付验证记录：`test -s timing/integration.md`、`bash scripts/verify-timing.sh`（含 15 个无效样例）、`bash scripts/verify-all.sh` 和 `git diff --check` 全部通过。完整门禁涵盖 RTL manifest、固定环境、`go mod verify`、功能 build/test/vet，以及独立空缓存 vendor build/test/vet。环境提供方补齐固定模块缓存后，原先的离线元数据缺失阻塞已解除。按授权仅调整 `scripts/verify-offline.sh` 的临时目录创建与位置，使用 `SIMULATOR_RUNTIME_ROOT`；保留空缓存、网络限制、断言和失败退出行为。未下载依赖或修改冻结 RTL、现有功能语义。
+## 验证
+
+在仓库根运行 `bash scripts/verify-timing.sh`。它使用固定工具链和 vendor，检查 YAML
+语法、稳定 ID、类型化引用、来源文件、定量单位、起止事件、null 未知项及功能问题引用。
+完整回归运行 `bash scripts/verify-all.sh`。两者验证结构和实现一致性，不证明动态时序
+已经与 RTLSIM 完全相等。
 
 周期组件诊断入口（只推进 token，不执行架构效果或分支跳转）：
 

@@ -1,6 +1,6 @@
 # Task10：四 Warp 周期事件契约
 
-本页保存已验收的 `timing-contract` 审计记录，不是整个 Task10 完成声明。后续 `multiwarp-scheduling` 的实现与验收映射见 [实施记录](task10-progress.md)。已完整读取 `Task/T10.md`、`Task/T9.md`、`emu/docs/architecture.md`、Task9 `timing/implementation.md` 和现有 `ir.yaml`，重新核对 Scheduler、Fetch、Decode、IBuffer/Uop、Issue/Scoreboard、OPC、Dispatcher、Commit，以及 branch/WCTL/SIMT/barrier/FCSR 和仲裁/计数 primitive。冻结输入未修改；没有使用外部 reference 或 RTLSIM。
+本页保存已验收的 `timing-contract` 审计记录，不是整个 Task10 完成声明。后续 `multiwarp-scheduling` 的实现与验收映射见 [实施记录](task10-progress.md)。已完整读取 `docs/history/tasks/T10.md`、`docs/history/tasks/T9.md`、`emu/docs/architecture.md`、Task9 `timing/implementation.md` 和现有 `ir.yaml`，重新核对 Scheduler、Fetch、Decode、IBuffer/Uop、Issue/Scoreboard、OPC、Dispatcher、Commit，以及 branch/WCTL/SIMT/barrier/FCSR 和仲裁/计数 primitive。冻结输入未修改；没有使用外部 reference 或 RTLSIM。
 
 结构化事实以 `ir.yaml` 的 `cycle_contracts` 为准；本页解释边界和实施后果。`FROZEN/rtl_fact` 表示配置条件下的源码事实，`PROVISIONAL/software_interface` 是软件接口选择，`UNRESOLVED/unresolved_pair` 保留尚未验证的同时事件。`rtl_anchors` 是 `source-id::逐字源码片段`，检查器验证片段确实存在于登记的冻结文件；原有 evidence 的模块/信号定位继续保留。文本锚点存在性和静态检查不等于 RTL 时序等价证明。
 

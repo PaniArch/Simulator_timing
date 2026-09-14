@@ -4,7 +4,7 @@
 
 ## 已读取与核对
 
-实现前已完整读取 `Task/T9.md`、`Task/T8.md`、`emu/docs/architecture.md`，以及 timing 的 README、architecture、rules、integration 和完整 ir.yaml。核对了冻结包 README 的版本与排除范围。
+实现前已完整读取 `docs/history/tasks/T9.md`、`docs/history/tasks/T8.md`、`emu/docs/architecture.md`，以及 timing 的 README、architecture、rules、integration 和完整 ir.yaml。核对了冻结包 README 的版本与排除范围。
 
 当前实际采用的缓冲规则已直接核对 `VX_elastic_buffer.sv` 的 SIZE 分支、`VX_pipe_buffer.sv` 的 ready 链、`VX_stream_buffer.sv` 的 valid_in_r/valid_out_r 和两种数据 mux，以及 `VX_fifo_queue.sv` 的 pending/full、look-ahead RAM 与注册 head bypass。
 
