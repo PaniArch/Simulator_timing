@@ -1112,3 +1112,8 @@ vecadd、relu、wgather 等短而访存敏感的单 launch 仍偏高，说明问
 精度收敛应优先为 vecadd/relu/wgather、BFS/pathfinder 分解每 launch 的 fetch miss、D-cache
 hit/miss、backend wait、LSU pending、control drain 和 flush 计数，再分别判断是 backend
 边界差异还是内部仲裁/释放过度保守，不应以统一缩放系数修正。
+
+## 10. 双侧实际 trace 分析已独立归档
+
+完整的 wgather/vecadd 逐事件对齐、隔离因果实验及后续全通过集小规模双侧复测，统一见
+[RTLSIM 与 Timing trace 对比分析](rtlsim-timing-trace-analysis-20260914.md)。

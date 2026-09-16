@@ -80,6 +80,7 @@ module load compilers/gcc-12.2.0
 - [周期 Kernel 使用说明](timing/kernel-usage.md)
 - [runtime 接入说明](docs/runtime/vortex-runtime-integration.md)
 - [benchmark 与 RTLSIM 周期评估](docs/runtime/runtime-error-diagnosis-20260910.md)
+- [双侧 trace 对比与全通过集小规模复测](docs/runtime/rtlsim-timing-trace-analysis-20260914.md)
 
 ## 验证原则
 

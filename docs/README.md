@@ -49,6 +49,7 @@ runtime 操作和历史任务集中在本目录。
 - [原生 Vortex runtime 接入](runtime/vortex-runtime-integration.md)
 - [支持集 Slurm 测试方法](runtime/runtime-supported-tests.md)
 - [扩展测试、性能及 RTLSIM 周期分析](runtime/runtime-error-diagnosis-20260910.md)
+- [RTLSIM 与 Timing 双侧 trace 证据及小规模复测](runtime/rtlsim-timing-trace-analysis-20260914.md)
 
 诊断文档是按日期累积的实验记录；其中的作业状态是历史快照，当前结论以文末最新章节
 和保存的 result/summary 文件为准。
