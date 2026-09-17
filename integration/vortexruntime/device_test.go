@@ -93,6 +93,11 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 			if !d.LastRun().BackingVisible {
 				t.Fatal("flush did not publish backing bytes")
 			}
+			previous := d.kernel
+			var previousCycle uint64
+			if previous != nil {
+				previousCycle = previous.Status().Cycle
+			}
 			// Reload the same VMA after the real CP flush, then launch again.
 			putWord(t, d, 0x100, 0x02b00093)
 			if err := d.Start(); err != nil {
@@ -101,6 +106,15 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 			waitIdle(t, d)
 			if d.LastError() != "" {
 				t.Fatal(d.LastError())
+			}
+			if mode == Timing {
+				status := d.kernel.Status()
+				if status.LaunchID != 2 || status.StartCycle != previousCycle || d.LastRun().Cycles != status.LaunchCycles {
+					t.Fatal("lost device clock or per-launch accounting", status, d.LastRun())
+				}
+				if previous.Status().Cycle != previousCycle {
+					t.Fatal("old launch status changed")
+				}
 			}
 			if _, err := d.ReadDCR(dcrCacheFlush, 0); err != nil {
 				t.Fatal(err)

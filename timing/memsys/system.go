@@ -18,6 +18,7 @@ type System struct {
 	split             *SIMDSplit
 	coalescer         *Coalescer
 	globalAdapter     *GlobalAdapter
+	dataPort          *dcachePortBuffer
 	localAdapter      *LocalAdapter
 	progress          map[Identity]uint8
 	released          map[Identity]bool
@@ -27,6 +28,7 @@ type System struct {
 }
 
 type SystemInput struct {
+	Trace                                 bool // observation only, no handshake or state changes
 	Fetch                                 WordOffer
 	Memory                                SIMDOffer
 	FetchReady, MemoryReady               bool // consumers of returned data
@@ -35,6 +37,7 @@ type SystemInput struct {
 }
 
 type SystemEdge struct {
+	Transfers                                   []Transfer // populated only for SystemInput.Trace
 	FetchAccepted, MemoryAccepted               bool
 	Fetch                                       WordReply
 	Memory                                      SIMDReply
@@ -44,6 +47,9 @@ type SystemEdge struct {
 	InstructionFlushAccepted, DataFlushAccepted bool
 	InstructionFlush, DataFlush                 FlushReply
 	WritebackErrors                             []Response
+	// D-cache boundary handshakes: adapter acceptance is not Cache acceptance.
+	DataAdapterAccepted, DataCacheAccepted [2]bool
+	DataCacheFlushAccepted                 bool
 }
 
 func NewSystem(owner warp.AtomicMemoryService, localOwner LocalOwner, config Config) (*System, error) {
@@ -70,6 +76,9 @@ func NewSystem(owner warp.AtomicMemoryService, localOwner LocalOwner, config Con
 	if s.globalAdapter, err = NewGlobalAdapter(); err != nil {
 		return nil, err
 	}
+	if s.dataPort, err = newDCachePortBuffer(); err != nil {
+		return nil, err
+	}
 	if s.localAdapter, err = NewLocalAdapter(); err != nil {
 		return nil, err
 	}
@@ -83,13 +92,18 @@ func (s *System) Responses() (WordReply, SIMDReply) {
 }
 
 func (s *System) Drained() bool {
-	return s.instruction.Drained() && s.data.Drained() && s.local.Drained() &&
+	return s.fault == nil && s.dataPort.Drained() && s.instruction.Drained() && s.data.Drained() && s.local.Drained() &&
 		s.split.Drained() && s.coalescer.Drained() && s.globalAdapter.Drained() &&
 		s.localAdapter.Drained() && s.backend.Outstanding() == 0
 }
 
+// DCachePort0Occupancy reports registered requests not yet accepted by Cache.
+// This read-only observation includes synthetic flushes; zero does not imply
+// Drained because responses, applications and flush visibility can remain live.
+func (s *System) DCachePort0Occupancy() int { return len(s.dataPort.queue.values) }
+
 func (s *System) HasResidency(kernel, cta uint64) bool {
-	return s.instruction.HasResidency(kernel, cta) || s.data.HasResidency(kernel, cta) ||
+	return s.dataPort.HasResidency(kernel, cta) || s.instruction.HasResidency(kernel, cta) || s.data.HasResidency(kernel, cta) ||
 		s.local.HasResidency(kernel, cta) || s.split.HasResidency(kernel, cta) ||
 		s.coalescer.HasResidency(kernel, cta) || s.globalAdapter.HasResidency(kernel, cta) ||
 		s.localAdapter.HasResidency(kernel, cta)
@@ -110,6 +124,9 @@ func (s *System) Step(cycle uint64, in SystemInput) (out SystemEdge, err error) 
 	}()
 	if s.started && (s.cycle == math.MaxUint64 || cycle != s.cycle+1) {
 		return out, fmt.Errorf("noncontiguous memory system cycle")
+	}
+	if err := s.dataPort.validate(in.DataFlush); err != nil {
+		return out, err
 	}
 	s.started, s.cycle = true, cycle
 	paths, batch := s.split.Outputs(), s.coalescer.Output()
@@ -159,15 +176,47 @@ func (s *System) Step(cycle uint64, in SystemInput) (out SystemEdge, err error) 
 	if err != nil {
 		return out, err
 	}
-	de, err := s.data.Step(cycle, CacheInput{Requests: s.globalAdapter.Offers(batch), ResponseReady: gr, Memory: Edge{memory.Accepted[n:], memory.Replies[n:]}, Flush: in.DataFlush, FlushReady: in.DataFlushReady})
+	adapterOffers := s.globalAdapter.Offers(batch)
+	dataRequests, dataFlush := s.dataPort.output(adapterOffers)
+	de, err := s.data.Step(cycle, CacheInput{Requests: dataRequests, ResponseReady: gr, Memory: Edge{memory.Accepted[n:], memory.Replies[n:]}, Flush: dataFlush, FlushReady: in.DataFlushReady})
 	if err != nil {
 		return out, err
 	}
-	me, err := s.local.Step(cycle, s.localAdapter.Offers(), lr)
+	adapterAccepted, dataFlushAccepted := s.dataPort.advance(adapterOffers, in.DataFlush, de)
+	adapterEdge := de
+	adapterEdge.Accepted = adapterAccepted
+	localOffers := s.localAdapter.Offers()
+	me, err := s.local.Step(cycle, localOffers, lr)
 	if err != nil {
 		return out, err
 	}
-	ge, err := s.globalAdapter.Step(cycle, GlobalAdapterInput{Batch: batch, Cache: de, ResponseReady: pathReady[0]})
+	var transfers []Transfer
+	if in.Trace {
+		add := func(boundary string, port int, request WordRequest, parent Identity, batch BatchID, lanes uint8) {
+			transfers = append(transfers, Transfer{boundary, port, request, parent, batch, lanes})
+		}
+		if ie.Accepted[0] {
+			add("fetch-cache", 0, in.Fetch.Request, in.Fetch.Request.Identity, BatchID{}, 0)
+		}
+		for p, accepted := range adapterAccepted {
+			if accepted {
+				add("global-adapter", p, adapterOffers[p].Request, batch.Batch.Identity, batch.Batch.ID, batch.Batch.LaneMask)
+			}
+		}
+		for p, accepted := range de.Accepted {
+			if accepted {
+				add("data-cache", p, dataRequests[p].Request, Identity{}, BatchID{}, 0)
+			}
+		}
+		for p, accepted := range me.Accepted {
+			if accepted {
+				req := localOffers[p].Request
+				rec := s.localAdapter.records[req.Identity.Transaction]
+				add("local-memory", p, req, rec.request.Identity, BatchID{}, 1<<p)
+			}
+		}
+	}
+	ge, err := s.globalAdapter.Step(cycle, GlobalAdapterInput{Batch: batch, Cache: adapterEdge, ResponseReady: pathReady[0]})
 	if err != nil {
 		return out, err
 	}
@@ -176,7 +225,7 @@ func (s *System) Step(cycle uint64, in SystemInput) (out SystemEdge, err error) 
 		return out, err
 	}
 	var mask uint8
-	for p, accepted := range de.Accepted {
+	for p, accepted := range adapterAccepted {
 		if accepted {
 			mask |= 1 << p
 		}
@@ -207,12 +256,15 @@ func (s *System) Step(cycle uint64, in SystemInput) (out SystemEdge, err error) 
 		delete(s.progress, id)
 		delete(s.released, id)
 	}
-	return SystemEdge{
+	return SystemEdge{Transfers: transfers,
 		FetchAccepted: ie.Accepted[0], MemoryAccepted: se.Accepted,
 		Fetch: ie.Replies[0], Memory: se.Response, MemoryDelivered: se.ResponseDelivered,
 		Stores: se.Stores, Complete: se.Complete,
-		InstructionFlushAccepted: ie.FlushAccepted, DataFlushAccepted: de.FlushAccepted,
-		InstructionFlush: ie.Flush, DataFlush: de.Flush,
+		InstructionFlushAccepted: ie.FlushAccepted, DataFlushAccepted: dataFlushAccepted,
+		DataAdapterAccepted:    [2]bool{adapterAccepted[0], adapterAccepted[1]},
+		DataCacheAccepted:      [2]bool{de.Accepted[0], de.Accepted[1]},
+		DataCacheFlushAccepted: de.FlushAccepted,
+		InstructionFlush:       ie.Flush, DataFlush: de.Flush,
 		WritebackErrors: append(ie.WritebackErrors, de.WritebackErrors...),
 	}, nil
 }

@@ -22,6 +22,10 @@ type GlobalAdapter struct {
 	records         map[uint64]*globalWordRecord
 	heldReads       [2]WordReply
 }
+
+// Cache supplies word-sink acceptances plus actual Cache responses/receipts.
+// System substitutes b-dflush input acceptance on port 0; a sent word may
+// therefore still be buffered upstream of Cache until a later edge.
 type GlobalAdapterInput struct {
 	Batch         BatchOffer
 	Cache         CacheEdge

@@ -109,6 +109,100 @@ def submit_chain(root, chain, position, parent=None):
     print("JOB_ID=%s CHAIN=%d POSITION=%d INDEX=%d" % (job, chain, position, indices[position]), flush=True)
 
 
+def unique_object(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON key: " + key)
+        value[key] = item
+    return value
+
+
+def invalid_constant(value):
+    raise ValueError("non-JSON number: " + value)
+
+
+def read_events(path):
+    records = []
+    malformed = False
+    if path.exists():
+        try:
+            for line in path.read_text().splitlines():
+                try:
+                    records.append(json.loads(line, object_pairs_hook=unique_object, parse_constant=invalid_constant))
+                except ValueError:
+                    malformed = True
+        except (OSError, UnicodeError):
+            malformed = True
+    return records, malformed
+
+
+def audit_evidence(records, mode, malformed=False):
+    """Require an ordered, paired launch/finish/visibility chain, not counts alone.
+
+    Cycle fields are explicit (including zero); functional mode has no timing
+    measurement. Any incomplete evidence makes aggregate cycle totals unknown.
+    """
+    starts, finishes, flushes = {}, {}, {}
+    valid = not malformed and mode in ("timing", "functional")
+    def natural(value):
+        return type(value) is int and value >= 0
+    def healthy(record, summary):
+        return all(key not in source or (isinstance(source[key], str) and not source[key])
+                   for source in (record, summary) for key in ("error", "error_origin"))
+    for record in records:
+        if not isinstance(record, dict):
+            valid = False
+            continue
+        event, summary = record.get("event"), record.get("summary")
+        if event not in ("launch-start", "launch-finish", "cache-flush") or not isinstance(summary, dict):
+            valid = False
+            continue
+        seq = summary.get("sequence")
+        if not natural(seq) or seq == 0:
+            valid = False
+            continue
+        if summary.get("mode") != mode or not healthy(record, summary):
+            valid = False
+        if event == "launch-start":
+            if seq != len(starts) + 1 or seq in starts or not isinstance(summary.get("launch"), dict) or not summary["launch"]:
+                valid = False
+            if starts and (len(finishes) != len(starts) or
+                           (mode == "timing" and len(flushes) != len(starts))):
+                valid = False
+            starts[seq] = summary
+            continue
+        if seq not in starts or summary.get("launch") != starts[seq].get("launch"):
+            valid = False
+        if type(summary.get("outcome")) is not int or summary["outcome"] != 0:
+            valid = False
+        if any(not natural(summary.get(k)) for k in ("execution_cycles", "flush_cycles", "generated", "admitted", "completed")):
+            valid = False
+        if not (summary.get("generated") == summary.get("admitted") == summary.get("completed")):
+            valid = False
+        if type(summary.get("backing_visible")) is not bool:
+            valid = False
+        if event == "launch-finish":
+            if seq in finishes or summary.get("flush_cycles") != 0:
+                valid = False
+            if summary.get("backing_visible") is not (mode == "functional"):
+                valid = False
+            finishes[seq] = summary
+        else:
+            if mode != "timing" or seq not in finishes or seq in flushes or summary.get("backing_visible") is not True:
+                valid = False
+            if seq in finishes and any(summary.get(k) != finishes[seq].get(k)
+                                       for k in ("execution_cycles", "generated", "admitted", "completed", "outcome")):
+                valid = False
+            flushes[seq] = summary
+    valid = valid and bool(starts) and starts.keys() == finishes.keys()
+    if mode == "timing":
+        valid = valid and starts.keys() == flushes.keys()
+    return dict(evidence_complete=bool(valid), launches=len(starts), finishes=len(finishes),
+                execution_cycles=sum(s["execution_cycles"] for s in finishes.values()) if valid and mode == "timing" else None,
+                flush_cycles=sum(s["flush_cycles"] for s in flushes.values()) if valid and mode == "timing" else None)
+
+
 def execute(root, index):
     manifest = json.loads((root / "manifest.json").read_text())
     case = manifest["cases"][index]
@@ -117,7 +211,8 @@ def execute(root, index):
     directory = root / "results" / str(index)
     directory.mkdir(parents=True, exist_ok=False)
     result = dict(case, job_id=os.getenv("SLURM_JOB_ID"), node=os.uname().nodename,
-                  classification="EXTERNAL_CONNECTION", exit_code=None)
+                  classification="EXTERNAL_CONNECTION", exit_code=None,
+                  execution_cycles=None, flush_cycles=None)
     start = time.monotonic()
     try:
         selected = ["lib/libvortex.so", "lib/libvortex-simtiming.so", "lib/libsimtiminggo.so",
@@ -150,25 +245,9 @@ def execute(root, index):
                     process.wait()
                 code = 124
         result["exit_code"] = code
-        records = []
-        malformed = False
-        events = directory / "events.jsonl"
-        if events.exists():
-            for line in events.read_text().splitlines():
-                if not line.strip():
-                    continue
-                try:
-                    records.append(json.loads(line))
-                except json.JSONDecodeError:
-                    malformed = True
+        records, malformed = read_events(directory / "events.jsonl")
         errors = (directory / "stderr.log").read_text(errors="replace") + json.dumps(records)
-        launches = [r for r in records if r.get("event") == "launch-start"]
-        finishes = [r["summary"] for r in records if r.get("event") == "launch-finish"]
-        flushes = [r["summary"] for r in records if r.get("event") == "cache-flush"]
-        result.update(launches=len(launches), finishes=len(finishes),
-                      execution_cycles=sum(s.get("execution_cycles", 0) for s in finishes),
-                      flush_cycles=sum(s.get("flush_cycles", 0) for s in flushes))
-        visible = {s["sequence"] for s in finishes + flushes if s.get("backing_visible")}
+        result.update(audit_evidence(records, case["mode"], malformed))
         if timed_out:
             result["classification"] = "TIMEOUT"
         elif "simulator-internal" in errors:
@@ -180,7 +259,7 @@ def execute(root, index):
             result["runner_error"] = "dynamic-loader environment failure; chain paused"
         elif code != 0:
             result["classification"] = "HOST_OR_UNKNOWN"
-        elif malformed or not launches or len(launches) != len(finishes) or any(s["sequence"] not in visible or s.get("mode") != case["mode"] for s in finishes):
+        elif not result["evidence_complete"]:
             result["classification"] = "INCOMPLETE_EVIDENCE"
         else:
             result["classification"] = "PASS"
@@ -204,7 +283,22 @@ def aggregate(root):
     counts = {}
     for case in manifest["cases"]:
         file = root / "results" / str(case["index"]) / "result.json"
-        row = json.loads(file.read_text()) if file.exists() else dict(case, classification="NOT_REPORTED")
+        try:
+            row = json.loads(file.read_text(), object_pairs_hook=unique_object, parse_constant=invalid_constant) if file.exists() else dict(case, classification="NOT_REPORTED")
+            if not isinstance(row, dict):
+                raise ValueError("result must be an object")
+        except (ValueError, OSError):
+            row = dict(case, classification="INCOMPLETE_EVIDENCE")
+        matches = all(row.get(k) == case[k] for k in ("index", "mode", "benchmark", "argv"))
+        row.update(case)
+        records, malformed = read_events(file.parent / "events.jsonl")
+        row.update(audit_evidence(records, case["mode"], malformed))
+        if not matches or (row.get("classification") == "PASS" and
+                           (not row["evidence_complete"] or type(row.get("exit_code")) is not int or row["exit_code"] != 0)):
+            row["classification"] = "INCOMPLETE_EVIDENCE"
+        if row.get("classification") not in ("PASS", "TIMEOUT", "SIMULATOR_INTERNAL", "EXTERNAL_CONNECTION",
+                                              "HOST_OR_UNKNOWN", "INCOMPLETE_EVIDENCE", "NOT_REPORTED"):
+            row["classification"] = "INCOMPLETE_EVIDENCE"
         rows.append(row)
         key = row["mode"] + ":" + row["classification"]
         counts[key] = counts.get(key, 0) + 1
@@ -213,7 +307,7 @@ def aggregate(root):
     with (root / "summary.tsv").open("w") as output:
         output.write("\t".join(fields) + "\n")
         for row in rows:
-            output.write("\t".join(str(row.get(f, "")) for f in fields) + "\n")
+            output.write("\t".join(("unknown" if row.get(f) is None else str(row[f])) for f in fields) + "\n")
     print(json.dumps(counts, indent=2))
     print("SUMMARY=" + str(root / "summary.tsv"))
     return 0 if all(row["classification"] == "PASS" for row in rows) else 1

@@ -44,7 +44,7 @@ memory/control 归因是候选方向，不能当作已经证明的建模错误�
 
 RTLSIM 文本 trace 库保留 release 编译、PERF 和原 Ramulator，只开启
 DBG_TRACE_PIPELINE/MEM/CACHE；没有开启 VCD 或更改硬件结构。源码对照：
-`Vortex_rtl/hw/rtl` 与 `../vortex/hw/rtl` 的源文件相同（后者额外有 .DS_Store）；
+`Vortex_rtl/hw/rtl` 与诊断时相邻 Vortex checkout 的 `hw/rtl` 源文件相同（后者额外有 .DS_Store；该 checkout 不属于当前离线输入）；
 两份 VX_config.toml SHA-256 都是
 `3f020a15364555da8da610b5f78501f670299440685846fb40bb0f757593fb93`。
 沿用 §9 冻结的 host/kernel 输入。
@@ -917,7 +917,7 @@ BFS 的后七次 launch、pathfinder 的后六次、multikernel 的后两次都�
 每次调用 runner.NewKernel；[newRunnerMemory](../../timing/runner/memory_system.go)
 新建 [NewSystem](../../timing/memsys/system.go)，重新 NewCache；[cache_bank](../../timing/memsys/cache_bank.go)
 的 initNext 从零逐 set 初始化。RTL runtime 持有同一个 Processor，
-后续调用 [processor.run](../../../vortex/sim/rtlsim/processor.cpp) 不等于重新构造和 reset 设备。
+后续调用 诊断时外部 Vortex 源码 `sim/rtlsim/processor.cpp` 中的 `processor.run` 不等于重新构造和 reset 设备。
 
 已经证明的是：模型把存储系统对象生命周期绑定到每次 Kernel launch，且实际启动等待
 与 RTL 不同。还不能声称 RTL 的 I-cache 跨 launch 始终命中：上表明确仍有外部读，
@@ -1074,3 +1074,87 @@ LW：
 [observer-control/result.json](/hpc2hdd/home/zekaiwang/vortex-work/Simulator_timing/.cache/trace-suite-small-20260914/observer-control/result.json)。
 上述核验覆盖的产物约 3.93 GB，保留在本地忽略目录，不随 Markdown 自动进入 Git。
 正式修改仅为这份新报告、旧报告的迁移链接及两处文档入口；没有修改模拟器主体或提交 commit。
+
+### port 0 生产接线修复交接（2026-09-16，dcache-port-buffer 第 1 步）
+
+§10.3 的诊断 overlay 未作为实现来源合入。正式 `timing/memsys/system.go`
+现在实例化 `dcache_port_buffer.go`，从 IR 读取 `b-dflush` 并要求 SIZE=2、
+OUT_REG=1；普通 load/store、原位 flush 和独立 flush 都经过 port 0 队列。
+port 1 保持直通，满时本拍出队不产生本拍入队 credit。独立 flush 的返回仍使用
+既有 scan + Visibility 软件契约，不能等同于 RTL 指令 FENCE 的端到端周期。
+
+新增生产测试 `TestSystemDFlushPortPhase` 在固定 100-cycle backend 下，以同 bank
+四 lane 非合并地址验证 Cache 接受端口连续为 1/0/1/0；同时单独观察 adapter
+接受，不能把两个边界再次合并。队列保存完整 word/residency 身份，adapter 记录
+保留到真实 load 回复或 store 收据；flush 尾部保留到回复交付，取消不丢弃 transport。
+新增基础逐边沿测试见 `timing/memsys/dcache_port_buffer_test.go`。
+
+第 1 步只交接生产接线和基础回归。下一位 closure Worker 需补齐 queued/in-flight
+取消、故障恢复、flush 组合的 runner 验证及 AC-009 结构覆盖检查，并运行完整冻结门禁。
+未重跑原规模 benchmark 或 RTLSIM；以上局部边沿验证不替代原规模实验，不修改历史结果。
+
+第 1 步实际验证（固定工具链、vendor、离线，无 RTL 修改）：
+
+- `go test ./timing/memsys -count=1`：PASS（含新逐边沿及原有 Batch/响应稳定性回归）。
+- `go test ./timing/runner -run 'Test(RealMemory|MemoryFaultReset|FlushPreserves|FlushAfter|KernelMixedMemory|RuntimeCacheFlush)' -count=1`：PASS（237.517s）。
+- `go test ./timing/runner -run 'Test.*Async' -count=1`：PASS。
+- `bash scripts/verify-timing.sh`：PASS；脚本诊断仅输出到 stderr，成功 stdout 为空。
+- `git diff --check`：PASS。
+
+完整 `bash scripts/verify-offline.sh` 留给第 2 步收尾执行，不能以以上定向结果替代。
+仓库未提供名为 Construction Skill 或 Boundary 的独立文件，`.agents`/`.codex`
+为空；本次依据现有 `emu/docs/architecture.md`、`timing/architecture.md`、
+`timing/memory-contract.md`、IR、冻结 RTL 和本轮明确 Worker 边界实施。
+
+## 14. dcache-port-buffer 里程碑收尾（2026-09-16）
+
+本节接续第 1 步生产缓冲接线，保留 §10.3 的历史实验数据，未把诊断 overlay
+或过去 benchmark 数字作为当前实现的验收结果。
+
+| 验收 | 实现与离线证据 |
+| --- | --- |
+| AC-006 | `memsys/dcache_port_buffer.go` + `System` 实例：`b-dflush` SIZE=2/OUT_REG=1，只缓冲 port 0；adapter 与 Cache 接受分别观测。`TestDCachePortBufferEdges` 覆盖空、满、同拍出入与稳定性。 |
+| AC-007 | `TestSystemDFlushInlineAndIndependent`、`TestDFlushQueuedLoadResponseTail`、`TestDFlushStoreAndFlushFaultTail` 验证原位/独立 flush、响应背压、正常/失败写回、一次应用与最终 backing bytes；`TestSystemFaultRetainsBufferedRequest` 保留终态协议故障身份。runner `TestDFlushQueuedRunnerCancellation` 对真实 load/store/FENCE 的 queued 边沿执行 selective cancel/epoch Flush。既有 partial_cancel、fault_recovery、cache_flush 回归覆盖 mixed 部分应用、延迟故障恢复和真实 D/I flush。 |
+| AC-008 | `TestSystemDFlushPortPhase` 在默认 100-cycle 服务下，对 load/store 的两个 non-coalescing batch 验证实际 Cache 接受逐拍 `1/0/1/0`；`TestSystemDFlushMixedPartialAcceptance` 验证冷 Cache 背压期间 LMEM 独立应用、global 部分接受和无重复。未修改 RTL bank 仲裁或套用历史端到端周期常数。 |
+| AC-009 | `timing/check/dflush_contract.go` 检查冻结 mem_unit port 0 → dcr_flush → mem_bus_arb → stream_arb → elastic/stream buffer 的编码与连接，核对 IR `b-dflush`，再运行生产 System 逐边沿 witness。负例覆盖错接端口、REQ_OUT_BUF=0、core 旁路和组合 ready；生产旁路及错误直通端口的临时编译变异也必须被 witness 拒绝。 |
+
+收尾测试发现并修复了一个软件尾部漏洞：取消请求的最后 response 可与 Core 已停止
+重合，System 已排空，但 runner 的 `complete`/`cancelledData` 仍待下一次 `receive`
+清理。`runnerMemory.drained` 统一包含这些记录和其他传输 maps；`warpPending`
+保留 final completion 身份直到消费。Runner/Kernel 的排空观测使用同一谓词。
+因此出现的额外收尾边沿来自已有 deferred receipt 的消费，不是经验周期补偿。
+`DCachePort0Occupancy` 只提供诊断读数，不能作为提前完成条件。
+
+本轮不实现设备跨 launch 生命周期、Warp 分配/复用策略或宿主吞吐优化。
+Batch provenance、stalled-response 检查、异步 BAR activation 截止线、唯一 backing
+owner、冻结单 Core/四 Warp/四 lane 与默认外部 latency=100 全部保持。
+
+最终验证（当前生产代码，离线固定工具链）：
+
+- `bash scripts/verify-timing.sh`：exit 0；重定向后确认 stdout 为 **0 bytes**。
+  IR/RTL 连接检查与生产 load/store witness 均通过。
+- `bash scripts/verify-offline.sh`：exit 0；空缓存、vendor、禁网的 list/build/test/vet
+  全部通过。runner 全包 **688.020 s**，memsys **72.117 s**，effects **143.387 s**，
+  runtime **40.460 s**；未改变验证脚本或扩大 timeout。
+- 新增 memsys 生命周期定向回归通过；runner 六种 queued 取消/epoch Flush 组合
+  单独回归通过（61.232 s），之后又包含于完整门禁。
+- 编译变异验证保留生产文件不变：旁路 System 缓冲时 witness 拒绝
+  `ports=[0 1 0 1], cycles=[103 104 106 107]`；错误直通端口被重复/外来 store
+  receipt 检查拒绝。临时变异文件已清除，未合入任何诊断 overlay。
+- `git diff --check` 通过；冻结 RTL、IR 默认外部 100-cycle 参数和两项验证脚本无差异。
+
+AC-006 至 AC-009 的本地里程碑验收已完成。原规模 benchmark、RTLSIM 与 raycast
+资产未提供，本轮未重跑；离线组件和 runner 结果不代表这些外部实验 PASS。
+
+## 15. device-and-warp-lifecycle 收尾（2026-09-16）
+
+§12.1 的每 launch 重建 Cache、§12.2 的整 CTA 同拍分配已分别由持续设备存储
+与注册逐 Warp 分配修复；§12.5 的 macro/uop 身份和计数明确分离。收尾进一步
+补齐实际 CTA dispatcher busy 到硬件 Cycle 的接线，新增跨 launch、提前复用、
+真实 store/取消尾部、barrier/LMEM/TLS 和审计/MPM 的组合回归。
+逐项 AC-010～AC-015 映射、命令结果和范围见
+[生命周期收尾验收](lifecycle-integration-closure.md)。
+
+上文历史 Timing/RTL 数字保留为当时实验，不是修复后的 benchmark 结果。
+首设备 reset/host DCR 与初始化重叠仍缺外部证据，未添加经验补偿；固定 100-cycle
+服务与 Ramulator 的差异仍独立记录。本地验收不代表新的 RTLSIM 周期等价结论。

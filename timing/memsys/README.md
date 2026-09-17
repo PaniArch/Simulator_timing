@@ -94,6 +94,17 @@ word；`Preview(cache.Responses())` 和 `ReadReady` 计算按 tag 分组的返�
 `Progress`/`Stores` 保留原 SIMD identity/tag/lane mask；store 事件表示 cache 应用，
 不表示 backing 已可见。完整示例见 `TestGlobalAdapterCacheCoalescerData`。
 
+global load 展开后的 `SIMDResponse.Batch` 保留原 `BatchID{Slot, Generation}`，
+`Coalescer.Preview` 与 `Step` 返回相同 provenance；调用方传给 split 时不得丢弃。
+split 的背压稳定性按 parent identity + Batch 检查，同父不同 batch 可合法重选；
+同一 batch 已出现的 lane/data/error 必须稳定。adapter 仍校验每个独立 producer
+端口，包括被更高优先级 batch 暂时遮住的响应。Batch 是软件校验元数据，不增加
+RTL tag、buffer 或 credit；local 响应和 progress/store 事件保持零值，完成账本
+仍按父 identity/tag 和 lane 覆盖去重，不按 batch 提前完成。
+`TestSameParentFragmentReselection` 覆盖 adapter→coalescer→split 跨周期重选、
+逐 lane 数据及恰好一次完成；`TestSplitFragmentStabilityAndLedger` 和
+`TestCoalescerRejectsUnsentFragment` 覆盖非法变化、旧 residency、重复及未发送片段。
+
 `NewLocalMemory(resolver)` 提供四端口 LMEM bank 组件。resolver 必须验证完整 residency，
 返回既有 `warp.AtomicMemoryService`（如 `core.CTAMemory`）；它不分配另一份 LMEM bytes。
 `Responses()` 用于旧边沿 ready 计算，`Step(cycle, offers, ready)` 提交请求及返回握手，
@@ -118,3 +129,77 @@ Runner 的 Fetch/LSU 接线尚未完成，见 `../memory-integration-progress.md
 路径返回原 tag/identity 和数据；它不生成独立 FlushReply 或后端 Visibility。普通 cached
 请求受当前 flush mask 锁定，外层 NC bypass 不受这个锁影响。SIMD Flush 属性经 coalescer
 和 adapter 保留。独立 `CacheInput.Flush` 继续使用其原软件可见性协议。
+
+## D-cache port 0 registered request boundary (dcache-port-buffer, step 1)
+
+`System.dataPort` instantiates `b-dflush` from Timing IR through
+`newDCachePortBuffer`. The frozen `VX_mem_unit.g_flush_port` connects only port 0
+through `VX_dcr_flush` (`REQ_OUT_BUF=3`); `VX_elastic_buffer` selects the two-slot
+`VX_stream_buffer` with `OUT_REG=1`. Port 1 remains a wire. Output is the old
+queue head; input acceptance cannot pass through to Cache on the same edge.
+With one occupied slot, pop/push can coincide. At occupancy two, old registered
+ready is false even if the head departs; input credit returns on the next edge.
+
+The buffer stores detached full `WordRequest` values (including inline Flush,
+transaction, residency and generation) or a software `FlushOffer`. Real port 0
+traffic wins arbitration over an independent flush, matching the reachable
+sticky-priority injector path. A synthetic request is injected once per accepted
+software offer; its response ownership remains until flush delivery. The public
+software Flush still means Cache scan plus backend Visibility, rather than an
+invented ISA load. Acceptance into the buffer is not backing visibility.
+
+`SystemEdge.DataAdapterAccepted` reports the adapter-to-buffer (port 0) and
+adapter-to-Cache (port 1) handshakes. `DataCacheAccepted` reports actual Cache word
+acceptance. `DataFlushAccepted` is independent-flush queue admission;
+`DataCacheFlushAccepted` is the later Cache control admission. Coalescer partial
+acceptance and GlobalAdapter sent records use the **adapter** handshakes. Actual
+Cache read responses and store receipts still release those records, with the
+existing Batch provenance and stalled-response validation unchanged.
+
+`System.Drained` and `HasResidency` include buffered words and flush reply tails.
+Cancellation still removes architectural consumers, never exposed transport;
+runner cancellation maps continue to retain and drain old identities. Protocol
+faults remain terminal and cannot report drained or replay a partially advanced
+edge. No reset, cross-launch reuse or Warp allocation policy changes are made.
+
+`dcache_port_buffer_test.go` covers old-edge FIFO credit, stable backpressure,
+full pop without push, one-slot simultaneous pop/push, port 1 bypass, shared
+flush slots and reply ownership, production four-lane same-bank phase
+`1/0/1/0`, real mixed global/LMEM partial acceptance, inline/independent flush and
+terminal-fault retention. The same-bank test checks actual production handshakes
+and fails if `System` bypasses port 0. Structural RTL/IR gate coverage and deeper
+runner lifecycle combinations are assigned to the following closure step.
+
+### Lifecycle closure and production binding gate
+
+The closure regression adds `dcache_port_lifecycle_test.go`: a port-0 queued
+load retains its full generation and response payload during backpressure;
+a cold-cache store and independent flush occupy both slots, apply once, and
+retain flush residency until response delivery. Both successful writeback and
+injected writeback failure are checked against actual backing bytes. Component
+protocol faults remain terminal; architectural memory faults still return through
+normal responses. Failure does not permit replay or claim backing visibility.
+
+`System.DCachePort0Occupancy()` is a read-only diagnostic count of requests not
+yet accepted by Cache (including synthetic flushes). It is not a drain predicate.
+`runner/port_buffer_lifecycle_test.go` stops real load/store/FENCE programs while
+this queue is occupied, cancels selectively or resets the execution epoch, then
+checks architectural response suppression, once-preserved store effects, drain
+and explicit backing visibility. Existing mixed partial-store, delayed-load,
+fault recovery and runtime Cache flush tests continue to cover surrounding tails.
+
+Runner drain now also includes completion receipts waiting for `receive` on the
+next edge, token/acceptance/cancellation maps and pending store events. Previously
+a cancelled load's last response could leave `complete` and `cancelledData` live
+when the runner stopped. `warpPending` includes these final receipts, so a CTA
+cannot reclaim that identity early. This is the actual deferred receipt edge,
+not an empirical cycle adjustment; it adds no hardware service delay or new
+all-Core fence. Canonical state and backing ownership are unchanged.
+
+`timing/check/dflush_contract.go` checks the frozen RTL instance/port connection,
+REQ_OUT_BUF encoding chain and `b-dflush` IR value. Its production System witness
+runs ordinary loads and stores, verifies actual adapter/Cache handshakes, one
+registered edge on port 0, port-1 bypass and consecutive same-bank `1/0/1/0`
+acceptance. `verify-timing.sh` executes this witness as well as the static IR
+checks. Source/IR mutation tests reject wrong port, bypass encoding and changed
+registered ready. These checks are local boundary evidence, not an RTLSIM run.

@@ -14,14 +14,16 @@ type instructionAccounting struct {
 	rev     revision
 }
 
-func (a *instructionAccounting) evaluate(issue, commit Signal, activeNext uint8) (Transition, error) {
+func (a *instructionAccounting) evaluate(issue, commit Signal, activeNext uint8, dispatchBusy bool) (Transition, error) {
 	next := append([]Token(nil), a.pending...)
 	if a.issued.Valid {
 		next = append(next, a.issued.Token)
 	}
 	retired := a.instret
 	cycles := a.cycles
-	if a.busy {
+	// VX_scheduler.busy ORs the registered busy_buf with the CTA dispatcher's
+	// current DISPATCH/kmu_fire signal. Do not register that second input again.
+	if a.busy || dispatchBusy {
 		cycles = (cycles + 1) & ((1 << 44) - 1)
 	}
 	// VX_scheduler busy_buf samples next active mask and OLD pending empty.
@@ -89,4 +91,32 @@ func (c *Core) ActiveWarps() (mask uint8) {
 		}
 	}
 	return
+}
+
+// ContinueCounters transfers device counters into a fresh launch pipeline.
+// It does not copy pending instructions or reset the memory hierarchy.
+func (c *Core) ContinueCounters(previous *Core) error {
+	if c.account.cycles != 0 || c.account.instret != 0 || c.account.busy || c.account.issued.Valid || len(c.account.pending) != 0 {
+		return fmt.Errorf("counter continuation requires fresh core")
+	}
+	if previous == nil || previous.account.issued.Valid || len(previous.account.pending) != 0 {
+		return fmt.Errorf("counter continuation requires drained previous core")
+	}
+	c.account.cycles, c.account.instret = previous.account.cycles, previous.account.instret
+	c.account.busy = previous.account.busy
+	return nil
+}
+
+// ClockIdleCounters clocks the scheduler counter registers on an explicit
+// memory-only device edge. The final registered busy bit may count this edge;
+// subsequent idle flush edges do not count. No instruction can be discarded.
+func (c *Core) ClockIdleCounters() error {
+	if c.account.issued.Valid || len(c.account.pending) != 0 || c.ActiveWarps() != 0 {
+		return fmt.Errorf("idle counter edge requires drained inactive core")
+	}
+	p, err := c.account.evaluate(Signal{}, Signal{}, 0, false)
+	if err != nil {
+		return err
+	}
+	return CommitEdge(p)
 }

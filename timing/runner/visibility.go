@@ -29,6 +29,9 @@ func (r *MultiRunner) MakeVisible(budget uint64) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+		if err := r.core.ClockIdleCounters(); err != nil {
+			return false, err
+		}
 		r.visibilitySent = r.visibilitySent || e.DataFlushAccepted
 		for _, q := range e.WritebackErrors {
 			if q.Err != nil {

@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
 
 	"vortex.local/simulator/emu/device"
+	"vortex.local/simulator/isa"
 	"vortex.local/simulator/support/memory"
 	"vortex.local/simulator/timing/memsys"
 	"vortex.local/simulator/timing/runner"
@@ -78,9 +80,13 @@ func (e *ClassifiedError) Unwrap() error {
 
 // RunSummary is the detached result of the most recent native launch.
 type RunSummary struct {
+	DeviceID         uint64           `json:"trace_device_id,omitempty"`
+	LaunchID         uint64           `json:"trace_launch_id,omitempty"`
+	HardwareCounters *isa.CounterView `json:"hardware_counters"` // nil means unavailable; device cumulative
+
 	Mode           Mode                 `json:"mode"`
-	Cycles         uint64               `json:"execution_cycles,omitempty"`
-	FlushCycles    uint64               `json:"flush_cycles,omitempty"`
+	Cycles         uint64               `json:"execution_cycles"`
+	FlushCycles    uint64               `json:"flush_cycles"`
 	BackingVisible bool                 `json:"backing_visible"`
 	Sequence       uint64               `json:"sequence"`
 	Launch         device.LaunchState   `json:"launch"`
@@ -120,6 +126,8 @@ type Device struct {
 	lastError *ClassifiedError
 	lastRun   RunSummary
 	auditPath string
+	auditMu   sync.Mutex                           // serializes whole records, independent of the state lock
+	auditOpen func(string) (io.WriteCloser, error) // optional per-device test seam
 }
 
 // NewDevice selects timing by default; functional is an explicit alternative.
@@ -179,10 +187,13 @@ func (d *Device) Memory() *memory.Sparse {
 func (d *Device) connectionError(op string, err error) error {
 	classified := &ClassifiedError{Origin: OriginConnection, Op: op, Err: err}
 	d.mu.Lock()
-	d.lastError = classified
+	d.lastError = combineErrors(d.lastError, classified)
 	d.mu.Unlock()
-	d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "error", Error: classified.Error(), Origin: classified.Origin})
-	return classified
+	auditErr := d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "error", Error: classified.Error(), Origin: classified.Origin})
+	d.mu.Lock()
+	d.lastError = combineErrors(d.lastError, auditFailure(auditErr))
+	d.mu.Unlock()
+	return combineErrors(classified, auditFailure(auditErr))
 }
 
 // RecordConnectionError exposes C-ABI and backend transport failures through
@@ -211,8 +222,7 @@ func (d *Device) WriteDCR(address, value uint32) error {
 	return nil
 }
 
-// ReadDCR connects cache control and stored DCRs. The MPM transport is not yet
-// exported: it reads zero in both modes; actual timing lives in RunSummary.
+// ReadDCR connects cache control, hardware MPM snapshots and stored DCRs.
 func (d *Device) ReadDCR(address, tag uint32) (uint32, error) {
 	if d == nil {
 		return 0, fmt.Errorf("nil runtime device")
@@ -224,7 +234,7 @@ func (d *Device) ReadDCR(address, tag uint32) (uint32, error) {
 		return d.flush(tag)
 	}
 	if address == dcrMPMValue {
-		return 0, nil
+		return d.readMPM(tag)
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -284,7 +294,10 @@ func (d *Device) Start() error {
 	d.busyLatch = true
 	d.mu.Unlock()
 
-	d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "launch-start", Summary: &RunSummary{Sequence: sequence, Launch: normalized, Mode: d.mode}})
+	if err := d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "launch-start", Summary: &RunSummary{Sequence: sequence, Launch: normalized, Mode: d.mode}}); err != nil {
+		// No execution is started when its launch cannot be recorded.
+		return d.publish(RunSummary{Sequence: sequence, Launch: normalized, Mode: d.mode, Outcome: device.KernelFault}, auditFailure(err))
+	}
 	go d.run(sequence, normalized)
 	return nil
 }
@@ -304,14 +317,8 @@ func (d *Device) run(sequence uint64, launch device.LaunchState) {
 		summary.Error = classified.Error()
 		summary.Origin = classified.Origin
 	}
-	d.mu.Lock()
-	d.lastRun = summary
-	if d.lastError == nil {
-		d.lastError = classified
-	}
-	d.busy = false
-	d.mu.Unlock()
-	d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "launch-finish", Summary: &summary, Error: summary.Error, Origin: summary.Origin})
+	auditErr := d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "launch-finish", Summary: &summary, Error: summary.Error, Origin: summary.Origin})
+	d.publish(summary, combineErrors(classified, auditFailure(auditErr)))
 }
 
 func (d *Device) runFunctional(launch device.LaunchState, summary *RunSummary) error {
@@ -350,7 +357,12 @@ func (d *Device) runTiming(launch device.LaunchState, summary *RunSummary) error
 	}
 	// Only the external service latency is selected here, never cache geometry.
 	config.Latency = 100
-	k, err := runner.NewKernel(launch, d.memory, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config})
+	var k *runner.Kernel
+	if d.kernel == nil {
+		k, err = runner.NewKernel(launch, d.memory, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config})
+	} else {
+		k, err = d.kernel.NextLaunch(launch)
+	}
 	if err != nil {
 		return err
 	}
@@ -365,7 +377,10 @@ func (d *Device) runTiming(launch device.LaunchState, summary *RunSummary) error
 			}
 		})
 		status := k.Status()
-		summary.Cycles, summary.Generated, summary.Completed = status.Cycle, status.Generated, status.Completed
+		summary.DeviceID, summary.LaunchID = status.DeviceID, status.LaunchID
+		counters := k.Counters()
+		summary.HardwareCounters = &counters
+		summary.Cycles, summary.Generated, summary.Completed = status.LaunchCycles, status.Generated, status.Completed
 		for _, e := range k.TakeEvents() {
 			if e.Kind == "admitted" {
 				summary.Admitted++
@@ -408,18 +423,19 @@ func (d *Device) flush(tag uint32) (uint32, error) {
 		}
 	}
 	d.mu.Lock()
-	d.lastRun.FlushCycles += k.Status().Cycle - before
-	d.lastRun.BackingVisible = err == nil && k.Status().BackingVisible
-	if err != nil {
-		d.lastError = &ClassifiedError{Origin: OriginSimulator, Op: "cache-flush", Err: err}
-		d.lastRun.Error, d.lastRun.Origin = d.lastError.Error(), OriginSimulator
-		err = d.lastError
-	}
 	summary := d.lastRun
-	d.busy = false
 	d.mu.Unlock()
-	d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "cache-flush", Summary: &summary, Error: summary.Error, Origin: summary.Origin})
-	return 0, err
+	counters := k.Counters()
+	summary.HardwareCounters = &counters
+	summary.FlushCycles += k.Status().Cycle - before
+	summary.BackingVisible = err == nil && k.Status().BackingVisible
+	var classified *ClassifiedError
+	if err != nil {
+		classified = &ClassifiedError{Origin: OriginSimulator, Op: "cache-flush", Err: err}
+		summary.Error, summary.Origin = classified.Error(), classified.Origin
+	}
+	auditErr := d.audit(auditRecord{Time: time.Now().UTC().Format(time.RFC3339Nano), Event: "cache-flush", Summary: &summary, Error: summary.Error, Origin: summary.Origin})
+	return 0, d.publish(summary, combineErrors(classified, auditFailure(auditErr)))
 }
 
 // Busy supplies the CP launch handshake. The first observation after Start is
@@ -457,21 +473,81 @@ func (d *Device) LastRun() RunSummary {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.lastRun
+	summary := d.lastRun
+	if summary.HardwareCounters != nil {
+		counters := *summary.HardwareCounters
+		summary.HardwareCounters = &counters
+	}
+	return summary
 }
 
-func (d *Device) audit(record auditRecord) {
-	if d == nil || d.auditPath == "" {
-		return
+// publish is the only execution/flush completion boundary. Disk I/O must finish
+// before entering it; Busy remains queryable and true throughout that I/O.
+func (d *Device) publish(summary RunSummary, failure *ClassifiedError) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	// Prefer the execution failure's identity, retaining concurrent connection
+	// failures and audit errors as causes rather than replacing either.
+	d.lastError = combineErrors(failure, d.lastError)
+	if d.lastError != nil {
+		summary.Error, summary.Origin = d.lastError.Error(), d.lastError.Origin
 	}
+	d.lastRun = summary
+	d.busy = false
+	if d.lastError != nil {
+		return d.lastError
+	}
+	return nil
+}
+
+func combineErrors(primary, secondary *ClassifiedError) *ClassifiedError {
+	if primary == nil {
+		return secondary
+	}
+	if secondary == nil {
+		return primary
+	}
+	return &ClassifiedError{Origin: primary.Origin, Op: primary.Op, Err: errors.Join(primary.Err, secondary)}
+}
+
+func auditFailure(err error) *ClassifiedError {
+	if err == nil {
+		return nil
+	}
+	return &ClassifiedError{Origin: OriginConnection, Op: "audit", Err: err}
+}
+
+func (d *Device) audit(record auditRecord) error {
+	if d == nil || d.auditPath == "" {
+		return nil // auditing explicitly disabled
+	}
+	d.auditMu.Lock()
+	defer d.auditMu.Unlock()
 	data, err := json.Marshal(record)
 	if err != nil {
-		return
+		return fmt.Errorf("encode audit: %w", err)
 	}
-	file, err := os.OpenFile(d.auditPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	open := d.auditOpen
+	if open == nil {
+		open = func(path string) (io.WriteCloser, error) {
+			return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		}
+	}
+	file, err := open(d.auditPath)
 	if err != nil {
-		return
+		return fmt.Errorf("open audit: %w", err)
 	}
-	_, _ = file.Write(append(data, '\n'))
-	_ = file.Close()
+	data = append(data, '\n')
+	n, writeErr := file.Write(data)
+	if writeErr == nil && n != len(data) {
+		writeErr = io.ErrShortWrite
+	}
+	if writeErr != nil {
+		writeErr = fmt.Errorf("write audit: %w", writeErr)
+	}
+	closeErr := file.Close()
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close audit: %w", closeErr)
+	}
+	return errors.Join(writeErr, closeErr)
 }

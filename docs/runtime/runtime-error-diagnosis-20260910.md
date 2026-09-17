@@ -47,6 +47,25 @@ residency、重复事件、真正过期跳转和控制事件的保护。较老�
 同时交付 BAR/branch，按指令序排序即可通过；本次是跨 edge，单边排序无法解决。
 应新增旧 BAR 延迟、年轻 ALU/branch 先完成、重复回执及 activation 变更的组合测试。
 
+### 本轮修复（asynchronous-barrier-delivery）
+
+`EffectStream` 已分离 PC frontier 与 activation admission 截止线：迟到的当前
+activation 非阻塞 arrive 保留 barrier/drain 外部事件，只移除旧顺序 PC 写入。
+外部事务成功才记录 receipt；重复、旧 activation/epoch/取消 residency、阻塞
+BAR 和过期 branch 继续拒绝。未改 decode stall、LSU gate、RTL 或外部服务契约。
+跨 edge state/effects 与实际 runner load→arrive→ALU→branch 回归见
+`emu/state/async_barrier_test.go`、`timing/effects/concurrent_test.go`、
+`timing/runner/async_barrier_test.go`。这些是离线机制回归，未重跑原规模
+async_barrier benchmark 或 RTLSIM，不将本文历史失败记录改写为已验收通过。
+
+本 Worker 在固定离线环境验证通过：`go test ./emu/state -count=1`、
+`go test ./timing/effects -count=1`、`go test ./timing/memsys -count=1`；runner
+选定回归 `TestMultiRunnerDelayedAsyncBarrier`、`TestMultiRunnerExplicitSpawnOwners`、
+`TestMultiRunnerSpawnWaitAndOutstandingServiceTails`、`TestMultiRunnerRealMemory`、
+`TestRealMemoryCancelLoadAndRestart`、`TestRealMemoryFenceReturnsOriginalRequest`、
+`TestCTADispatchWhileOtherWarpsRun`；`go vet ./emu/state ./timing/effects ./timing/runner`
+与 `git diff --check`。完整离线门禁及 runtime 竞态验收由 closure Worker 执行。
+
 ## 2. conv3：已确认响应稳定性检查的身份粒度错误
 
 原始参数 `-n32 -l`，job 12702539，exit 255，97.496 秒；错误为
@@ -92,6 +111,18 @@ split 因 `4 & ~2 != 0` 错报 lane 丢失。错误路径为 global，不是 LME
 lane 未发送、重复完成、数据变动、旧 generation 和 CTA residency 检查。
 不应删除全部检查、随意新增缓冲或改为全局串行返回。
 回归应覆盖同父不同 batch 背压重选，以及真数据不稳定仍被拒绝。
+
+2026-09-16 存储响应修复：`Coalescer.Preview/Step` 现通过 `SIMDResponse.Batch`
+保留批次 slot/generation，split 以父 identity + Batch 判断是否同一片段。
+原 adapter 逐 producer 稳定性检查、coalescer generation/发送检查、split 逐 lane
+完成账本均保留；不增加缓冲或串行化返回，也不修改外部 100-cycle 服务契约。
+离线入口为 `source env/env.sh` 后 `go test ./timing/memsys`；新增
+`TestSameParentFragmentReselection` 通过真实组件握手重现本节共享机制，并验证被
+优先级隐藏的端口仍受稳定性保护、最终所有 lane 恰好交付一次且释放全部引用。
+反向输入另见 `TestSplitFragmentStabilityAndLedger`、
+`TestCoalescerRejectsUnsentFragment` 和既有 stale-generation 回归。
+这些是 conv3/dogfood/fence/softmax/stencil3d 的共享机制回归，不是原规模
+benchmark 或 RTLSIM 重跑结果；本次存储 Worker 不关闭 barrier 或审计问题。
 
 ## 3. 日志收尾存在竞态，0 cycles 不是执行证据
 
@@ -1117,3 +1148,35 @@ hit/miss、backend wait、LSU pending、control drain 和 flush 计数，再分�
 
 完整的 wgather/vecadd 逐事件对齐、隔离因果实验及后续全通过集小规模双侧复测，统一见
 [RTLSIM 与 Timing trace 对比分析](rtlsim-timing-trace-analysis-20260914.md)。
+
+## protocol-and-audit 里程碑收尾（2026-09-16）
+
+本次仅处理冻结的首个里程碑；不实施 port 0 新缓冲、设备存储复用、CTA 生命周期或
+宿主性能改造。以下是可离线复验的机制证据，不是原规模 benchmark 的重跑结果。
+
+| 验收项 | 实现与回归证据 |
+| --- | --- |
+| AC-001 | `timing/memsys/coalescer.go` 的 SIMDResponse.Batch 保留 Slot/Generation；split 以父 Identity + Batch 比较响应片段。`fragment_identity_test.go` 的 adapter→coalescer→split 跨周期背压重选验证完整数据与一次完成，拒绝隐藏 producer 变化、重复、未发送 lane、提前完成、旧 generation/residency。 |
+| AC-002 | `emu/state/effect_stream.go` 分离 activation 截止线与 PC frontier，迟到非阻塞 arrive 不回退 PC。`emu/state/async_barrier_test.go`、`timing/effects/concurrent_test.go`、`timing/runner/async_barrier_test.go` 验证年轻 ALU/branch 在更早 edge 完成，拒绝重复、旧 activation/epoch/residency 与过期阻塞控制；保留 LSU gate。 |
+| AC-003 | 同一 memsys 组合反例覆盖 conv3/dogfood/fence/softmax/stencil3d 的共享失败机制；runner 的真实 load 延迟 WCTL，四 Warp 均在年轻 ALU/branch 之后恰好交付一次 arrive。不是仅同 edge 排序用例。 |
+| AC-004 | `integration/vortexruntime/device.go` 在终态审计 Write/Close 后发布 idle；`audit_test.go` 覆盖成功/执行失败、open/write/short-write/close 注入、Busy 并发查询、真实 JSONL、禁用审计、flush 发布顺序。原执行失败保留，审计失败进入错误通道。 |
+| AC-005 | `scripts/vortex-supported.py` 与 `scripts/test-vortex-supported.py` 校验配对、顺序、模式、描述、complete、计数、visibility、显式周期、manifest 身份与 JSON 结构；重新汇总不信任旧 PASS。不完整周期 null/unknown，功能模式无 timing 测量。 |
+
+后续调用方须保留 global-load Batch；local/progress/store 继续使用零值。
+异步控制收据仅在成功交付后记录，activation 截止线不能与 PC frontier 合并。
+不增加响应缓冲、不串行化返回、不修改冻结 RTL、外部服务 100-cycle 契约或真实背压。
+
+当前 worktree 未提供兼容 CP ABI 的原生 benchmark 二进制、raycast 资产或 RTLSIM
+构建产物，本轮未执行原规模 benchmark/RTLSIM；不得用本表宣称它们已经 PASS。
+历史 trace 文档两处外部 checkout 相对路径已改为来源说明，保留历史含义且不作为
+当前离线依赖；环境检查规则和冻结验证命令未改。
+
+本轮验证结果（固定 `/opt/simulator-environment`、Go 1.26.2、SoftFloat、vendor、禁网）：
+
+- `source env/env.sh; go test -race ./integration/vortexruntime -count=1`：PASS，281.809 秒，包含本轮全部新增审计用例。
+- `python3 scripts/test-vortex-supported.py`：PASS，6 项测试，包含合法模式、反向证据、execute 与 aggregate 入口。
+- `bash scripts/verify-offline.sh`：PASS，空缓存、vendor only、禁网完成 go list/build/test/vet；runner 全套 616.750 秒，runtime 40.220 秒，memsys 44.333 秒，effects 145.676 秒。未调整原门禁时限或周期断言。
+- `git diff --check`：PASS。
+
+AC-001 至 AC-005 的本地实现与冻结离线验收链已闭合；原规模 benchmark/RTLSIM
+外部输入限制仍如上，不将机制回归通过扩展为未执行实验的结论。

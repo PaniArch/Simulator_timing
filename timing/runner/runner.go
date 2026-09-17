@@ -11,6 +11,7 @@ import (
 )
 
 type Options struct {
+	TraceMemory bool // capture detached accepted fragment/transport events
 	// DataMemory is the explicit lifetime-stable local route for a single Warp.
 	DataMemory   warp.MemoryService
 	MemoryConfig *memsys.Config // nil selects the IR external-backend default for every runner
@@ -93,7 +94,7 @@ func (r *Runner) Cycle() uint64   { return r.multi.Cycle() }
 func (r *Runner) Completed() bool { return r.multi.Completed() }
 func (r *Runner) Pending() bool {
 	m := r.multi
-	return m.effects.InFlight() != 0 || !m.core.Idle(!m.fetchResponse.Valid && !m.response.Valid) || !m.hierarchy.system.Drained() || len(m.hierarchy.stores) != 0
+	return m.effects.InFlight() != 0 || !m.core.Idle(!m.fetchResponse.Valid && !m.response.Valid) || !m.hierarchy.drained()
 }
 
 // Flush snapshots the caller's current PC/mask into a new execution epoch.

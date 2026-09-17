@@ -627,12 +627,21 @@ func (m *CTAManager) ViewForWarp(warpID uint8) (isa.CTAView, error) {
 		return isa.CTAView{}, fmt.Errorf("core: warp %d has no CTA membership", warpID)
 	}
 	cta := m.ctas[key.ctaID]
-	if cta == nil || key.rank >= uint32(len(cta.members)) || cta.members[key.rank].WarpID != warpID {
+	var member WarpMembership
+	found := false
+	if cta != nil {
+		for _, candidate := range cta.members {
+			if candidate.Rank == key.rank && candidate.WarpID == warpID {
+				member, found = candidate, true
+				break
+			}
+		}
+	}
+	if !found {
 		return isa.CTAView{}, fmt.Errorf("core: warp %d CTA membership is inconsistent", warpID)
 	}
-	member := cta.members[key.rank]
 	return isa.CTAView{
-		ID: cta.config.ID, Rank: member.Rank, Size: uint32(len(cta.members)),
+		ID: cta.config.ID, Rank: member.Rank, Size: (cta.config.BlockSize + isa.FrozenLaneCount - 1) / isa.FrozenLaneCount,
 		ThreadCoordinates: member.ThreadCoordinates, BlockID: cta.config.BlockID,
 		BlockDimensions: cta.config.BlockDimensions, GridDimensions: cta.config.GridDimensions,
 		BlockSize: cta.config.BlockSize, WarpStep: cta.config.WarpStep,

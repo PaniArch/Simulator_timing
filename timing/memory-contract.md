@@ -104,3 +104,16 @@ DCR flush injector 在一次请求期间只注入一次，并保持 done 到 req
 是三个事件；公开 Flush 使用最后一个作为软件返回条件，不把该条件冒充 RTL 指令 FENCE 周期。
 新 hit 在 forwarding 期间可先于旧 replay store 访问数据阵列；bank 使用 RTL grant，
 不附加软件同址门控。`u-t12-cache-hit-order` 保留上游指令级约束的组合问题。
+
+## b-dflush production closure
+
+`System` now routes port 0 (ordinary words, inline flush and synthetic flush)
+through `b-dflush` before Cache; port 1 remains direct. Adapter acceptance and
+Cache acceptance are distinct. Full registered buffers return credit only on the
+next edge, not on the full pop edge. Queued requests and flush response tails
+participate in residency and drain. Runner deferred completion receipts also
+participate in software drain and per-Warp pending until consumed. See
+[memsys lifecycle closure](memsys/README.md) and the production witness in
+`timing/check/dflush_contract.go`; the latter is run by `verify-timing.sh`.
+This closes the missing local physical boundary, not the unresolved cross-group
+ordering or end-to-end RTLSIM timing equivalence questions above.

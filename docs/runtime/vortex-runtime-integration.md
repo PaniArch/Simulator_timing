@@ -72,6 +72,17 @@ native backend 的拓扑参数来自本仓库冻结 VX_config.toml；静态断�
 生成库位于 `.cache/vortex-runtime`，不入库。
 
 可以设置 `SIMTIMING_EVENT_LOG` 指定 JSONL 文件；父目录需预先存在。
+设置后，`launch-start` 审计失败会拒绝启动；`launch-finish` 和 `cache-flush` 的
+打开、写入（含短写）及关闭全部结束后，才发布 `LastRun` 并解除 Busy。
+日志 I/O 不持有设备状态锁，因此 Busy/LastRun/LastError 查询仍能运行。
+记录之间使用独立锁串行写入。审计错误以 `external-connection/op=audit` 返回，
+同时发生的模拟器错误仍保留原始 origin 和 cause；不尝试把审计失败再写入同一坏日志。
+未设置环境变量时审计明确禁用，完成顺序仍经过同一发布入口。
+这里保证 Write/Close 返回，不声称 fsync 或断电持久性。
+
+`execution_cycles`/`flush_cycles` 总是显式输出，包括零；功能模式没有硬件周期测量，
+支持集汇总中表示为 null。周期模式 finish 仅证明执行终态，仍须匹配后续成功 flush
+才能证明 backing visibility。日志成功写入不覆盖 native CP 的真实 flush 契约。
 smoke 脚本自动生成独立日志目录，先周期型、再功能型，仅执行以下三项：
 
 | benchmark | 参数 | 周期型 execution cycles | flush cycles | 功能型/周期型 host checker |
@@ -100,16 +111,26 @@ go vet ./integration/vortexruntime ./cmd/simtiming-go ./support/memory
 
 本次小样例未暴露新的模拟器主体失败。以下边界明确保留：
 
-- 原生 MPM 导出暂未连接，两个模式的 PERF 输出仍为零；实际周期以 JSONL 为准，
-  不将软件 retired 指令数冒充硬件 lane-based minstret。运行中 CSR 的既有周期语义未改。
-- Kernel 入口每次创建新的周期组件；旧 Kernel 必须先真实 flush。没有新增跨 Kernel
-  warm-cache/pipeline 生命周期模型，不宣称跨 launch 的硬件周期等价。
+- Timing 原生 MPM 已连接设备累计的 44 位 busy Cycle 与 Warp/uop EOP Instret；
+  宏 Retired 和 execution_cycles 仍单独记录。功能模式/未实现统计明确 unavailable，
+  不再以零伪装。tag 编码、trace 关联及本地验证见
+  [身份与计数交接](identity-performance-handoff.md)，外部原生 PERF 展示仍待验证。
+- 同设备后继 Kernel 通过 NextLaunch 续用已排空的存储系统和连续时钟，旧 Kernel
+  仍须先真实 flush；不会重复 Cache reset。首次 host reset/DCR 的完整外部时序尚未
+  闭合，不宣称跨 launch 硬件周期等价。见 [生命周期交接](device-lifecycle-handoff.md)。
 - 周期推进较慢：本次 744 cycles 的初次原生调试约 13 秒墙钟时间。
   这是当前模型运行开销，不是外部内存延迟；不为加速而改变结构或周期推进规则。
-- 既有 whole-CTA dispatcher、Barrier RAM 抽象、未决冲突 store 语义等边界继续保留。
+- 周期 Kernel 已改为注册的逐 Warp 分配与局部安全复用，CTA/LMEM 独立预留；
+  事件和验证范围见 [增量驻留交接](incremental-warp-handoff.md)。Barrier RAM 抽象、
+  未决冲突 store 语义等边界继续保留。
 - 未覆盖完整 benchmark、大规模压力、DRAM 内部、L2/L3、coherence 或 RTLSIM 精度对齐。
 
 功能型/周期型均已接入，而不是以功能执行结果冒充周期执行通过。
 
 后续 28 项 × 两模式的 Slurm 扩展测试及查询入口见
 [支持集测试记录](runtime-supported-tests.md)。
+
+生命周期里程碑的当前实现、跨层回归和最终离线证据见
+[收尾验收](lifecycle-integration-closure.md)。硬件 Cycle 同时接入注册 Warp busy
+与真实 CTA dispatcher busy；MPM 在 launch-finish/cache-flush 审计完成前不可读，
+不提前发布累计快照。上述历史 smoke 数字未作为本轮重跑结果。

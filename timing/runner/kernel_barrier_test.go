@@ -56,94 +56,113 @@ func kernelExchange(t *testing.T, delay, period uint64, startup, entry uint32) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wakeCount := 0
-	overlap := false
-	memoryOverlap := false
-	tail := false
-	lastService := map[uint32]uint64{}
-	counts := map[string]map[uint32]int{}
-	collect := func(events []runner.KernelEvent, record runner.MultiRecord) {
-		for _, event := range events {
-			if counts[event.Kind] == nil {
-				counts[event.Kind] = map[uint32]int{}
-			}
-			counts[event.Kind][event.CTA]++
-			if event.Kind == "reclaimed" && event.Cycle <= lastService[event.CTA] {
-				t.Fatal("CTA reclaimed before byte service", event, lastService[event.CTA])
-			}
-			if event.Kind == "admitted" && event.CTA >= 2 {
-				for _, other := range k.Status().Resident {
-					if other.Launch.ID < event.CTA {
-						memoryOverlap = memoryOverlap || other.MemoryPending
-						for _, member := range other.Resident.Members {
-							overlap = overlap || record.Warps[member.WarpID].HardwarePending != 0
-							for _, service := range record.Services {
-								overlap = overlap || service.Token.Warp == member.WarpID
+	// The backpressured case also crosses a native-style D/I flush boundary.
+	// Change the input between launches so stale Cache/LMEM/barrier state cannot
+	// silently reproduce the expected output from the first launch.
+	launches := 1
+	if delay == 40 {
+		launches = 2
+	}
+	for run := 0; run < launches; run++ {
+		wakeCount := 0
+		overlap := false
+		memoryOverlap := false
+		tail := false
+		lastService := map[uint32]uint64{}
+		counts := map[string]map[uint32]int{}
+		collect := func(events []runner.KernelEvent, record runner.MultiRecord) {
+			for _, event := range events {
+				if counts[event.Kind] == nil {
+					counts[event.Kind] = map[uint32]int{}
+				}
+				counts[event.Kind][event.CTA]++
+				if event.Kind == "reclaimed" && event.Cycle <= lastService[event.CTA] {
+					t.Fatal("CTA reclaimed before byte service", event, lastService[event.CTA])
+				}
+				if event.Kind == "admitted" && event.CTA >= 2 {
+					for _, other := range k.Status().Resident {
+						if other.Launch.ID < event.CTA {
+							memoryOverlap = memoryOverlap || other.MemoryPending
+							for _, member := range other.Resident.Members {
+								overlap = overlap || record.Warps[member.WarpID].HardwarePending != 0
+								for _, service := range record.Services {
+									overlap = overlap || service.Token.Warp == member.WarpID
+								}
 							}
 						}
 					}
 				}
 			}
 		}
-	}
-	if err := k.Run(5000, func(r runner.MultiRecord) {
-		for _, cta := range k.Status().Resident {
-			for _, member := range cta.Resident.Members {
-				for _, service := range r.Services {
-					if service.Resource == "memory-system" && service.Token.Warp == member.WarpID {
-						lastService[cta.Launch.ID] = max(lastService[cta.Launch.ID], r.Cycle)
-						tail = tail || !r.Warps[member.WarpID].Active
+		if err := k.Run(5000, func(r runner.MultiRecord) {
+			for _, cta := range k.Status().Resident {
+				for _, member := range cta.Resident.Members {
+					for _, service := range r.Services {
+						if service.Resource == "memory-system" && service.Token.Warp == member.WarpID {
+							lastService[cta.Launch.ID] = max(lastService[cta.Launch.ID], r.Cycle)
+							tail = tail || !r.Warps[member.WarpID].Active
+						}
 					}
 				}
 			}
+			if len(r.Services) != 0 && k.Status().Complete {
+				t.Fatal("Kernel completed with a live service")
+			}
+			collect(k.TakeEvents(), r)
+			for _, f := range r.Report.Wakeups {
+				if f.Kind == "external-wake" {
+					wakeCount++
+				}
+			}
+		}); err != nil {
+			t.Fatal(err)
 		}
-		if len(r.Services) != 0 && k.Status().Complete {
-			t.Fatal("Kernel completed with a live service")
+		if !k.Status().Complete || wakeCount != 32 {
+			t.Fatal(k.Status(), wakeCount)
 		}
-		collect(k.TakeEvents(), r)
-		for _, f := range r.Report.Wakeups {
-			if f.Kind == "external-wake" {
-				wakeCount++
+		collect(k.TakeEvents(), runner.MultiRecord{})
+		if delay >= 120 && !memoryOverlap {
+			t.Fatal("CTA reuse never overlapped another CTA memory tail")
+		}
+		if delay >= 120 && !tail {
+			t.Fatal("long-delay case missed store tail")
+		}
+		if !overlap {
+			t.Fatal("no admission overlapped older CTA work")
+		}
+		for _, kind := range []string{"generated", "admitted", "reclaimed"} {
+			for c := uint32(0); c < 4; c++ {
+				if counts[kind][c] != 1 {
+					t.Fatal("CTA event count", kind, c, counts)
+				}
 			}
 		}
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if !k.Status().Complete || wakeCount != 32 {
-		t.Fatal(k.Status(), wakeCount)
-	}
-	collect(k.TakeEvents(), runner.MultiRecord{})
-	if delay >= 120 && !memoryOverlap {
-		t.Fatal("CTA reuse never overlapped another CTA memory tail")
-	}
-	if delay >= 120 && !tail {
-		t.Fatal("long-delay case missed store tail")
-	}
-	if !overlap {
-		t.Fatal("no admission overlapped older CTA work")
-	}
-	for _, kind := range []string{"generated", "admitted", "reclaimed"} {
 		for c := uint32(0); c < 4; c++ {
-			if counts[kind][c] != 1 {
-				t.Fatal("CTA event count", kind, c, counts)
-			}
-		}
-	}
-	for c := uint32(0); c < 4; c++ {
-		for rank := uint32(0); rank < 2; rank++ {
-			for lane := uint32(0); lane < 4; lane++ {
-				for round := uint32(0); round < 2; round++ {
-					address := uint32(0x800) + c*64 + rank*16 + lane*4 + round*256
-					var b [4]byte
-					kernelVisible(t, k)
-					if err := ram.Read(address, b[:]); err != nil {
-						t.Fatal(err)
-					}
-					want := 10 + (rank ^ 1) + c*16 + round
-					if got := binary.LittleEndian.Uint32(b[:]); got != want {
-						t.Fatalf("CTA %d rank %d lane %d round %d got %d want %d", c, rank, lane, round, got, want)
+			for rank := uint32(0); rank < 2; rank++ {
+				for lane := uint32(0); lane < 4; lane++ {
+					for round := uint32(0); round < 2; round++ {
+						address := uint32(0x800) + c*64 + rank*16 + lane*4 + round*256
+						var b [4]byte
+						kernelVisible(t, k)
+						if err := ram.Read(address, b[:]); err != nil {
+							t.Fatal(err)
+						}
+						want := uint32(10+100*run) + (rank ^ 1) + c*16 + round
+						if got := binary.LittleEndian.Uint32(b[:]); got != want {
+							t.Fatalf("CTA %d rank %d lane %d round %d got %d want %d", c, rank, lane, round, got, want)
+						}
 					}
 				}
+			}
+		}
+		if run+1 < launches {
+			if done, err := k.FlushCaches(4000); err != nil || !done {
+				t.Fatal(done, err)
+			}
+			put(0x7f0, uint32(10+100*(run+1)))
+			k, err = k.NextLaunch(launch)
+			if err != nil {
+				t.Fatal(err)
 			}
 		}
 	}

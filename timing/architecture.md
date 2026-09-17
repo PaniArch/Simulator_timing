@@ -135,3 +135,47 @@ T9 第三轮的 `Frontend` 已实现上述前端的瞬态连接；`ALU`、`SFU` 
 保留的旧 Runner 诊断 API；Task10 普通指令不等待整 Core Idle。
 
 T12 里程碑 01 的结构化存储契约见 [memory-contract.md](memory-contract.md) 和 `ir.yaml:memory_contracts`。它扩充静态证据与接口，不宣称后续 cache/LMEM 运行时已接入。
+
+### 设备存储续用（runtime 修复，第 1 Worker）
+
+Kernel.NextLaunch 在健康执行完成且完整排空后转移同一 memsys/Clock 的所有权，
+不重置 Cache；新执行上下文拥有递增 launch identity。旧 Kernel 不再能推进，
+Status 保留交接快照。Cycle 是设备连续周期，StartCycle/LaunchCycles 明确本次
+launch 的计数起点；runtime 分开记录执行与真实 D/I flush 的差值。
+详见 [设备生命周期交接](../docs/runtime/device-lifecycle-handoff.md)。
+
+### 逐 Warp 驻留（runtime 修复，第 2 Worker）
+
+生产 Kernel 以独立 CTA/LMEM reservation、注册 Warp selection/fire 和退休流水推进；
+不再一次绑定完整 CTA，也不等待所有旧成员结束才允许局部复用。ResidencyMemory
+仍是 metadata/LMEM 单一 owner，CTA Size 保持逻辑完整大小，当前 Members 可为空或
+为部分绑定。物理 Warp generation 与 CTA slot generation 分开，完整 transport 和
+barrier 尾部继续保护复用。接口、RTL 边沿和 trace 事件定义见
+[增量 Warp 驻留交接](../docs/runtime/incremental-warp-handoff.md)。
+
+
+## Runtime 身份与硬件计数（device-and-warp-lifecycle，第 3 Worker）
+
+`RESOLVED`：Kernel 的边沿记录以 DeviceID/LaunchID、显式 WarpBinding 和
+Token.ID/Epoch/Uop 关联逻辑 CTA/rank、物理 slot/generation；存储 fragment trace
+连接 SIMD parent、coalescer Batch、adapter wire transaction 和 Cache 接受，
+保留 port-0 注册缓冲相位。绑定来自真实 dispatch 与唯一 residency owner。
+
+`RESOLVED`：原生 MPM 按 VX_dcr_data tag 编码导出已有 scheduler 44 位 Cycle/Instret。
+NextLaunch 转移计数与 busy 寄存器；显式 flush 在真实空闲边沿推进 busy 尾部。
+Instret 是 committed Warp/EOP 通知，不是宏收据或 lane 计数。runtime 保存终态
+硬件快照并在审计之后发布，未知统计明确 unavailable，不以有效零值代替。
+
+字段、RTL 依据、复验命令及未验证的外部边界见
+[身份与计数交接](../docs/runtime/identity-performance-handoff.md)。
+本条不关闭首次 host DCR 时间线、外部 native benchmark 或 RTLSIM 等价问题，
+也不替代 closure Worker 的全仓与里程碑验收。
+
+### 生命周期跨层收尾
+
+收尾核对补齐了 `VX_scheduler.busy_buf || cta_dispatcher_busy` 的 Cycle 计数
+接线：CoreInputs.DispatchBusy 来自真实 CTA 接纳及边沿前 DISPATCH 状态，
+不人为增加延迟或修改 wall-clock。注册 busy 尾部、累计 44 位计数及 EOP/宏
+单位保持独立。跨 launch 的提前复用、store/取消尾部、barrier/LMEM/TLS、
+fragment 身份和审计/MPM 组合证据见
+[生命周期收尾验收](../docs/runtime/lifecycle-integration-closure.md)。

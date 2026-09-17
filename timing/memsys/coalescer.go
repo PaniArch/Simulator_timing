@@ -31,10 +31,14 @@ type SIMDOffer struct {
 }
 type SIMDResponse struct {
 	Identity Identity
-	Tag      uint64
-	Mask     uint8
-	Data     [4][4]byte
-	Errors   [4]error
+	// Batch preserves global load fragment provenance across expansion. A zero
+	// generation denotes an unbatched response (local path or software event).
+	// It is not the parent transaction or an additional hardware tag/credit.
+	Batch  BatchID
+	Tag    uint64
+	Mask   uint8
+	Data   [4][4]byte
+	Errors [4]error
 }
 
 // BatchID extends the RTL slot with a software generation against stale replies.
@@ -324,7 +328,7 @@ func (c *Coalescer) Step(cycle uint64, in CoalescerInput) (CoalescerEdge, error)
 		s := &c.slots[r.ID.Slot]
 		e.ResponseValid = true
 		e.ResponseDelivered = in.ResponseReady
-		e.Response = SIMDResponse{Identity: s.request.Identity, Tag: s.request.Tag}
+		e.Response = SIMDResponse{Identity: s.request.Identity, Batch: r.ID, Tag: s.request.Tag}
 		for lane := 0; lane < 4; lane++ {
 			group := lane / 2
 			if s.lanes&(1<<lane) != 0 && r.Mask&(1<<group) != 0 {
@@ -408,7 +412,7 @@ func (c *Coalescer) Preview(in BatchReply) (SIMDReply, error) {
 	if !s.valid || s.generation != r.ID.Generation || r.Mask == 0 || r.Mask&^s.sent != 0 || r.Mask&^s.remaining != 0 {
 		return SIMDReply{}, fmt.Errorf("stale or unsent coalescer preview")
 	}
-	out := SIMDReply{true, SIMDResponse{Identity: s.request.Identity, Tag: s.request.Tag}}
+	out := SIMDReply{true, SIMDResponse{Identity: s.request.Identity, Batch: r.ID, Tag: s.request.Tag}}
 	for lane := 0; lane < 4; lane++ {
 		p := lane / 2
 		if s.lanes&(1<<lane) != 0 && r.Mask&(1<<p) != 0 {

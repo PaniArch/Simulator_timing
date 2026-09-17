@@ -42,3 +42,11 @@ T12 新增 `MemoryRequests` 和 `AcceptMemoryResult`，支持将真实 cache/LME
 word 与逐 lane store 应用事件交给 effects，不在完成时再次读取或写入 backing。
 普通及 packed load 的寄存器写仍发生在匹配 WB；完整 Runner 接线尚未完成。
 详见 [../memory-integration-progress.md](../memory-integration-progress.md)。
+
+跨周期异步 barrier 回归：`TestConcurrentDelayedNonblockingBarrierFeedback`
+覆盖年轻 ALU/branch 在先前 edge 完成，迟到 arrive 仍恰好交付且不回退 PC；
+`TestConcurrentDelayedArrivalRejectsStaleIdentity` 覆盖重复、旧 epoch 和取消的 residency。
+`emu/state/TestEffectStreamDelayedArrival` 覆盖独立 activation 截止线、回调失败与非法阻塞组。
+`runner/TestMultiRunnerDelayedAsyncBarrier` 用真实 outstanding load 延迟 WCTL，
+检查年轻 ALU/branch 先完成的周期证据。此 runner 测试使用外部事件探针；canonical
+BarrierCoordinator 事务另由 `TestBarrierOwnerAtControlFeedback` 验证。

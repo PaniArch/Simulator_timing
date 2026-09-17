@@ -5,14 +5,15 @@ import (
 	"vortex.local/simulator/isa"
 )
 
-// EffectStream owns only the control visibility frontier for one residency of
-// a canonical Warp owner. Timing supplies strictly ordered instruction IDs;
+// EffectStream owns the PC visibility and activation frontiers for one residency
+// of a canonical Warp owner. Timing supplies strictly ordered instruction IDs;
 // register writes/flags remain independently visible at their own events.
 // Construct a new stream only after cancelling the old residency's deliveries.
 // This policy is a software interface, not an RTL retirement/ROB claim.
 type EffectStream struct {
-	owner        *WarpState
-	controlOrder uint64
+	owner           *WarpState
+	controlOrder    uint64
+	activationOrder uint64
 }
 
 func NewEffectStream(owner *WarpState) (*EffectStream, error) {
@@ -67,9 +68,12 @@ func (w *WarpState) stageInstructionEffects(context InstructionContext, effects 
 
 func (d *EffectDelivery) stageStreamControl(part isa.InstructionEffects) (*EffectStage, error) {
 	if d.order <= d.stream.controlOrder {
+		// BAR.arrive is nonblocking: its external event can outlive younger
+		// PC completions, but never the activation that admitted it.
+		lateArrive := d.order > d.stream.activationOrder && asynchronousArrival(part)
 		// A late ordinary completion has no remaining architectural PC effect.
 		// A second or reordered control transition is not silently discarded.
-		if (part.Control != nil && part.Control.Reason != isa.PCSequential) || part.Trap != nil || len(part.WarpMasks) != 0 || part.Divergence != nil || part.WarpSpawn != nil || len(part.WarpDrains) != 0 || len(part.Barriers) != 0 {
+		if (part.Control != nil && part.Control.Reason != isa.PCSequential) || part.Trap != nil || len(part.WarpMasks) != 0 || part.Divergence != nil || part.WarpSpawn != nil || (!lateArrive && (len(part.WarpDrains) != 0 || len(part.Barriers) != 0)) {
 			return nil, fmt.Errorf("stale nonsequential control delivery")
 		}
 		part.Control = nil
@@ -78,10 +82,25 @@ func (d *EffectDelivery) stageStreamControl(part isa.InstructionEffects) (*Effec
 	return d.owner.stageInstructionEffects(d.instruction, part)
 }
 
+// Only the evaluator's nonblocking BAR.arrive group may cross the PC frontier.
+// Event attachment (expect_tx) is also an arrive opcode, with Arrive=false.
+func asynchronousArrival(part isa.InstructionEffects) bool {
+	if part.Control == nil || part.Control.Reason != isa.PCSequential || len(part.Barriers) != 1 || len(part.WarpDrains) != 1 {
+		return false
+	}
+	b, drain := part.Barriers[0], part.WarpDrains[0]
+	return b.Kind == isa.BarrierArrive && !b.Sync && !b.Wait && !b.ReleaseByCoordinator && b.DrainLSU &&
+		(b.Arrive != b.Event) && drain.Kind == isa.DrainLSU && !drain.Wait && !drain.ReleaseAfterDrain
+}
+
 // RecordActivation prevents late ordinary PC deliveries from the previous
-// activation from rewinding a newly spawned warp. Register and memory receipts
-// are not cancelled. Timing supplies its greatest previously admitted ID.
+// activation from rewinding a newly spawned warp and rejects its late external
+// control events. Register and memory receipts are not cancelled. Timing supplies
+// its greatest previously admitted ID, independently of the visible PC frontier.
 func (s *EffectStream) RecordActivation(through uint64) {
+	if through > s.activationOrder {
+		s.activationOrder = through
+	}
 	if through > s.controlOrder {
 		s.controlOrder = through
 	}

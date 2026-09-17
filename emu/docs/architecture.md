@@ -697,6 +697,14 @@ WB/flags 仍独立交付。mask/lifecycle 只由实际控制效果改变，旧�
 恢复旧 mask。越过 frontier 的非顺序控制报错，不静默选择优先级，也不宣称
 RTL 存在 ROB 或统一 retirement 顺序。
 
+非阻塞 `BAR.arrive`（含 expect_tx）例外仅针对外部事件：当前 activation 内
+迟于年轻 ALU/branch 的合法 arrive 丢弃旧顺序 PC 效果，仍将 barrier 与已满足的
+LSU drain 一起交给外部 owner，成功后记录一次 ControlEvent receipt。
+`EffectStream.RecordActivation` 独立维护 admission order 截止线，即使 PC frontier
+已到达相同 order，也禁止旧 activation 的 arrive。epoch/residency/cancellation
+仍由 timing 身份路由校验；阻塞 BAR、未完成 drain 和真正过期跳转仍拒绝。
+这不改变 arrive 的非阻塞 decode 或现有 LSU admission gate，不添加 Core drain。
+
 Fetch/Memory 服务按身份匹配，使用显式正延迟和响应背压；分片与 packed load
 保留覆盖、去重和单次交付。冻结 ISA 只有 packed load，无 packed store 指令。
 失败边沿停止，不重试部分成功的效果；外部 owner 仍须遵守同步 all-or-error
@@ -755,3 +763,104 @@ bash scripts/verify-all.sh
 部分同时反馈、CSR 背压、跨 Warp memory ordering 和外部效果故障继续保留证据
 边界。Task10 不新增 CTA/Kernel orchestration、Cache、DRAM timing、多 Core，
 也不宣称 RTLSIM trace 精度等价。所有冻结 RTL 输入保持不变。
+
+### 存储响应片段身份修复（2026-09-16）
+
+`PROVISIONAL（软件校验元数据）`：timing/memsys 的 global load 响应在
+coalescer 展开后仍携带 BatchID（slot/generation），split 对相同父 identity
+下的不同 batch 允许零缓冲 priority pack 重选。相同片段及独立 producer 的
+背压稳定性仍分别校验；父请求完成仍要求全部 lane 交付及子请求引用释放。
+该元数据不改变 canonical owner、RTL 缓冲/仲裁、外部服务延迟或功能效果接口。
+接口与定向回归见 [memsys 说明](../../timing/memsys/README.md)；原规模 runtime
+benchmark 和 RTL 周期等价不由组件回归宣称通过。
+
+### Runtime 终态审计发布（protocol-and-audit）
+
+`integration/vortexruntime` 在启用 JSONL 审计时，先完成 launch-finish/cache-flush
+记录的 Write/Close，再以设备锁原子发布 detached RunSummary、错误和 idle。
+独立 audit mutex 仅串行化记录 I/O，不持有设备状态锁或改变下层模拟周期。
+打开、写入、短写、关闭失败均进入 native error channel；原模拟器错误及 origin 不被
+审计错误覆盖。未启用审计时无日志 I/O。此规则不等于断电持久化，也不把 timing
+execution complete 升级为 backing visible；后者仍要求原生 CP 真实 CACHE_FLUSH。
+固定单 Core/四 Warp/四 lane、外部服务 100 cycles、memory Batch provenance 与
+EffectStream activation 截止线均保持不变。详见 runtime 集成文档和 audit_test.go。
+
+### D-cache port 0 transport ownership（dcache-port-buffer，第 1 步）
+
+`timing/memsys/System` 通过 `b-dflush` 的两槽注册输出连接 adapter port 0 与
+D-cache；port 1 直通。普通请求和独立 flush 共用容量，原位 flush 保留原 word
+身份。adapter 接受、Cache 接受、store 应用、响应交付仍是独立事件。新增缓冲
+只持传输值和 flush 回复尾部，不拥有 canonical bytes，也不改变功能 effect。
+`Drained`/`HasResidency` 包含缓冲；取消不删除已暴露请求，终态协议错误不允许重放。
+具体边沿及第 1 步验证范围见 [memsys 契约](../../timing/memsys/README.md)。
+本记录不表示后续生命周期组合和里程碑完整验收已经完成。
+
+### D-cache port buffer lifecycle closure（dcache-port-buffer，第 2 步）
+
+`FROZEN（局部 RTL transport 边界）`：`b-dflush` 的 port 0 两槽注册输出、满时不
+复用同拍释放 credit、port 1 直通已由生产 System 逐边沿 witness 与冻结 RTL 接线
+互证；普通访存和原位/独立 flush 均使用该边界。`timing/check/dflush_contract.go`
+将 RTL 实例和编码链、IR 值与生产握手串联到 timing 门禁，不能以空置实例替代接线。
+
+`PROVISIONAL（软件 identity 尾部）`：runner 的 `drained` 还要求下一边沿待消费的
+completion receipt、token/acceptance/cancellation maps 和 store events 为空；
+`warpPending` 包含最终 completion 身份，防止取消 load/FENCE 的返回刚排空就结束
+执行或回收相关 residency。原有 `receive` 消费顺序不变，没有新增 canonical owner、
+硬件延迟、全 Core drain、跨 launch 复用或 Warp 分配策略。
+只读 `DCachePort0Occupancy` 用于诊断及边沿测试，不可替代完整 `Drained`。
+
+验收映射、命令结果和外部实验限制见 runtime trace 分析文档的里程碑收尾记录。
+
+### runtime 设备存储续用
+
+`PROVISIONAL（已实现软件所有权接口）`：timing Kernel.NextLaunch 将完整排空的
+memsys 与连续时钟转交新 launch；backing owner 不变，CTA/LMEM 架构 owner 重建，
+launch 身份递增并重新绑定 LMEM resolver。旧 Kernel 禁止继续推进。native runtime
+仍要求成功 D/I flush 后才能重启，不以执行完成替代 backing visibility。
+冻结 RTL 的 reset/init 与 flush 状态区分、验证和未闭合的首次 host 控制时间线见
+[设备生命周期交接](../../docs/runtime/device-lifecycle-handoff.md)。
+
+### Timing 增量 Warp residency
+
+`PROVISIONAL（已实现软件所有权接口）`：`core.ResidencyMemory` 增加 Reserve、
+BindWarp、DetachWarp，将 CTA metadata/固定 stride LMEM 的生命周期与物理 Warp
+绑定分开。功能 Core 的整 CTA API 保持；timing Kernel 在逐边沿 coordinator 中
+使用增量接口，调用解绑前验证该 Warp 的完整流水/效果/传输排空并保留 barrier
+地址保护。CTAView 的 Size 取完整 block 大小，Rank 不依赖当前成员 slice 下标。
+
+`FROZEN（局部 RTL 控制依据）`：VX_cta_dispatch 的 IDLE/DISPATCH、注册 warp_fire_r、
+单 Warp 选择和两级退休/共享 RAM 写端口定义生产 Kernel 的分配控制状态；软件的
+完整尾部检查仍可能推迟安全回收。物理 Warp 与 CTA slot generation 独立，TLS
+仍保留于 canonical WarpState；没有新建架构寄存器或 memory bytes 的写源。
+实现、验证范围和下一 Worker 的事件接口见
+[增量 Warp 驻留交接](../../docs/runtime/incremental-warp-handoff.md)。
+
+
+## Runtime 身份与硬件计数（device-and-warp-lifecycle，第 3 Worker）
+
+`RESOLVED`：Kernel 的边沿记录以 DeviceID/LaunchID、显式 WarpBinding 和
+Token.ID/Epoch/Uop 关联逻辑 CTA/rank、物理 slot/generation；存储 fragment trace
+连接 SIMD parent、coalescer Batch、adapter wire transaction 和 Cache 接受，
+保留 port-0 注册缓冲相位。绑定来自真实 dispatch 与唯一 residency owner。
+
+`RESOLVED`：原生 MPM 按 VX_dcr_data tag 编码导出已有 scheduler 44 位 Cycle/Instret。
+NextLaunch 转移计数与 busy 寄存器；显式 flush 在真实空闲边沿推进 busy 尾部。
+Instret 是 committed Warp/EOP 通知，不是宏收据或 lane 计数。runtime 保存终态
+硬件快照并在审计之后发布，未知统计明确 unavailable，不以有效零值代替。
+
+字段、RTL 依据、复验命令及未验证的外部边界见
+[身份与计数交接](../../docs/runtime/identity-performance-handoff.md)。
+本条不关闭首次 host DCR 时间线、外部 native benchmark 或 RTLSIM 等价问题，
+也不替代 closure Worker 的全仓与里程碑验收。
+
+### 生命周期跨层收尾（device-and-warp-lifecycle）
+
+`RESOLVED（计数接线）`：`VX_scheduler.busy` 包含注册 busy_buf 与组合
+cta_dispatcher_busy；Kernel 将边沿前 DISPATCH 或真实 CTA admission 经
+CoreInputs.DispatchBusy 传给唯一 accounting owner，按 OR 每拍计数一次。
+分配 busy 不增加额外注册尾拍；44 位累计、EOP Instret 和宏退休的单位保持独立。
+
+组合回归覆盖提前 Warp 复用、真实存储/取消尾部、跨 launch fragment 身份、
+barrier/LMEM 交换、TLS、flush 后不同输入，以及终态审计阻塞期间的 MPM 发布。
+没有增加 canonical owner、通用故障自动恢复或放宽排空门槛。逐项验收、最终
+命令结果和外部实验限制见 [生命周期收尾](../../docs/runtime/lifecycle-integration-closure.md)。

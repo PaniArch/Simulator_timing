@@ -424,3 +424,135 @@ func TestConcurrentNonblockingBarrierAndBranchFeedback(t *testing.T) {
 		t.Fatal("overlap did not complete both instructions", done, err)
 	}
 }
+
+func TestConcurrentDelayedNonblockingBarrierFeedback(t *testing.T) {
+	for _, younger := range []string{"branch", "alu"} {
+		t.Run(younger, func(t *testing.T) {
+			_, owners, ram := concurrentSetup(t)
+			if err := owners[0].WriteRegister(isa.Register{File: isa.Integer, Index: 1}, 15, isa.LaneValues{}); err != nil {
+				t.Fatal(err)
+			}
+			if err := owners[0].WriteRegister(isa.Register{File: isa.Integer, Index: 2}, 15, isa.LaneValues{1, 1, 1, 1}); err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			c, err := effects.NewConcurrent(owners, 9, ram, [4]effects.ExternalOwner{func(e isa.InstructionEffects) error { calls += len(e.Barriers); return nil }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var word uint32
+			for _, entry := range isa.Catalog() {
+				if entry.Name == "bar.arrive" {
+					word = entry.Example&^uint32(31<<15|31<<20) | 1<<15 | 2<<20
+				}
+			}
+			bar := concurrentToken(t, 1, word, 0x100)
+			word2 := uint32(0x00000463)
+			if younger == "alu" {
+				word2 = 0x00700193
+			}
+			branch := concurrentToken(t, 2, word2, 0x104)
+			if bar.Token.WarpStall || (younger == "branch" && !branch.Token.WarpStall) {
+				t.Fatal("test does not represent nonblocking arrive")
+			}
+			for _, signal := range []model.Signal{bar, branch} {
+				if err := c.Begin(signal.Token); err != nil {
+					t.Fatal(err)
+				}
+			}
+			read := bar
+			read.Token.ReadMask, read.Token.LastRead = bar.Token.Used, true
+			concurrentEdge(t, c, 0, model.CoreReport{Read: read})
+			read = branch
+			read.Token.ReadMask, read.Token.LastRead = 0, true
+			concurrentEdge(t, c, 1, model.CoreReport{Read: read})
+			concurrentEdge(t, c, 2, model.CoreReport{Executed: [4]model.Signal{branch, {}, bar}})
+			if c.ControlAllowed(bar, state.ReadContext{PendingLSU: true}) || !c.ControlAllowed(bar, state.ReadContext{}) {
+				t.Fatal("LSU admission gate changed")
+			}
+			if younger == "branch" {
+				concurrentEdge(t, c, 3, model.CoreReport{Branch: branch})
+			} else {
+				concurrentEdge(t, c, 3, model.CoreReport{Writeback: branch})
+			}
+			report4 := model.CoreReport{}
+			if younger == "alu" {
+				report4.PendingRelease = branch
+			}
+			concurrentEdge(t, c, 4, report4)
+			before := snap(t, owners[0])
+			if calls != 0 {
+				t.Fatal("early arrival")
+			}
+			concurrentEdge(t, c, 5, model.CoreReport{Control: bar})
+			if snap(t, owners[0]) != before {
+				t.Fatal("late arrival changed canonical state")
+			}
+			if calls != 1 || snap(t, owners[0]).PC() != map[string]uint32{"branch": 0x10c, "alu": 0x108}[younger] {
+				t.Fatal("barrier event or branch redirect lost", calls, snap(t, owners[0]).PC())
+			}
+			concurrentEdge(t, c, 6, model.CoreReport{Writeback: bar})
+			report := model.CoreReport{PendingRelease: bar}
+			if younger == "branch" {
+				report.Writeback = branch
+			}
+			concurrentEdge(t, c, 7, report)
+			if younger == "branch" {
+				concurrentEdge(t, c, 8, model.CoreReport{PendingRelease: branch})
+			}
+			if done, err := c.Reap(); err != nil || len(done) != 2 {
+				t.Fatal("overlap did not complete both instructions", done, err)
+			}
+			if err := c.Observe(9, model.CoreReport{Control: bar}, [4]state.ReadContext{}); err == nil || calls != 1 {
+				t.Fatal("duplicate reaped arrival accepted")
+			}
+		})
+	}
+}
+
+func TestConcurrentDelayedArrivalRejectsStaleIdentity(t *testing.T) {
+	for _, scenario := range []string{"epoch", "cancelled-residency", "duplicate"} {
+		t.Run(scenario, func(t *testing.T) {
+			_, owners, ram := concurrentSetup(t)
+			calls := 0
+			c, err := effects.NewConcurrent(owners, 9, ram, [4]effects.ExternalOwner{func(isa.InstructionEffects) error { calls++; return nil }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var word uint32
+			for _, e := range isa.Catalog() {
+				if e.Name == "bar.arrive" {
+					word = e.Example&^uint32(31<<15|31<<20) | 1<<15 | 2<<20
+				}
+			}
+			bar := concurrentToken(t, 1, word, 0x100)
+			if err = c.Begin(bar.Token); err != nil {
+				t.Fatal(err)
+			}
+			read := bar
+			read.Token.ReadMask, read.Token.LastRead = bar.Token.Used, true
+			concurrentEdge(t, c, 0, model.CoreReport{Read: read})
+			concurrentEdge(t, c, 1, model.CoreReport{Executed: [4]model.Signal{{}, {}, bar}})
+			switch scenario {
+			case "epoch":
+				if err = c.Reset(10); err != nil {
+					t.Fatal(err)
+				}
+			case "cancelled-residency":
+				if _, err = c.Cancel(model.Cancellation{Warp: 0, Epoch: 9, Through: 1}); err != nil {
+					t.Fatal(err)
+				}
+			case "duplicate":
+				concurrentEdge(t, c, 2, model.CoreReport{Control: bar})
+			}
+			before := snap(t, owners[0])
+			beforeCalls := calls
+			if err = c.Observe(3, model.CoreReport{Control: bar}, [4]state.ReadContext{}); err == nil {
+				t.Fatal("invalid arrival accepted")
+			}
+			if calls != beforeCalls || snap(t, owners[0]) != before {
+				t.Fatal("invalid arrival mutated owner")
+			}
+		})
+	}
+}

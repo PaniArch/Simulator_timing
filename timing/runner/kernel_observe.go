@@ -8,11 +8,17 @@ import (
 // KernelEvent records residency boundaries separately from pipeline edges.
 // Slot is -1 for generation; CTA is always the immutable GridWalker ID.
 type KernelEvent struct {
-	Kind  string
-	Cycle uint64
-	CTA   uint32
-	Slot  int
-	Warps isa.WarpMask
+	Kind           string
+	Cycle          uint64
+	DeviceID       uint64
+	CTA            uint32
+	Slot           int
+	Warps          isa.WarpMask
+	LaunchID       uint64
+	Generation     uint64 // CTA slot generation
+	Warp           uint8
+	Rank           uint32
+	WarpGeneration uint64
 }
 
 // TakeEvents returns and clears detached events. Call after each Run, including
@@ -23,7 +29,11 @@ func (k *Kernel) TakeEvents() []KernelEvent {
 	return events
 }
 func (k *Kernel) event(kind string, cta uint32, slot int, warps isa.WarpMask) {
-	k.events = append(k.events, KernelEvent{Kind: kind, Cycle: k.runner.Cycle(), CTA: cta, Slot: slot, Warps: warps})
+	e := KernelEvent{DeviceID: k.deviceID, Kind: kind, Cycle: k.runner.Cycle(), CTA: cta, Slot: slot, Warps: warps, LaunchID: k.launchID}
+	if slot >= 0 {
+		e.Generation = k.generations[slot]
+	}
+	k.events = append(k.events, e)
 }
 
 // observeCTA is also the actual release predicate, so status cannot advertise
@@ -32,16 +42,19 @@ func (k *Kernel) observeCTA(slot int, c *KernelCTA) KernelCTA {
 	out := *c
 	out.Generation = k.generations[slot]
 	out.StoppedWarps = 0
-	out.MemoryPending = k.runner.hierarchy.system.HasResidency(1, uint64(slot))
-	out.Reclaimable = !k.memory.BarrierPending(uint32(slot))
+	out.MemoryPending = k.runner.hierarchy.system.HasResidency(k.launchID, uint64(slot))
+	out.Reclaimable = c.Dispatched == k.launch.WarpsPerCTA && c.RetiredRanks == isa.WarpMask((1<<k.launch.WarpsPerCTA)-1) && !k.memory.BarrierPending(uint32(slot))
 	for _, member := range c.Resident.Members {
+		if member.Rank >= c.Dispatched {
+			continue
+		}
 		w := member.WarpID
 		snapshot, err := k.runner.owners[w].Snapshot()
 		if err == nil && (snapshot.ActiveMask() == 0 || snapshot.Lifecycle() != state.WarpRunning) {
 			out.StoppedWarps |= 1 << w
 		}
 		out.MemoryPending = out.MemoryPending || k.runner.hierarchy.warpPending(w)
-		out.Reclaimable = out.Reclaimable && k.runner.WarpQuiescent(w)
+		out.Reclaimable = out.Reclaimable && !k.runner.parked[w] && k.runner.WarpQuiescent(w)
 	}
 	out.Reclaimable = out.Reclaimable && !out.MemoryPending
 	return out

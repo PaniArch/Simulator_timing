@@ -14,6 +14,7 @@ type Core struct {
 	commit  *Commit
 }
 type CoreInputs struct {
+	DispatchBusy                  bool                // current CTA DISPATCH state or KMU admission handshake
 	Feedback                      []SchedulerFeedback // resolved old-edge branch/SIMT producer values
 	Instruction                   Signal              // explicit-token mode only; leave invalid in scheduled mode
 	FetchResponse, MemoryResponse Response
@@ -158,7 +159,7 @@ func (c *Core) Evaluate(in CoreInputs) (CoreTransition, error) {
 			}
 		}
 	}
-	account, err := c.account.evaluate(front.PendingIssue, wb.PendingRelease, activeNext)
+	account, err := c.account.evaluate(front.PendingIssue, wb.PendingRelease, activeNext, in.DispatchBusy)
 	if err != nil {
 		return CoreTransition{}, err
 	}

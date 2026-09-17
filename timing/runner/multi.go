@@ -25,23 +25,28 @@ type MultiOptions struct {
 	MemoryDelay func(model.Token) uint64
 }
 type MultiRecord struct {
-	Counters       isa.CounterView // old-edge hardware scheduler counters
-	Warps          [4]WarpObservation
-	Events         []StageEvent
-	Cancelled      []model.Token // effect contexts removed since the previous edge
-	Cycle          uint64
-	Report         model.CoreReport
-	InFlight       int
-	Finished       []model.Token
-	Retired        [4]uint64
-	ResourcesAfter []model.ResourceState
-	Services       []ServiceState
+	DeviceID, LaunchID uint64
+	Bindings           [4]WarpBinding    // detached physical-to-logical binding for every token on this edge
+	Memory             memsys.SystemEdge // detached memory handshakes; fragments require TraceMemory
+	Counters           isa.CounterView   // old-edge hardware scheduler counters
+	Warps              [4]WarpObservation
+	Events             []StageEvent
+	Cancelled          []model.Token // effect contexts removed since the previous edge
+	Cycle              uint64
+	Report             model.CoreReport
+	InFlight           int
+	Finished           []model.Token
+	Retired            [4]uint64
+	ResourcesAfter     []model.ResourceState
+	Services           []ServiceState
 }
 
 // MultiRunner drives scheduled Core admission from four explicit owners. Fetch
 // and data services are queues keyed by token identity, not a single current
 // instruction. Only final completion uses Core.Idle; ordinary admission never does.
 type MultiRunner struct {
+	dispatchBusy                  bool // Kernel's actual pre-edge CTA DISPATCH/admission signal
+	launchIdentity                uint64
 	controlSequence, visibilityID uint64
 	cacheFlush                    *cacheFlush
 	hierarchy                     *runnerMemory
@@ -131,7 +136,7 @@ func NewMulti(owners [4]*state.WarpState, memory warp.MemoryService, options Mul
 	if err != nil {
 		return nil, err
 	}
-	r := &MultiRunner{blocked: map[uint8]model.Token{}, epoch: 1, owners: owners, memory: memory, core: core, clock: clock, effects: adapter, options: options}
+	r := &MultiRunner{launchIdentity: 1, blocked: map[uint8]model.Token{}, epoch: 1, owners: owners, memory: memory, core: core, clock: clock, effects: adapter, options: options}
 	if options.MemorySystem != nil {
 		r.hierarchy, err = newRunnerMemory(memory, options.MemorySystem)
 		if err != nil {
@@ -215,7 +220,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		return record, err
 	}
 	feedback = append(feedback, r.externalFeedback()...)
-	inputs := model.CoreInputs{Feedback: feedback, FetchResponse: r.fetchResponse, MemoryResponse: r.response, FetchReady: ready, MemoryReady: ready, ControlAllowed: r.effects.ControlAllowed(control, context)}
+	inputs := model.CoreInputs{DispatchBusy: r.dispatchBusy, Feedback: feedback, FetchResponse: r.fetchResponse, MemoryResponse: r.response, FetchReady: ready, MemoryReady: ready, ControlAllowed: r.effects.ControlAllowed(control, context)}
 	if r.hierarchy != nil {
 		inputs.FetchReady = false
 		inputs.MemoryReady = false
@@ -224,6 +229,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 	if err == nil && r.hierarchy != nil {
 		var edgeErr error
 		edge, e := r.hierarchy.step(r, cycle, p.Report)
+		record.Memory = edge
 		edgeErr = e
 		if edgeErr != nil {
 			return record, edgeErr
@@ -311,7 +317,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		}
 		allStopped = allStopped && (s.ActiveMask() == 0 || s.Lifecycle() != state.WarpRunning)
 	}
-	memoryDrained := r.hierarchy == nil || (r.hierarchy.system.Drained() && len(r.hierarchy.stores) == 0)
+	memoryDrained := r.hierarchy == nil || r.hierarchy.drained()
 	r.stopped = memoryDrained && allStopped && r.effects.InFlight() == 0 && r.core.Idle(len(r.fetch) == 0 && len(r.loads) == 0 && !r.fetchResponse.Valid && !r.response.Valid)
 	return record, nil
 }

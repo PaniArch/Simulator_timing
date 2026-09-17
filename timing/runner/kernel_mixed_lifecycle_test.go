@@ -108,6 +108,9 @@ func TestKernelMixedMemoryLifecycle(t *testing.T) {
 					t.Fatal("live residency reclaimable")
 				}
 				stoppedTail = stoppedTail || (c.StoppedWarps != 0 && c.MemoryPending)
+				if len(c.Resident.Members) == 0 {
+					continue
+				}
 				w := c.Resident.Members[0].WarpID
 				if c.StoppedWarps.Active(w) {
 					s, _ := k.runner.owners[w].Snapshot()

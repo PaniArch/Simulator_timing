@@ -28,6 +28,9 @@ func (r *MultiRunner) FlushCaches(budget uint64) (bool, error) {
 }
 func (r *Runner) FlushCaches(budget uint64) (bool, error) { return r.multi.FlushCaches(budget) }
 func (k *Kernel) FlushCaches(budget uint64) (bool, error) {
+	if k.transferred {
+		return false, fmt.Errorf("kernel memory ownership transferred")
+	}
 	if k.failed != nil {
 		return false, k.failed
 	}
@@ -57,7 +60,7 @@ func (r *MultiRunner) flushCaches(budget uint64) (bool, error) {
 	done := false
 	err := r.clock.Run(budget, func(cycle uint64) (bool, error) {
 		f := r.cacheFlush
-		id := memsys.Identity{Kernel: 1, Transaction: f.transaction}
+		id := memsys.Identity{Kernel: r.launchIdentity, Transaction: f.transaction}
 		// Use the pre-edge D done latch: I cannot launch on the D completion edge.
 		e, err := r.hierarchy.system.Step(cycle, memsys.SystemInput{
 			FetchReady: true, MemoryReady: true, DataFlushReady: true, InstructionFlushReady: true,
@@ -65,6 +68,9 @@ func (r *MultiRunner) flushCaches(budget uint64) (bool, error) {
 			InstructionFlush: memsys.FlushOffer{Valid: f.dataDone && !f.instructionSent, Identity: id, Tag: f.transaction},
 		})
 		if err != nil {
+			return false, err
+		}
+		if err := r.core.ClockIdleCounters(); err != nil {
 			return false, err
 		}
 		f.dataSent = f.dataSent || e.DataFlushAccepted

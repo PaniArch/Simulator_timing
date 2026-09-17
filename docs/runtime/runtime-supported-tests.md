@@ -41,7 +41,14 @@ python3 .cache/runtime-supported/20260910T123839Z-87khjjzf/runner.py aggregate \
 summary.json/summary.tsv 总是列出完整 56 项；未报告结果是 NOT_REPORTED，不能算作通过。
 NOT_REPORTED 可能表示排队、运行中、作业被外部终止或链暂停，需结合 Slurm 状态判断。
 
-PASS 要求 host 退出 0、至少有一次 launch、start/finish 数量吻合、模式正确且结果已经可见。
+PASS 要求 host 退出 0，且至少有一次完整 launch。按连续 sequence 验证 start → finish，
+模式与 launch 描述逐项匹配，finish 为 complete 且 generated/admitted/completed 一致。
+周期模式还要求同 sequence 的成功 cache-flush（cycle/counter 与 finish 一致）之后才能
+开始下一次 launch；功能模式 finish 本身必须 backing-visible。重复、错序、缺失、
+畸形 JSON（含重复 key）、错误事件或未显式记录周期都不能判 PASS。
+aggregate 重新读取原始 events.jsonl 并核对 result 与 manifest 的 case 身份，
+不会仅相信 result.json 中预存的 PASS。缺失或不完整证据的周期在 JSON 中为 null、
+TSV 中为 unknown；功能模式的周期也为 null/unknown。旧日志省略的零周期不补零。
 其他类别为 SIMULATOR_INTERNAL、EXTERNAL_CONNECTION、TIMEOUT、HOST_OR_UNKNOWN、
 INCOMPLETE_EVIDENCE。超时不自动归因于模拟器设计。模型错误原样记录，不自动修主体。
 运行库/驱动脚本等全局基础设施失败会暂停对应链，避免余下项目全部无效失败。

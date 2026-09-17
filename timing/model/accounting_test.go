@@ -6,7 +6,7 @@ func TestHardwarePendingRegisteredUopCommit(t *testing.T) {
 	c := &Core{}
 	step := func(issue, commit Signal) {
 		t.Helper()
-		p, err := c.account.evaluate(issue, commit, 0)
+		p, err := c.account.evaluate(issue, commit, 0, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -33,7 +33,7 @@ func TestHardwarePendingRegisteredUopCommit(t *testing.T) {
 	if c.HardwarePending()[2] != 0 || c.Instret() != 2 {
 		t.Fatal("packed uops were counted as one macro")
 	}
-	if _, err := c.account.evaluate(Signal{}, b, 0); err == nil {
+	if _, err := c.account.evaluate(Signal{}, b, 0, false); err == nil {
 		t.Fatal("duplicate commit accepted")
 	}
 }
@@ -49,7 +49,7 @@ func TestHardwarePendingPartialWritebackAndCancellation(t *testing.T) {
 	step := func(input Signal) {
 		t.Helper()
 		wb := commit.Evaluate([4]Signal{input})
-		p, err := c.account.evaluate(Signal{}, wb.PendingRelease, 0)
+		p, err := c.account.evaluate(Signal{}, wb.PendingRelease, 0, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestSchedulerCycleCounterBusyRegisterAndWrap(t *testing.T) {
 	c := &Core{}
 	step := func(active uint8) {
 		t.Helper()
-		p, err := c.account.evaluate(Signal{}, Signal{}, active)
+		p, err := c.account.evaluate(Signal{}, Signal{}, active, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,5 +140,70 @@ func TestSchedulerCycleCounterBusyRegisterAndWrap(t *testing.T) {
 	step(0)
 	if c.Cycles() != 0 {
 		t.Fatal("counter did not wrap at RTL width")
+	}
+}
+
+func TestCounterContinuationAndIdleTail(t *testing.T) {
+	previous, err := NewCore("std")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous.account = instructionAccounting{cycles: (1 << 44) - 1, instret: 27, busy: true}
+	next, err := NewCore("std")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := next.ContinueCounters(previous); err != nil {
+		t.Fatal(err)
+	}
+	if next.Cycles() != previous.Cycles() || next.Instret() != 27 || !next.account.busy {
+		t.Fatal("counter state lost")
+	}
+	if err := next.ClockIdleCounters(); err != nil {
+		t.Fatal(err)
+	}
+	if next.Cycles() != 0 || next.Instret() != 27 || next.account.busy {
+		t.Fatal("registered tail/width")
+	}
+	if err := next.ClockIdleCounters(); err != nil {
+		t.Fatal(err)
+	}
+	if next.Cycles() != 0 {
+		t.Fatal("idle flush counted as busy")
+	}
+	if err := next.ContinueCounters(previous); err == nil {
+		t.Fatal("overwrote used counters")
+	}
+	previous.account.pending = []Token{{ID: 1}}
+	if err := (&Core{}).ContinueCounters(previous); err == nil {
+		t.Fatal("continued live instructions")
+	}
+	if err := previous.ClockIdleCounters(); err == nil {
+		t.Fatal("idle clock discarded live instruction")
+	}
+}
+
+func TestCounterDispatchBusyIsCombinationalOR(t *testing.T) {
+	var a instructionAccounting
+	for _, step := range []struct {
+		dispatch bool
+		active   uint8
+		want     uint64
+	}{
+		{true, 0, 1},  // admission, before any active Warp
+		{true, 1, 2},  // selection/fire clocks busy_buf
+		{true, 0, 3},  // both busy inputs: count once
+		{false, 0, 3}, // dispatcher itself adds no registered tail
+	} {
+		p, err := a.evaluate(Signal{}, Signal{}, step.active, step.dispatch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := CommitEdge(p); err != nil {
+			t.Fatal(err)
+		}
+		if a.cycles != step.want {
+			t.Fatal(a.cycles, step)
+		}
 	}
 }

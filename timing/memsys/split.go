@@ -187,7 +187,11 @@ func (s *SIMDSplit) validate(cycle uint64, in SplitInput) error {
 		if s.heldReads[p].Valid && !in.Reads[p].Valid {
 			return fmt.Errorf("dropped stalled path valid")
 		}
-		if s.heldReads[p].Valid && in.Reads[p].Valid && s.heldReads[p].Response.Identity == in.Reads[p].Response.Identity {
+		// The zero-buffer global pack can reselect another batch of the same
+		// parent while stalled. Only the same fragment must retain its lanes;
+		// the adapter separately enforces stability of every producer port,
+		// including a previously selected port hidden by higher priority input.
+		if s.heldReads[p].Valid && in.Reads[p].Valid && s.heldReads[p].Response.Identity == in.Reads[p].Response.Identity && s.heldReads[p].Response.Batch == in.Reads[p].Response.Batch {
 			old, now := s.heldReads[p].Response, in.Reads[p].Response
 			if old.Tag != now.Tag || old.Mask&^now.Mask != 0 {
 				return fmt.Errorf("lost stalled path lanes")

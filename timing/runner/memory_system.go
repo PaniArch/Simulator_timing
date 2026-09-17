@@ -16,6 +16,7 @@ import (
 // the current full residency identity; LocalOwner revalidates it at service.
 // Neither callback may allocate replacement backing bytes.
 type MemorySystemOptions struct {
+	reuse      *runnerMemory // internal, transferred only after full drain
 	Config     memsys.Config
 	Bind       func(model.Token) memsys.Identity
 	LocalOwner memsys.LocalOwner
@@ -28,6 +29,7 @@ type appliedStore struct {
 type runnerMemory struct {
 	system                        *memsys.System
 	bind                          func(model.Token) memsys.Identity
+	localOwner                    memsys.LocalOwner
 	fetchSeq, dataSeq             uint64
 	fetch                         memsys.WordOffer
 	data                          memsys.SIMDOffer
@@ -47,11 +49,16 @@ func newRunnerMemory(owner warp.MemoryService, o *MemorySystemOptions) (*runnerM
 	if o.Bind == nil || o.LocalOwner == nil {
 		return nil, fmt.Errorf("T12 requires explicit residency binding and local owner resolver")
 	}
-	s, err := memsys.NewSystem(atomic, o.LocalOwner, o.Config)
+	if o.reuse != nil {
+		return o.reuse, nil
+	}
+	m := &runnerMemory{localOwner: o.LocalOwner}
+	s, err := memsys.NewSystem(atomic, func(id memsys.Identity) (warp.AtomicMemoryService, error) { return m.localOwner(id) }, o.Config)
 	if err != nil {
 		return nil, err
 	}
-	return &runnerMemory{system: s, bind: o.Bind, cancelledFetch: make(map[memsys.Identity]bool), cancelledData: make(map[memsys.Identity]bool), accepted: make(map[memsys.Identity]bool), fetchTokens: make(map[memsys.Identity]model.Token), dataTokens: make(map[memsys.Identity]model.Token)}, nil
+	*m = runnerMemory{localOwner: o.LocalOwner, system: s, bind: o.Bind, cancelledFetch: make(map[memsys.Identity]bool), cancelledData: make(map[memsys.Identity]bool), accepted: make(map[memsys.Identity]bool), fetchTokens: make(map[memsys.Identity]model.Token), dataTokens: make(map[memsys.Identity]model.Token)}
+	return m, nil
 }
 func (m *runnerMemory) identity(t model.Token, seq uint64) memsys.Identity {
 	id := m.bind(t)
@@ -170,7 +177,7 @@ func (m *runnerMemory) step(r *MultiRunner, cycle uint64, report model.CoreRepor
 		m.data = memsys.SIMDOffer{Valid: true, Request: req}
 		m.dataTokens[id] = t
 	}
-	e, err := m.system.Step(cycle, memsys.SystemInput{Fetch: m.fetch, Memory: m.data, FetchReady: m.fetchPop, MemoryReady: m.dataPop, DataFlushReady: true, InstructionFlushReady: true})
+	e, err := m.system.Step(cycle, memsys.SystemInput{Trace: r.options.TraceMemory, Fetch: m.fetch, Memory: m.data, FetchReady: m.fetchPop, MemoryReady: m.dataPop, DataFlushReady: true, InstructionFlushReady: true})
 	if err != nil {
 		return e, err
 	}
@@ -228,7 +235,36 @@ func (m *runnerMemory) cancel(scope model.Cancellation) {
 	}
 }
 
+// drained includes receipts waiting for receive on the next edge. In
+// particular, a cancelled load can deliver its final response after the Core
+// stopped; component drain alone must not strand its cancellation identity.
+func (m *runnerMemory) drained() bool {
+	return m.system.Drained() && !m.fetch.Valid && !m.data.Valid &&
+		len(m.stores) == 0 && len(m.complete) == 0 &&
+		len(m.fetchTokens) == 0 && len(m.dataTokens) == 0 &&
+		len(m.cancelledFetch) == 0 && len(m.cancelledData) == 0 && len(m.accepted) == 0
+}
+
 func (m *runnerMemory) warpPending(w uint8) bool {
+	if m.fetch.Valid && m.fetch.Request.Identity.Warp == uint32(w) {
+		return true
+	}
+	if m.data.Valid && m.data.Request.Identity.Warp == uint32(w) {
+		return true
+	}
+	for _, entries := range []map[memsys.Identity]bool{m.cancelledFetch, m.cancelledData, m.accepted} {
+		for id := range entries {
+			if id.Warp == uint32(w) {
+				return true
+			}
+		}
+	}
+
+	for _, id := range m.complete {
+		if id.Warp == uint32(w) {
+			return true
+		}
+	}
 	for _, t := range m.fetchTokens {
 		if t.Warp == w {
 			return true

@@ -1,4 +1,4 @@
-// Command check validates only this repository's static Timing IR.
+// Command check validates Timing IR and selected production boundary witnesses.
 package main
 
 import (
@@ -238,6 +238,9 @@ func validate(data []byte, root string) error {
 	if err := validateMemoryContracts(top); err != nil {
 		return err
 	}
+	if err := validateDFlushContract(top, readDFlushRoot(root)); err != nil {
+		return err
+	}
 	return validateCycleContracts(top, root)
 }
 func main() {
@@ -248,6 +251,9 @@ func main() {
 	data, err := os.ReadFile(filepath.Join(root, "timing/ir.yaml"))
 	if err == nil {
 		err = validate(data, root)
+	}
+	if err == nil {
+		err = probeDFlushSystem()
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "verify-timing:", err)
