@@ -19,9 +19,9 @@ Vortex host benchmark → native runtime → simtiming
 - 冻结拓扑为 RV32、1 Core、4 Warp、每 Warp 4 lane；当前配置关闭 L2/L3。
 - Timing 模型的 L1 miss 进入确定性的 external backend，默认从请求实际接受起延迟
   100 cycles；它不是 DRAM 微架构模型。
-- 功能型与周期型后端均已连接原生 runtime。当前有 20 个不同 benchmark 获得 Timing
-  PASS，并完成同输入 RTLSIM 周期比较；等权 MAPE 为 22.10%。这表示功能链已闭合，
-  不表示已经达到逐周期 RTL 等价。
+- 功能型与周期型后端均已连接原生 runtime。2026-09-17 修复后小规模回归覆盖正式支持
+  集 28 项及 basic/wsync/bfs，共 31 项 Timing/RTLSIM 双侧 PASS；PERF 周期等权 MAPE
+  为 28.48%（两侧外部 memory backend 不同）。这不代表原规模全部通过或逐周期 RTL 等价。
 - DRAM controller、L2/L3、多 Core coherence、VM/TLB 和 RTLSIM trace 精度收敛不在
   当前基础模型范围内。
 
@@ -81,6 +81,7 @@ module load compilers/gcc-12.2.0
 - [runtime 接入说明](docs/runtime/vortex-runtime-integration.md)
 - [benchmark 与 RTLSIM 周期评估](docs/runtime/runtime-error-diagnosis-20260910.md)
 - [双侧 trace 对比与全通过集小规模复测](docs/runtime/rtlsim-timing-trace-analysis-20260914.md)
+- [修复后 31 项小规模回归与 trace 证据](docs/runtime/rtlsim-timing-small-regression-20260917.md)
 
 ## 验证原则
 
