@@ -1,0 +1,76 @@
+File: runner.test
+Build ID: 8f5080232704b0d499188e47eb80582a5befcfe2
+Type: alloc_space
+Time: 2026-09-17 11:04:54 CST
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 144.38MB, 96.98% of 148.88MB total
+Dropped 18 nodes (cum <= 0.74MB)
+      flat  flat%   sum%        cum   cum%
+   28.22MB 18.95% 18.95%    87.33MB 58.66%  vortex.local/simulator/timing/model.(*Core).Resources
+   26.07MB 17.51% 36.47%    44.10MB 29.62%  vortex.local/simulator/timing/model.(*Frontend).Resources
+   13.02MB  8.74% 45.21%    13.02MB  8.74%  vortex.local/simulator/timing/model.combine (inline)
+    7.51MB  5.04% 50.25%     7.51MB  5.04%  vortex.local/simulator/timing/model.(*STDFPU).Resources
+    7.02MB  4.71% 54.96%     7.02MB  4.71%  vortex.local/simulator/timing/memsys.(*cacheMSHR).step
+       6MB  4.03% 58.99%        6MB  4.03%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+    5.50MB  3.70% 62.69%     6.50MB  4.37%  vortex.local/simulator/timing/model.(*Scoreboard).Resources
+    5.01MB  3.36% 66.05%     5.01MB  3.36%  vortex.local/simulator/timing/model.CommitEdge
+       5MB  3.36% 69.41%        5MB  3.36%  vortex.local/simulator/timing/model.(*Dispatch).Resources
+    4.50MB  3.02% 72.44%     4.50MB  3.02%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+       3MB  2.02% 74.45%     3.50MB  2.35%  vortex.local/simulator/timing/model.(*LSU).Resources
+       3MB  2.02% 76.47%        3MB  2.02%  vortex.local/simulator/timing/model.(*ALU).Resources
+    2.50MB  1.68% 78.15%     2.50MB  1.68%  vortex.local/simulator/timing/model.(*Sequencer).Evaluate
+       2MB  1.35% 79.50%     4.01MB  2.69%  vortex.local/simulator/timing/effects.(*Concurrent).Observe
+       2MB  1.34% 80.84%        2MB  1.34%  vortex.local/simulator/timing/model.(*Collector).Resources
+       2MB  1.34% 82.18%     3.50MB  2.35%  vortex.local/simulator/timing/model.(*Scoreboard).evaluate
+       2MB  1.34% 83.53%        2MB  1.34%  vortex.local/simulator/timing/model.(*Buffer).Residents
+       2MB  1.34% 84.87%     3.50MB  2.35%  vortex.local/simulator/timing/model.(*Merge).Evaluate
+    1.52MB  1.02% 85.89%     1.52MB  1.02%  sync.(*Pool).pinSlow
+    1.50MB  1.01% 86.90%     1.50MB  1.01%  vortex.local/simulator/timing/effects.(*Adapter).validateReport
+    1.50MB  1.01% 87.91%     1.50MB  1.01%  vortex.local/simulator/timing/runner.stageEvents
+    1.50MB  1.01% 88.91%     1.50MB  1.01%  vortex.local/simulator/timing/model.(*WaitPool).Evaluate
+    1.50MB  1.01% 89.92%        6MB  4.03%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+    1.50MB  1.01% 90.93%     3.52MB  2.36%  fmt.Sprintf
+       1MB  0.67% 91.60%        1MB  0.67%  vortex.local/simulator/timing/model.(*SFU).Resources
+       1MB  0.67% 92.27%     8.02MB  5.38%  vortex.local/simulator/timing/memsys.(*cacheBank).step
+       1MB  0.67% 92.95%     9.50MB  6.38%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+       1MB  0.67% 93.62%        1MB  0.67%  vortex.local/simulator/timing/memsys.(*Cache).MemoryOffers (inline)
+       1MB  0.67% 94.29%        1MB  0.67%  vortex.local/simulator/timing/memsys.(*Cache).Responses (inline)
+       1MB  0.67% 94.96%        1MB  0.67%  vortex.local/simulator/timing/model.(*Scheduler).Evaluate
+    0.50MB  0.34% 95.30%   147.38MB 98.99%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+    0.50MB  0.34% 95.63%     1.50MB  1.01%  vortex.local/simulator/timing/model.(*Fetch).Resources
+    0.50MB  0.34% 95.97%        3MB  2.02%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+    0.50MB  0.34% 96.30%     2.50MB  1.68%  vortex.local/simulator/timing/model.(*SFU).Evaluate
+    0.50MB  0.34% 96.64%     1.50MB  1.01%  vortex.local/simulator/timing/model.(*Collector).Evaluate
+    0.50MB  0.34% 96.98%        7MB  4.70%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+         0     0% 96.98%     1.52MB  1.02%  fmt.newPrinter
+         0     0% 96.98%   147.38MB 98.99%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 96.98%   147.38MB 98.99%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0% 96.98%     1.52MB  1.02%  sync.(*Pool).Get
+         0     0% 96.98%     1.52MB  1.02%  sync.(*Pool).pin
+         0     0% 96.98%   117.81MB 79.13%  testing.(*B).launch
+         0     0% 96.98%    31.07MB 20.87%  testing.(*B).run1.func1
+         0     0% 96.98%   148.88MB   100%  testing.(*B).runN
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/effects.(*Adapter).observeAt
+         0     0% 96.98%     9.02MB  6.06%  vortex.local/simulator/timing/memsys.(*Cache).Step
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/memsys.(*Cache).validate
+         0     0% 96.98%    10.02MB  6.73%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0% 96.98%     3.50MB  2.35%  vortex.local/simulator/timing/model.(*ALU).Evaluate
+         0     0% 96.98%   147.88MB 99.33%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0% 96.98%    83.18MB 55.87%  vortex.local/simulator/timing/model.(*Core).Evaluate
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/model.(*Core).WarpQuiescent
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/model.(*Dispatch).Evaluate
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/model.(*Fetch).Evaluate
+         0     0% 96.98%       13MB  8.73%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+         0     0% 96.98%   147.38MB 98.99%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0% 96.98%        2MB  1.34%  vortex.local/simulator/timing/model.observed
+         0     0% 96.98%   148.88MB   100%  vortex.local/simulator/timing/runner.(*Kernel).Run
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/runner.(*Kernel).residency
+         0     0% 96.98%   147.88MB 99.33%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0% 96.98%   147.38MB 98.99%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+         0     0% 96.98%        1MB  0.67%  vortex.local/simulator/timing/runner.(*MultiRunner).WarpQuiescent
+         0     0% 96.98%    20.57MB 13.82%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps
+         0     0% 96.98%   148.88MB   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0% 96.98%   148.88MB   100%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0% 96.98%    10.02MB  6.73%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+         0     0% 96.98%   148.88MB   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1

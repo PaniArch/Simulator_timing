@@ -1,0 +1,111 @@
+File: runner.test
+Build ID: 8f5080232704b0d499188e47eb80582a5befcfe2
+Type: cpu
+Time: 2026-09-17 11:04:51 CST
+Duration: 2.95s, Total samples = 350ms (11.87%)
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 350ms, 100% of 350ms total
+      flat  flat%   sum%        cum   cum%
+      30ms  8.57%  8.57%       30ms  8.57%  runtime.memhash64
+      30ms  8.57% 17.14%       30ms  8.57%  runtime.memmove
+      20ms  5.71% 22.86%       20ms  5.71%  runtime.mapaccess1_fast64
+      20ms  5.71% 28.57%       20ms  5.71%  runtime.memclrNoHeapPointers
+      10ms  2.86% 31.43%       10ms  2.86%  fmt.(*pp).doPrintf
+      10ms  2.86% 34.29%       10ms  2.86%  internal/reflectlite.Swapper.func9
+      10ms  2.86% 37.14%       10ms  2.86%  internal/runtime/atomic.(*Uint64).CompareAndSwap (inline)
+      10ms  2.86% 40.00%       20ms  5.71%  internal/runtime/maps.(*table).uncheckedPutSlot
+      10ms  2.86% 42.86%       10ms  2.86%  internal/runtime/syscall/linux.Syscall6
+      10ms  2.86% 45.71%       10ms  2.86%  runtime.(*mspan).init
+      10ms  2.86% 48.57%       10ms  2.86%  runtime.gcd (inline)
+      10ms  2.86% 51.43%       10ms  2.86%  runtime.heapBitsInSpan (inline)
+      10ms  2.86% 54.29%       10ms  2.86%  runtime.heapSetTypeSmallHeader (inline)
+      10ms  2.86% 57.14%      120ms 34.29%  runtime.mallocgc
+      10ms  2.86% 60.00%       10ms  2.86%  runtime.nextFreeFast (inline)
+      10ms  2.86% 62.86%       10ms  2.86%  runtime.recordspan
+      10ms  2.86% 65.71%       10ms  2.86%  runtime.releasem (inline)
+      10ms  2.86% 68.57%       10ms  2.86%  runtime.typedmemmove
+      10ms  2.86% 71.43%       10ms  2.86%  vortex.local/simulator/timing/memsys.(*Cache).HasResidency
+      10ms  2.86% 74.29%       10ms  2.86%  vortex.local/simulator/timing/memsys.(*Cache).validate
+      10ms  2.86% 77.14%       10ms  2.86%  vortex.local/simulator/timing/model.(*Dispatch).Evaluate
+      10ms  2.86% 80.00%       10ms  2.86%  vortex.local/simulator/timing/model.(*Fetch).Evaluate.func1
+      10ms  2.86% 82.86%       10ms  2.86%  vortex.local/simulator/timing/model.(*Fetch).Resources
+      10ms  2.86% 85.71%       10ms  2.86%  vortex.local/simulator/timing/model.(*Pipeline).Occupancy (inline)
+      10ms  2.86% 88.57%       40ms 11.43%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+      10ms  2.86% 91.43%       30ms  8.57%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+      10ms  2.86% 94.29%       20ms  5.71%  vortex.local/simulator/timing/model.combine (inline)
+      10ms  2.86% 97.14%       20ms  5.71%  vortex.local/simulator/timing/model.observed
+      10ms  2.86%   100%      340ms 97.14%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0%   100%       20ms  5.71%  fmt.Sprintf
+         0     0%   100%      340ms 97.14%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0%   100%      340ms 97.14%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0%   100%       10ms  2.86%  internal/runtime/maps.(*Map).growToTable
+         0     0%   100%       50ms 14.29%  internal/runtime/maps.(*table).grow
+         0     0%   100%       50ms 14.29%  internal/runtime/maps.(*table).rehash
+         0     0%   100%       10ms  2.86%  internal/runtime/maps.newTable
+         0     0%   100%       10ms  2.86%  internal/runtime/maps.typedmemmove
+         0     0%   100%       10ms  2.86%  internal/runtime/syscall/linux.EpollWait
+         0     0%   100%       10ms  2.86%  runtime.(*atomicHeadTailIndex).cas (inline)
+         0     0%   100%       10ms  2.86%  runtime.(*fixalloc).alloc
+         0     0%   100%       30ms  8.57%  runtime.(*mcache).nextFree
+         0     0%   100%       30ms  8.57%  runtime.(*mcache).refill
+         0     0%   100%       30ms  8.57%  runtime.(*mcentral).cacheSpan
+         0     0%   100%       20ms  5.71%  runtime.(*mcentral).grow
+         0     0%   100%       20ms  5.71%  runtime.(*mheap).alloc
+         0     0%   100%       20ms  5.71%  runtime.(*mheap).alloc.func1
+         0     0%   100%       10ms  2.86%  runtime.(*mheap).allocMSpanLocked
+         0     0%   100%       20ms  5.71%  runtime.(*mheap).allocSpan
+         0     0%   100%       10ms  2.86%  runtime.(*mheap).initSpan
+         0     0%   100%       10ms  2.86%  runtime.(*randomOrder).reset (inline)
+         0     0%   100%       10ms  2.86%  runtime.(*spanSet).pop
+         0     0%   100%       20ms  5.71%  runtime.gcStart
+         0     0%   100%       20ms  5.71%  runtime.gcStart.func4
+         0     0%   100%      120ms 34.29%  runtime.growslice
+         0     0%   100%       60ms 17.14%  runtime.mallocgcSmallScanHeader
+         0     0%   100%       40ms 11.43%  runtime.mallocgcSmallScanNoHeader
+         0     0%   100%       60ms 17.14%  runtime.mapassign_fast64ptr
+         0     0%   100%       10ms  2.86%  runtime.netpoll
+         0     0%   100%       20ms  5.71%  runtime.newobject
+         0     0%   100%       10ms  2.86%  runtime.procresize
+         0     0%   100%       10ms  2.86%  runtime.slicebytetostring
+         0     0%   100%       20ms  5.71%  runtime.startTheWorldWithSema
+         0     0%   100%       40ms 11.43%  runtime.systemstack
+         0     0%   100%       10ms  2.86%  sort.Slice
+         0     0%   100%       10ms  2.86%  sort.insertionSort_func
+         0     0%   100%       10ms  2.86%  sort.pdqsort_func
+         0     0%   100%      290ms 82.86%  testing.(*B).launch
+         0     0%   100%       60ms 17.14%  testing.(*B).run1.func1
+         0     0%   100%      350ms   100%  testing.(*B).runN
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/effects.(*Concurrent).Feedback
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/effects.(*Concurrent).keys
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/memsys.(*Cache).Step
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/memsys.(*System).HasResidency
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/model.(*ALU).Evaluate
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+         0     0%   100%      340ms 97.14%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%   100%      160ms 45.71%  vortex.local/simulator/timing/model.(*Core).Evaluate
+         0     0%   100%      130ms 37.14%  vortex.local/simulator/timing/model.(*Core).Resources
+         0     0%   100%       20ms  5.71%  vortex.local/simulator/timing/model.(*Dispatch).Resources
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+         0     0%   100%       80ms 22.86%  vortex.local/simulator/timing/model.(*Frontend).Resources
+         0     0%   100%       20ms  5.71%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+         0     0%   100%       20ms  5.71%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+         0     0%   100%       20ms  5.71%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/model.(*STDFPU).Resources
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/model.(*STDPath).Occupancy
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/model.(*Scoreboard).Resources
+         0     0%   100%      340ms 97.14%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0%   100%       90ms 25.71%  vortex.local/simulator/timing/model.CommitEdge
+         0     0%   100%      340ms 97.14%  vortex.local/simulator/timing/runner.(*Kernel).Run
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/runner.(*Kernel).Status
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/runner.(*Kernel).observeCTA
+         0     0%   100%      340ms 97.14%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0%   100%      340ms 97.14%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/runner.(*MultiRunner).cleanupRedirects
+         0     0%   100%       30ms  8.57%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/runner.(*baselineFixture).complete (inline)
+         0     0%   100%      350ms   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0%   100%      340ms 97.14%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0%   100%       10ms  2.86%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+         0     0%   100%      350ms   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1

@@ -1,0 +1,123 @@
+File: kernel-false.test
+Build ID: 73478c2fdd0eb85fac89cc51d0be72f1f0a3b64a
+Type: alloc_objects
+Time: 2026-09-17 09:31:27 CST
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 2520738, 100% of 2520738 total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    2520738   100%  testing.(*B).runN
+         0     0%     0%    2520738   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0%     0%    2520738   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%     0%    2512546 99.68%  vortex.local/simulator/timing/runner.(*Kernel).Run
+         0     0%     0%    2512546 99.68%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0%     0%    2503416 99.31%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%     0%    2503416 99.31%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0%     0%    2495224 98.99%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0%     0%    2495224 98.99%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0%     0%    2495224 98.99%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0%     0%    2495224 98.99%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+      1820 0.072% 0.072%    2495224 98.99%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0% 0.072%    2008229 79.67%  go.yaml.in/yaml/v3.(*parser).parse
+         0     0% 0.072%    2008229 79.67%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0% 0.072%    2008229 79.67%  go.yaml.in/yaml/v3.unmarshal
+         0     0% 0.072%    2008229 79.67%  vortex.local/simulator/timing.Number (inline)
+         0     0% 0.072%    2008229 79.67%  vortex.local/simulator/timing.number
+         0     0% 0.072%    2008229 79.67%  vortex.local/simulator/timing/effects.(*Concurrent).Begin (inline)
+         0     0% 0.072%    2008229 79.67%  vortex.local/simulator/timing/effects.(*Concurrent).begin
+         0     0% 0.072%    2008229 79.67%  vortex.local/simulator/timing/effects.New
+         0     0% 0.072%    2007819 79.65%  go.yaml.in/yaml/v3.(*parser).document
+         0     0% 0.072%    2007819 79.65%  go.yaml.in/yaml/v3.(*parser).mapping
+    131076  5.20%  5.27%    2007819 79.65%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%  5.27%    1986557 78.81%  testing.(*B).launch
+         0     0%  5.27%    1794004 71.17%  go.yaml.in/yaml/v3.(*parser).sequence
+    255091 10.12% 15.39%    1005519 39.89%  go.yaml.in/yaml/v3.(*parser).scalar
+         0     0% 15.39%     819200 32.50%  go.yaml.in/yaml/v3.peek_token
+         0     0% 15.39%     819200 32.50%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+         0     0% 15.39%     819200 32.50%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0% 15.39%     819200 32.50%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0% 15.39%     819200 32.50%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+         0     0% 15.39%     818790 32.48%  go.yaml.in/yaml/v3.(*parser).peek
+    344106 13.65% 29.04%     802862 31.85%  go.yaml.in/yaml/v3.(*parser).node
+         0     0% 29.04%     802406 31.83%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+      3005  0.12% 29.16%     802406 31.83%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+    717480 28.46% 57.63%     717480 28.46%  go.yaml.in/yaml/v3.read
+         0     0% 57.63%     671333 26.63%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+         0     0% 57.63%     534181 21.19%  testing.(*B).run1.func1
+    458756 18.20% 75.82%     458756 18.20%  go.yaml.in/yaml/v3.resolve
+         0     0% 75.82%     370205 14.69%  vortex.local/simulator/timing/model.(*Core).Evaluate
+    152919  6.07% 81.89%     152919  6.07%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+         0     0% 81.89%     114689  4.55%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_value
+         0     0% 81.89%     113412  4.50%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+     98305  3.90% 85.79%      98305  3.90%  go.yaml.in/yaml/v3.read_line
+      3867  0.15% 85.94%      93755  3.72%  vortex.local/simulator/timing/model.(*Core).Resources
+     16182  0.64% 86.59%      80998  3.21%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+     15371  0.61% 87.20%      57455  2.28%  vortex.local/simulator/timing/model.(*Frontend).Resources
+      2731  0.11% 87.30%      51883  2.06%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+     43691  1.73% 89.04%      43691  1.73%  vortex.local/simulator/timing/model.(*Merge).Evaluate
+     39441  1.56% 90.60%      39441  1.56%  vortex.local/simulator/timing/model.combine (inline)
+     21846  0.87% 91.47%      38872  1.54%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+      2185 0.087% 91.56%      37898  1.50%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0% 91.56%      37898  1.50%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+     19897  0.79% 92.34%      29158  1.16%  vortex.local/simulator/timing/memsys.(*Cache).Step
+      6554  0.26% 92.60%      28400  1.13%  vortex.local/simulator/timing/effects.(*Concurrent).keys
+       684 0.027% 92.63%      24078  0.96%  vortex.local/simulator/timing/effects.(*Concurrent).Observe
+      5461  0.22% 92.85%      24031  0.95%  vortex.local/simulator/timing/model.(*ALU).Evaluate
+         0     0% 92.85%      21946  0.87%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps
+     21846  0.87% 93.72%      21846  0.87%  internal/reflectlite.Swapper
+         0     0% 93.72%      21846  0.87%  sort.Slice
+         0     0% 93.72%      21845  0.87%  vortex.local/simulator/timing/model.(*Commit).Evaluate
+     19116  0.76% 94.47%      19116  0.76%  vortex.local/simulator/timing/model.(*STDFPU).Resources
+     18619  0.74% 95.21%      18619  0.74%  vortex.local/simulator/timing/model.(*Scoreboard).Resources
+         0     0% 95.21%      16385  0.65%  vortex.local/simulator/timing/model.(*SFU).Evaluate
+         0     0% 95.21%      16384  0.65%  go.yaml.in/yaml/v3.yaml_parser_fetch_flow_scalar
+         0     0% 95.21%      16384  0.65%  go.yaml.in/yaml/v3.yaml_parser_parse_flow_sequence_entry
+         0     0% 95.21%      16384  0.65%  go.yaml.in/yaml/v3.yaml_parser_parse_indentless_sequence_entry
+         0     0% 95.21%      16384  0.65%  go.yaml.in/yaml/v3.yaml_parser_scan_flow_scalar
+     16384  0.65% 95.86%      16384  0.65%  vortex.local/simulator/timing/model.(*Fetch).Evaluate
+     14563  0.58% 96.44%      14563  0.58%  vortex.local/simulator/timing/model.(*Dispatch).Resources
+         0     0% 96.44%      10923  0.43%  vortex.local/simulator/timing/model.(*Collector).Evaluate
+         0     0% 96.44%      10923  0.43%  vortex.local/simulator/timing/model.(*Dispatch).Evaluate
+      9106  0.36% 96.80%       9106  0.36%  vortex.local/simulator/timing/model.CommitEdge
+      8193  0.33% 97.13%       9002  0.36%  vortex.local/simulator/timing/runner.(*Kernel).residency
+      8192  0.32% 97.45%       8320  0.33%  vortex.local/simulator/timing/runner.(*Kernel).Status
+         0     0% 97.45%       8288  0.33%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+      8288  0.33% 97.78%       8288  0.33%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+         0     0% 97.78%       8192  0.32%  github.com/sarchlab/akita/v5/timing.NewSerialEngine (inline)
+      8192  0.32% 98.10%       8192  0.32%  sync.NewCond (inline)
+         0     0% 98.10%       8192  0.32%  vortex.local/simulator/timing/runner.(*baselineFixture).complete (inline)
+      7564   0.3% 98.40%       7564   0.3%  vortex.local/simulator/timing/model.(*Collector).Resources
+         0     0% 98.40%       6554  0.26%  vortex.local/simulator/timing/effects.(*Concurrent).Reap
+      6554  0.26% 98.66%       6554  0.26%  vortex.local/simulator/timing/memsys.(*Cache).MemoryOffers (inline)
+      5960  0.24% 98.90%       5960  0.24%  vortex.local/simulator/timing/model.(*SFU).Resources
+      5958  0.24% 99.14%       5958  0.24%  vortex.local/simulator/timing/model.(*Sequencer).Evaluate
+      5122   0.2% 99.34%       5122   0.2%  vortex.local/simulator/timing/model.(*LSU).Resources
+      2340 0.093% 99.43%       4164  0.17%  vortex.local/simulator/timing/memsys.(*cacheBank).step
+         0     0% 99.43%       3277  0.13%  vortex.local/simulator/timing/memsys.(*Cache).validate
+      2235 0.089% 99.52%       2235 0.089%  vortex.local/simulator/timing/model.(*ALU).Resources
+      1824 0.072% 99.59%       1824 0.072%  vortex.local/simulator/timing/memsys.(*cacheMSHR).step
+      1820 0.072% 99.67%       1820 0.072%  vortex.local/simulator/timing/memsys.(*cacheQueue[go.shape.struct { vortex.local/simulator/timing/memsys.acceptedCycle uint64; vortex.local/simulator/timing/memsys.request vortex.local/simulator/timing/memsys.Request; vortex.local/simulator/timing/memsys.kind vortex.local/simulator/timing/memsys.cachePacketKind; vortex.local/simulator/timing/memsys.handle vortex.local/simulator/timing/memsys.mshrHandle; vortex.local/simulator/timing/memsys.origin vortex.local/simulator/timing/memsys.WordRequest; vortex.local/simulator/timing/memsys.port int }]).update
+      1820 0.072% 99.74%       1820 0.072%  vortex.local/simulator/timing/runner.stageEvents
+      1639 0.065% 99.80%       1639 0.065%  vortex.local/simulator/timing/memsys.(*Backend).PreviewResponses
+      1639 0.065% 99.87%       1639 0.065%  vortex.local/simulator/timing/memsys.(*Backend).Step
+      1260  0.05% 99.92%       1260  0.05%  vortex.local/simulator/timing/model.(*Fetch).Resources
+         0     0% 99.92%        937 0.037%  vortex.local/simulator/timing/model.(*Core).WarpQuiescent
+         0     0% 99.92%        937 0.037%  vortex.local/simulator/timing/runner.(*MultiRunner).WarpQuiescent
+       910 0.036%   100%        910 0.036%  vortex.local/simulator/timing/effects.(*Adapter).validateReport
+         0     0%   100%        873 0.035%  vortex.local/simulator/timing/runner.(*Kernel).observeCTA
+         0     0%   100%        873 0.035%  vortex.local/simulator/timing/runner.(*MultiRunner).cleanupFeedback
+         0     0%   100%        873 0.035%  vortex.local/simulator/timing/runner.(*MultiRunner).cleanupRedirects
+       410 0.016%   100%        865 0.034%  vortex.local/simulator/timing/effects.(*Adapter).observeAt
+         0     0%   100%        410 0.016%  go.yaml.in/yaml/v3.(*parser).expect
+         0     0%   100%        410 0.016%  go.yaml.in/yaml/v3.(*parser).init
+       410 0.016%   100%        410 0.016%  go.yaml.in/yaml/v3.yaml_insert_token
+         0     0%   100%        410 0.016%  go.yaml.in/yaml/v3.yaml_parser_fetch_value
+         0     0%   100%        410 0.016%  go.yaml.in/yaml/v3.yaml_parser_parse_stream_start
+       228 0.009%   100%        228 0.009%  vortex.local/simulator/timing/effects.(*Concurrent).Observe.func2
+         0     0%   100%         78 0.0031%  fmt.Sprintf
+         0     0%   100%         78 0.0031%  fmt.newPrinter
+         0     0%   100%         78 0.0031%  sync.(*Pool).Get
+         0     0%   100%         78 0.0031%  sync.(*Pool).pin
+        78 0.0031%   100%         78 0.0031%  sync.(*Pool).pinSlow
+         0     0%   100%         64 0.0025%  vortex.local/simulator/timing/model.(*Core).Idle
+         0     0%   100%         64 0.0025%  vortex.local/simulator/timing/runner.(*MultiRunner).DispatchWarp

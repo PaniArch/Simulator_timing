@@ -1,0 +1,80 @@
+File: runner.test
+Build ID: 8f5080232704b0d499188e47eb80582a5befcfe2
+Type: alloc_objects
+Time: 2026-09-17 11:04:54 CST
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 849768, 98.43% of 863352 total
+Dropped 14 nodes (cum <= 4316)
+      flat  flat%   sum%        cum   cum%
+    181318 21.00% 21.00%     181318 21.00%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+     98304 11.39% 32.39%     131189 15.20%  fmt.Sprintf
+     70998  8.22% 40.61%     110320 12.78%  vortex.local/simulator/timing/model.(*Merge).Evaluate
+     54613  6.33% 46.94%      64135  7.43%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+     48596  5.63% 52.57%      48596  5.63%  vortex.local/simulator/timing/model.combine (inline)
+     47431  5.49% 58.06%     253000 29.30%  vortex.local/simulator/timing/model.(*Frontend).Resources
+     39473  4.57% 62.63%      76922  8.91%  vortex.local/simulator/timing/model.(*Scoreboard).Resources
+     32769  3.80% 66.43%      32769  3.80%  vortex.local/simulator/timing/model.(*WaitPool).Evaluate
+     32768  3.80% 70.22%      32768  3.80%  fmt.(*buffer).writeString (inline)
+     24030  2.78% 73.01%      24030  2.78%  vortex.local/simulator/timing/model.(*Scheduler).Evaluate
+     21845  2.53% 75.54%      21845  2.53%  internal/reflectlite.unsafe_New
+     20710  2.40% 77.94%      20710  2.40%  vortex.local/simulator/timing/model.CommitEdge
+     18724  2.17% 80.10%      18724  2.17%  vortex.local/simulator/timing/model.(*Buffer).Residents (partial-inline)
+     14896  1.73% 81.83%      14896  1.73%  vortex.local/simulator/timing/model.(*Sequencer).Evaluate
+     14563  1.69% 83.52%      14563  1.69%  vortex.local/simulator/timing/model.(*Dispatch).Resources
+     11832  1.37% 84.89%      62077  7.19%  vortex.local/simulator/timing/model.(*Scoreboard).evaluate
+     10923  1.27% 86.15%      10923  1.27%  vortex.local/simulator/timing/model.(*CSR).Evaluate
+     10923  1.27% 87.42%      43691  5.06%  vortex.local/simulator/timing/model.(*Collector).Evaluate
+     10923  1.27% 88.68%      85981  9.96%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+     10923  1.27% 89.95%      10923  1.27%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+     10015  1.16% 91.11%      10015  1.16%  vortex.local/simulator/timing/model.(*STDFPU).Resources
+      9522  1.10% 92.21%       9522  1.10%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+      7022  0.81% 93.02%       7022  0.81%  vortex.local/simulator/timing/memsys.(*Cache).Responses (inline)
+      5461  0.63% 93.66%       5461  0.63%  vortex.local/simulator/timing/model.(*Commit).Evaluate
+      5461  0.63% 94.29%      60075  6.96%  vortex.local/simulator/timing/model.(*SFU).Evaluate
+      5461  0.63% 94.92%       5461  0.63%  vortex.local/simulator/timing/runner.(*runnerMemory).services
+      5041  0.58% 95.51%       5041  0.58%  vortex.local/simulator/timing/model.(*Collector).Resources
+      4915  0.57% 96.07%       4915  0.57%  vortex.local/simulator/timing/memsys.(*Cache).MemoryOffers (inline)
+      4470  0.52% 96.59%       4470  0.52%  vortex.local/simulator/timing/model.(*ALU).Resources
+      3611  0.42% 97.01%     280341 32.47%  vortex.local/simulator/timing/model.(*Core).Resources
+      3277  0.38% 97.39%     112469 13.03%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+      3074  0.36% 97.75%       7755   0.9%  vortex.local/simulator/timing/model.(*LSU).Resources
+      2341  0.27% 98.02%       5533  0.64%  vortex.local/simulator/timing/memsys.(*cacheBank).step
+      1365  0.16% 98.18%      39595  4.59%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+      1260  0.15% 98.32%      10622  1.23%  vortex.local/simulator/timing/model.(*Fetch).Resources
+       910  0.11% 98.43%     819533 94.92%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0% 98.43%      32768  3.80%  fmt.(*pp).doPrintf
+         0     0% 98.43%     819533 94.92%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 98.43%     819533 94.92%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0% 98.43%      21845  2.53%  internal/reflectlite.Swapper
+         0     0% 98.43%      21845  2.53%  sort.Slice
+         0     0% 98.43%     671247 77.75%  testing.(*B).launch
+         0     0% 98.43%     192105 22.25%  testing.(*B).run1.func1
+         0     0% 98.43%     863352   100%  testing.(*B).runN
+         0     0% 98.43%      21845  2.53%  vortex.local/simulator/timing/effects.(*Concurrent).Feedback
+         0     0% 98.43%      21845  2.53%  vortex.local/simulator/timing/effects.(*Concurrent).keys
+         0     0% 98.43%      10448  1.21%  vortex.local/simulator/timing/memsys.(*Cache).Step
+         0     0% 98.43%       4915  0.57%  vortex.local/simulator/timing/memsys.(*Cache).validate
+         0     0% 98.43%       4681  0.54%  vortex.local/simulator/timing/memsys.(*System).Responses (inline)
+         0     0% 98.43%      13608  1.58%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0% 98.43%      79191  9.17%  vortex.local/simulator/timing/model.(*ALU).Evaluate
+         0     0% 98.43%     830456 96.19%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0% 98.43%     600565 69.56%  vortex.local/simulator/timing/model.(*Core).Evaluate
+         0     0% 98.43%      32896  3.81%  vortex.local/simulator/timing/model.(*Core).WarpQuiescent
+         0     0% 98.43%      16384  1.90%  vortex.local/simulator/timing/model.(*Dispatch).Evaluate
+         0     0% 98.43%      32768  3.80%  vortex.local/simulator/timing/model.(*Fetch).Evaluate
+         0     0% 98.43%     196715 22.79%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+         0     0% 98.43%       4681  0.54%  vortex.local/simulator/timing/model.(*Merge).Residents
+         0     0% 98.43%     819533 94.92%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0% 98.43%      18724  2.17%  vortex.local/simulator/timing/model.observed
+         0     0% 98.43%     863352   100%  vortex.local/simulator/timing/runner.(*Kernel).Run
+         0     0% 98.43%      32896  3.81%  vortex.local/simulator/timing/runner.(*Kernel).residency
+         0     0% 98.43%     830456 96.19%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0% 98.43%     819533 94.92%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+         0     0% 98.43%      32896  3.81%  vortex.local/simulator/timing/runner.(*MultiRunner).WarpQuiescent
+         0     0% 98.43%      96496 11.18%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps
+         0     0% 98.43%     863352   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0% 98.43%     863352   100%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0% 98.43%       4681  0.54%  vortex.local/simulator/timing/runner.(*runnerMemory).receive
+         0     0% 98.43%      13608  1.58%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+         0     0% 98.43%     863352   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1

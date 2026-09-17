@@ -1,0 +1,13 @@
+ok  	vortex.local/simulator/timing	3.001s
+ok  	vortex.local/simulator/timing/check	7.325s
+ok  	vortex.local/simulator/timing/effects	5.679s
+ok  	vortex.local/simulator/timing/memsys	8.490s
+ok  	vortex.local/simulator/timing/model	4.586s
+ok  	vortex.local/simulator/timing/runner	98.059s
+ok  	vortex.local/simulator/emu/core	0.059s
+ok  	vortex.local/simulator/emu/device	0.072s
+ok  	vortex.local/simulator/emu/state	0.046s
+ok  	vortex.local/simulator/emu/warp	0.050s
+ok  	vortex.local/simulator/integration/vortexruntime	4.815s
+ok  	vortex.local/simulator/cmd/timing-run	1.883s
+ok  	vortex.local/simulator/cmd/timing-multi	1.179s

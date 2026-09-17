@@ -1,0 +1,20 @@
+File: clock.test
+Build ID: d43518f5c417fe74df174d5b02f6028e55e8fee5
+Type: alloc_space
+Time: 2026-09-17 09:29:07 CST
+Showing nodes accounting for 680.12MB, 99.56% of 683.16MB total
+Dropped 48 nodes (cum <= 3.42MB)
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   673.10MB 98.53%  testing.(*B).runN
+   43.50MB  6.37%  6.37%   672.60MB 98.45%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%  6.37%   672.60MB 98.45%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+         0     0%  6.37%   672.10MB 98.38%  testing.(*B).launch
+  275.58MB 40.34% 46.71%   275.58MB 40.34%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler (inline)
+  140.51MB 20.57% 67.27%   266.02MB 38.94%  github.com/sarchlab/akita/v5/timing.NewSerialEngine (inline)
+   62.50MB  9.15% 76.42%    87.50MB 12.81%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+      63MB  9.22% 85.65%       63MB  9.22%  sync.NewCond (inline)
+   62.50MB  9.15% 94.79%    62.50MB  9.15%  github.com/sarchlab/akita/v5/timing.newUnsafeEventQueue (inline)
+         0     0% 94.79%       25MB  3.66%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+      25MB  3.66% 98.45%       25MB  3.66%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+    7.52MB  1.10% 99.56%     7.52MB  1.10%  runtime.mallocgc
+         0     0% 99.56%     6.52MB  0.95%  runtime.newobject

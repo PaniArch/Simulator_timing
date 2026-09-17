@@ -864,3 +864,60 @@ CoreInputs.DispatchBusy 传给唯一 accounting owner，按 OR 每拍计数一�
 barrier/LMEM 交换、TLS、flush 后不同输入，以及终态审计阻塞期间的 MPM 发布。
 没有增加 canonical owner、通用故障自动恢复或放宽排空门槛。逐项验收、最终
 命令结果和外部实验限制见 [生命周期收尾](../../docs/runtime/lifecycle-integration-closure.md)。
+
+### 宿主性能基线（performance-baseline）
+
+`PROVISIONAL（测量入口）`：`timing/model` 与 `timing/runner` 的
+`performance_baseline_test.go` 使用仓库内构造的有限程序与 RAM，比较逐周期、
+固定分块和不规则分块。完整记录保留身份并检查 detached 历史；无诊断路径仍
+比较周期、寄存器、内存、硬件计数、宏退休、flush 和错误停止。测量与证据见
+[性能基线](../../docs/performance/baseline-evidence.md)。
+
+本增量没有修改生产执行路径、canonical owner、接口或计数单位。后续优化必须
+保留同一旧边沿的 Evaluate/CommitEdge 边界：第二次 Core.Evaluate 接入实际
+FetchAccepted/MemoryAccepted，不能仅因重复调用而删除。Kernel 内部 observer
+参与退休与 barrier 控制，不等同于可关闭用户诊断。Clock 引擎生命周期、回调
+替换、错误后边沿计数及跨 launch 连续时钟的优化仍由后续里程碑实现和验证。
+
+### 持久 Clock 引擎（persistent-clock-engine）
+
+`PROVISIONAL（宿主执行优化）`：每个 Clock 独立持有 SerialEngine 与边沿驱动，
+Run 复用引擎并在返回时释放 callback/预算/错误；每个模拟边沿仍独立调度。
+成功停止边沿计数、失败边沿不计数，错误由 Clock 显式传播。NextLaunch 按原
+所有权协议转移连续 Clock，旧 Kernel 不再推进；独立设备不共享引擎。
+Flush 的失败边沿对齐、MakeVisible、FlushCaches、硬件计数和 Evaluate/CommitEdge
+边界不变。Clock 不可复制、并发或重入。测量、集成回归与诊断清单排序限制见
+[持久引擎验收](../../docs/performance/clock-engine-closure.md)。
+
+### 宿主状态构造（profile-guided-state-cost，第 1 Worker）
+
+`PROVISIONAL（宿主执行优化）`：Timing Number/Buffer 仅缓存私有 embedded IR 的
+只读解析结果，公开返回标量值，不共享组件或 canonical owner；独立输入解析仍
+保留原值和错误契约。Kernel 内部 executionComplete 直接聚合原生命周期门槛，
+公开 Status 继续生成 detached 诊断快照。回收尾部、backing visibility、硬件计数、
+内存握手反馈、两次 Evaluate/CommitEdge 和 Kernel 内部 observer 职责不变。
+实测依据、初始化/执行收益区分及后续验证职责见
+[状态构造交接](../../docs/performance/state-construction-handoff.md)。
+
+### 宿主诊断构造（profile-guided-state-cost，第 2 Worker）
+
+`PROVISIONAL（宿主执行优化）`：Core.EvaluateExecution 与 Evaluate 共用全部旧态
+求值、握手及 proposal/accounting，仅省略 Resources 快照；公开 Evaluate 仍返回
+完整 detached report。MultiRunner 保留 memory acceptance 前后两次求值，只在外部
+observer 存在时采集旧态/提交后资源与事件；旧态资源供 Warp 观测只读使用。
+Kernel 的私有 post-edge 退休/barrier 回调始终执行，与外部诊断开关独立。
+恢复通知在原边沿消费，切换 observer 不补发历史；零预算不消费。没有跨边沿
+资源复用、第二个 owner 或变更错误边沿提交语义。实测、兼容指纹及验证边界见
+[诊断构造交接](../../docs/performance/diagnostic-construction-handoff.md)。
+
+### 宿主状态与诊断优化集成验证（profile-guided-state-cost，closure）
+
+`PROVISIONAL（宿主优化验证）`：沿用私有只读 IR 缓存、内部完成谓词、可选资源
+诊断和始终执行的 Kernel 控制回调；没有进一步改变生产 ownership 或执行边沿。
+新增两 launch/六 CTA packed-load 的分块与诊断开关等价，检查累计 EOP/宏计数、
+真实可见性/cache flush 和历史 trace；扩充部分已应用 mixed store 取消/epoch Flush
+后继续排空矩阵，并覆盖延迟后端故障的相同失败边沿和锁存停止。既有 audit/MPM
+发布门槛、device/generation/transport identity 门禁继续运行。
+最终冻结包验证、profile 关联、复现入口和未验证范围见
+[状态构造优化验收](../../docs/performance/state-cost-closure.md)。
+没有新增 benchmark milestone，也不声明原规模 benchmark 或 RTLSIM 等价。

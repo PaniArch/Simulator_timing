@@ -1,0 +1,47 @@
+File: runner.test
+Build ID: f32a964895fe6b4e38a16970d6947834c845850f
+Type: inuse_space
+Time: 2026-09-17 10:59:42 CST
+Showing nodes accounting for 7.04MB, 100% of 7.04MB total
+Showing top 40 nodes out of 45
+      flat  flat%   sum%        cum   cum%
+    5.54MB 78.68% 78.68%     5.54MB 78.68%  runtime.mallocgc
+    1.50MB 21.32%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.(*parser).node
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.(*parser).document
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.(*parser).mapping
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.(*parser).parse
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%   100%        1MB 14.21%  go.yaml.in/yaml/v3.(*parser).scalar
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.(*parser).sequence
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0%   100%     1.50MB 21.32%  go.yaml.in/yaml/v3.unmarshal
+         0     0%   100%        1MB 14.21%  runtime.(*scavengerState).sleep
+         0     0%   100%        1MB 14.21%  runtime.(*timer).maybeAdd
+         0     0%   100%        1MB 14.21%  runtime.(*timer).modify
+         0     0%   100%        1MB 14.21%  runtime.(*timer).reset (inline)
+         0     0%   100%        1MB 14.21%  runtime.(*timers).addHeap
+         0     0%   100%     2.50MB 35.60%  runtime.allocm
+         0     0%   100%        1MB 14.21%  runtime.bgscavenge
+         0     0%   100%        1MB 14.21%  runtime.growslice
+         0     0%   100%     1.50MB 21.36%  runtime.mcall
+         0     0%   100%        1MB 14.24%  runtime.mstart
+         0     0%   100%        1MB 14.24%  runtime.mstart0
+         0     0%   100%        1MB 14.24%  runtime.mstart1
+         0     0%   100%     2.50MB 35.60%  runtime.newm
+         0     0%   100%     4.54MB 64.47%  runtime.newobject
+         0     0%   100%     1.50MB 21.36%  runtime.park_m
+         0     0%   100%     2.03MB 28.87%  runtime.procresize
+         0     0%   100%     1.50MB 21.36%  runtime.resetspinning
+         0     0%   100%     2.03MB 28.87%  runtime.rt0_go
+         0     0%   100%     2.03MB 28.87%  runtime.schedinit
+         0     0%   100%     2.50MB 35.60%  runtime.schedule
+         0     0%   100%     2.50MB 35.60%  runtime.startm
+         0     0%   100%     2.50MB 35.60%  runtime.wakep
+         0     0%   100%     1.50MB 21.32%  sync.(*Once).Do
+         0     0%   100%     1.50MB 21.32%  sync.(*Once).doSlow
+         0     0%   100%     1.50MB 21.32%  testing.(*B).run1.func1
+         0     0%   100%     1.50MB 21.32%  testing.(*B).runN
+         0     0%   100%     1.50MB 21.32%  vortex.local/simulator/timing.Number
+         0     0%   100%     1.50MB 21.32%  vortex.local/simulator/timing.init.OnceValues[go.shape.*uint8,go.shape.interface { Error string }].func2
+         0     0%   100%     1.50MB 21.32%  vortex.local/simulator/timing.init.OnceValues[go.shape.*uint8,go.shape.interface { Error string }].func2.1
+         0     0%   100%     1.50MB 21.32%  vortex.local/simulator/timing.init.func1

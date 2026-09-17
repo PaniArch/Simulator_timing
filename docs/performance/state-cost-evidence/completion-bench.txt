@@ -1,0 +1,12 @@
+goos: linux
+goarch: amd64
+pkg: vortex.local/simulator/timing/runner
+cpu: Intel(R) Xeon(R) Gold 6348H CPU @ 2.30GHz
+BenchmarkKernelCompletionRead/status=true-96         	     100	      2528 ns/op	     352 B/op	       2 allocs/op
+BenchmarkKernelCompletionRead/status=true-96         	     100	      2491 ns/op	     352 B/op	       2 allocs/op
+BenchmarkKernelCompletionRead/status=true-96         	     100	      2637 ns/op	     352 B/op	       2 allocs/op
+BenchmarkKernelCompletionRead/status=false-96        	     100	        33.14 ns/op	       0 B/op	       0 allocs/op
+BenchmarkKernelCompletionRead/status=false-96        	     100	        31.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkKernelCompletionRead/status=false-96        	     100	        30.02 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	vortex.local/simulator/timing/runner	2.343s

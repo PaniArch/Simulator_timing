@@ -1,0 +1,26 @@
+File: clock.test
+Build ID: d43518f5c417fe74df174d5b02f6028e55e8fee5
+Type: alloc_objects
+Time: 2026-09-17 09:29:07 CST
+Showing nodes accounting for 9646728, 99.85% of 9660930 total
+Dropped 42 nodes (cum <= 48304)
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    9567104 99.03%  testing.(*B).runN
+    950315  9.84%  9.84%    9556181 98.92%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%  9.84%    9556181 98.92%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+         0     0%  9.84%    9554361 98.90%  testing.(*B).launch
+   2064524 21.37% 31.21%    5144841 53.25%  github.com/sarchlab/akita/v5/timing.NewSerialEngine (inline)
+   1365395 14.13% 45.34%    2457686 25.44%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+   2048062 21.20% 66.54%    2048062 21.20%  github.com/sarchlab/akita/v5/timing.newUnsafeEventQueue (inline)
+         0     0% 66.54%    1092291 11.31%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+   1092291 11.31% 77.85%    1092291 11.31%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+   1032255 10.68% 88.53%    1032255 10.68%  sync.NewCond (inline)
+   1003339 10.39% 98.92%    1003339 10.39%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler (inline)
+     90547  0.94% 99.85%      90547  0.94%  runtime.mallocgc
+         0     0% 99.85%      65537  0.68%  runtime.(*scavengerState).sleep
+         0     0% 99.85%      65537  0.68%  runtime.(*timer).maybeAdd
+         0     0% 99.85%      65537  0.68%  runtime.(*timer).modify
+         0     0% 99.85%      65537  0.68%  runtime.(*timer).reset (inline)
+         0     0% 99.85%      65537  0.68%  runtime.(*timers).addHeap
+         0     0% 99.85%      65537  0.68%  runtime.bgscavenge
+         0     0% 99.85%      65537  0.68%  runtime.growslice

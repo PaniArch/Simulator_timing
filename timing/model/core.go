@@ -117,7 +117,20 @@ func (c *Core) Idle(serviceIdle bool) bool {
 	}
 	return true
 }
+
+// Evaluate returns the full old-edge diagnostic report, including detached resources.
 func (c *Core) Evaluate(in CoreInputs) (CoreTransition, error) {
+	p, err := c.EvaluateExecution(in)
+	if err == nil {
+		p.Report.Resources = c.Resources()
+	}
+	return p, err
+}
+
+// EvaluateExecution computes the same proposal and control report as Evaluate,
+// but leaves Resources nil. Callers needing diagnostics can sample Resources
+// before CommitEdge. No proposal, handshake, effect or accounting work is skipped.
+func (c *Core) EvaluateExecution(in CoreInputs) (CoreTransition, error) {
 	wb := c.commit.Evaluate([4]Signal{c.alu.Output(), c.lsu.Output(), c.sfu.Output(), c.fpu.Output()})
 	outputs := c.front.Outputs()
 	alu, err := c.alu.Evaluate(outputs[0], wb.Ready[0])
@@ -145,7 +158,7 @@ func (c *Core) Evaluate(in CoreInputs) (CoreTransition, error) {
 	executed[0].Valid = alu.Accepted
 	executed[3].Valid = fpu.Accepted
 	scheduler, scheduled := c.front.SchedulerState()
-	report := CoreReport{IssueCandidates: c.IssueCandidates(), IssueSelected: front.IssueSelected, Wakeups: append([]SchedulerFeedback(nil), in.Feedback...), Scheduler: scheduler, Scheduled: scheduled, Scoreboard: c.front.ScoreboardState(), Issued: front.Issued, Decoded: front.Decoded, IBufferPop: front.IBufferPop, MemoryResponse: in.MemoryResponse, Executed: executed, CSRRequest: sfu.CSRRequest, Resources: c.Resources(), Credits: c.front.Credits(), Offered: front.Offered, FetchRequest: front.Request, MemoryRequest: lsu.Request, InstructionAccepted: front.Accepted, FetchAccepted: front.RequestAccepted, FetchResponseReady: front.ResponseReady, MemoryAccepted: lsu.RequestAccepted, MemoryResponseReady: lsu.ResponseReady, Dispatched: front.Releases, Read: front.Read, Writeback: wb.Writeback, PendingRelease: wb.PendingRelease, Branch: alu.Branch, Control: sfu.Control, Flags: fpu.Flags, CSRRequestWindow: sfu.CSRRequestWindow}
+	report := CoreReport{IssueCandidates: c.IssueCandidates(), IssueSelected: front.IssueSelected, Wakeups: append([]SchedulerFeedback(nil), in.Feedback...), Scheduler: scheduler, Scheduled: scheduled, Scoreboard: c.front.ScoreboardState(), Issued: front.Issued, Decoded: front.Decoded, IBufferPop: front.IBufferPop, MemoryResponse: in.MemoryResponse, Executed: executed, CSRRequest: sfu.CSRRequest, Credits: c.front.Credits(), Offered: front.Offered, FetchRequest: front.Request, MemoryRequest: lsu.Request, InstructionAccepted: front.Accepted, FetchAccepted: front.RequestAccepted, FetchResponseReady: front.ResponseReady, MemoryAccepted: lsu.RequestAccepted, MemoryResponseReady: lsu.ResponseReady, Dispatched: front.Releases, Read: front.Read, Writeback: wb.Writeback, PendingRelease: wb.PendingRelease, Branch: alu.Branch, Control: sfu.Control, Flags: fpu.Flags, CSRRequestWindow: sfu.CSRRequestWindow}
 	activeNext := c.ActiveWarps()
 	for _, event := range orderedFeedback(in.Feedback) {
 		switch event.Kind {

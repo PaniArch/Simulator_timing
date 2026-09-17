@@ -1,0 +1,1 @@
+All source hashes verified after frozen validation; no subsequent Go edits.

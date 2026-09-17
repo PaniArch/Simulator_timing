@@ -1,0 +1,48 @@
+File: runner.test
+Build ID: f32a964895fe6b4e38a16970d6947834c845850f
+Type: alloc_space
+Time: 2026-09-17 10:59:42 CST
+Showing nodes accounting for 1858.61MB, 94.18% of 1973.45MB total
+Dropped 142 nodes (cum <= 9.87MB)
+Showing top 40 nodes out of 85
+      flat  flat%   sum%        cum   cum%
+  926.14MB 46.93% 46.93%  1000.69MB 50.71%  go.yaml.in/yaml/v3.(*parser).node
+  504.06MB 25.54% 72.47%   504.06MB 25.54%  go.yaml.in/yaml/v3.read
+  116.53MB  5.90% 78.38%   992.70MB 50.30%  go.yaml.in/yaml/v3.(*parser).scalar
+  113.52MB  5.75% 84.13%  1779.31MB 90.16%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+   69.50MB  3.52% 87.65%    74.55MB  3.78%  go.yaml.in/yaml/v3.resolve
+   30.74MB  1.56% 89.21%    94.84MB  4.81%  vortex.local/simulator/timing/model.(*Core).Resources
+   30.08MB  1.52% 90.73%    44.09MB  2.23%  vortex.local/simulator/timing/model.(*Frontend).Resources
+   24.50MB  1.24% 91.97%    24.50MB  1.24%  go.yaml.in/yaml/v3.read_line
+   19.51MB  0.99% 92.96%   540.57MB 27.39%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+   17.53MB  0.89% 93.85%    17.53MB  0.89%  vortex.local/simulator/timing/model.combine (inline)
+    6.50MB  0.33% 94.18%    15.01MB  0.76%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+         0     0% 94.18%   158.41MB  8.03%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 94.18%   158.41MB  8.03%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0% 94.18%    19.02MB  0.96%  go.yaml.in/yaml/v3.(*decoder).document (inline)
+         0     0% 94.18%    19.02MB  0.96%  go.yaml.in/yaml/v3.(*decoder).mapping
+         0     0% 94.18%    19.02MB  0.96%  go.yaml.in/yaml/v3.(*decoder).mappingStruct
+         0     0% 94.18%    18.02MB  0.91%  go.yaml.in/yaml/v3.(*decoder).sequence
+         0     0% 94.18%    19.02MB  0.96%  go.yaml.in/yaml/v3.(*decoder).unmarshal
+         0     0% 94.18%  1779.31MB 90.16%  go.yaml.in/yaml/v3.(*parser).document
+         0     0% 94.18%  1779.31MB 90.16%  go.yaml.in/yaml/v3.(*parser).mapping
+         0     0% 94.18%  1779.31MB 90.16%  go.yaml.in/yaml/v3.(*parser).parse
+         0     0% 94.18%   548.57MB 27.80%  go.yaml.in/yaml/v3.(*parser).peek
+         0     0% 94.18%  1618.29MB 82.00%  go.yaml.in/yaml/v3.(*parser).sequence
+         0     0% 94.18%  1799.83MB 91.20%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0% 94.18%   548.57MB 27.80%  go.yaml.in/yaml/v3.peek_token
+         0     0% 94.18%  1799.83MB 91.20%  go.yaml.in/yaml/v3.unmarshal
+         0     0% 94.18%   548.57MB 27.80%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+         0     0% 94.18%   548.57MB 27.80%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0% 94.18%   540.57MB 27.39%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+         0     0% 94.18%   548.57MB 27.80%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0% 94.18%   430.57MB 21.82%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+         0     0% 94.18%       85MB  4.31%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_value
+         0     0% 94.18%    23.50MB  1.19%  go.yaml.in/yaml/v3.yaml_parser_parse_indentless_sequence_entry
+         0     0% 94.18%   548.57MB 27.80%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+         0     0% 94.18%  1614.63MB 81.82%  testing.(*B).launch
+         0     0% 94.18%   346.62MB 17.56%  testing.(*B).run1.func1
+         0     0% 94.18%  1961.25MB 99.38%  testing.(*B).runN
+         0     0% 94.18%   371.58MB 18.83%  vortex.local/simulator/timing.Arbiter (inline)
+         0     0% 94.18%  1425.75MB 72.25%  vortex.local/simulator/timing.Buffer (inline)
+         0     0% 94.18%   371.58MB 18.83%  vortex.local/simulator/timing.arbiter

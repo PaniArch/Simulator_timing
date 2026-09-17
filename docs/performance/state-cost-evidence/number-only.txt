@@ -1,0 +1,12 @@
+goos: linux
+goarch: amd64
+pkg: vortex.local/simulator/timing/runner
+cpu: Intel(R) Xeon(R) Gold 6348H CPU @ 2.30GHz
+BenchmarkRunnerBaseline/kernel/single/diag=false/init-96         	       1	2407803836 ns/op	314458616 B/op	 5868926 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/init-96         	       1	2374962137 ns/op	310644800 B/op	 5799360 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/init-96         	       1	2417194035 ns/op	310658760 B/op	 5799365 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/execute-96      	       1	  62821072 ns/op	       160.0 edges/op	26711392 B/op	  106743 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/execute-96      	       1	  71612436 ns/op	       160.0 edges/op	26725720 B/op	  106751 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/execute-96      	       1	  67590273 ns/op	       160.0 edges/op	26710880 B/op	  106738 allocs/op
+PASS
+ok  	vortex.local/simulator/timing/runner	14.621s

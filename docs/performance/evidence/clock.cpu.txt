@@ -1,0 +1,69 @@
+File: clock.test
+Build ID: d43518f5c417fe74df174d5b02f6028e55e8fee5
+Type: cpu
+Time: 2026-09-17 09:29:05 CST
+Duration: 2.04s, Total samples = 3.81s (187.07%)
+Showing nodes accounting for 2.39s, 62.73% of 3.81s total
+Dropped 76 nodes (cum <= 0.02s)
+Showing top 60 nodes out of 177
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      2.09s 54.86%  testing.(*B).launch
+         0     0%     0%      2.09s 54.86%  testing.(*B).runN
+     0.02s  0.52%  0.52%      2.09s 54.86%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+     0.05s  1.31%  1.84%      2.07s 54.33%  vortex.local/simulator/timing/model.(*Clock).Run
+     0.12s  3.15%  4.99%      1.43s 37.53%  runtime.mallocgc
+         0     0%  4.99%      1.33s 34.91%  runtime.systemstack
+     0.36s  9.45% 14.44%      1.27s 33.33%  runtime.mallocgcSmallScanNoHeader
+         0     0% 14.44%      1.06s 27.82%  runtime.gcBgMarkWorker
+     0.04s  1.05% 15.49%         1s 26.25%  runtime.newobject
+         0     0% 15.49%      0.95s 24.93%  runtime.gcBgMarkWorker.func2
+     0.03s  0.79% 16.27%      0.92s 24.15%  github.com/sarchlab/akita/v5/timing.NewSerialEngine (inline)
+     0.01s  0.26% 16.54%      0.87s 22.83%  runtime.gcDrain
+         0     0% 16.54%      0.80s 21.00%  runtime.gcDrainMarkWorkerDedicated (inline)
+         0     0% 16.54%      0.58s 15.22%  runtime.markroot
+     0.11s  2.89% 19.42%      0.54s 14.17%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+         0     0% 19.42%      0.52s 13.65%  runtime.markroot.func1
+         0     0% 19.42%      0.51s 13.39%  runtime.scanstack
+         0     0% 19.42%      0.45s 11.81%  runtime.scanframeworker
+     0.09s  2.36% 21.78%      0.42s 11.02%  runtime.getempty
+         0     0% 21.78%      0.42s 11.02%  runtime.mcall
+     0.01s  0.26% 22.05%      0.42s 11.02%  runtime.park_m
+         0     0% 22.05%      0.41s 10.76%  runtime.findRunnable
+         0     0% 22.05%      0.41s 10.76%  runtime.schedule
+         0     0% 22.05%      0.39s 10.24%  github.com/sarchlab/akita/v5/timing.newUnsafeEventQueue (inline)
+     0.01s  0.26% 22.31%      0.31s  8.14%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler (inline)
+     0.03s  0.79% 23.10%      0.30s  7.87%  runtime.mapassign_faststr
+     0.03s  0.79% 23.88%      0.28s  7.35%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+     0.03s  0.79% 24.67%      0.27s  7.09%  runtime.scanblock
+     0.02s  0.52% 25.20%      0.25s  6.56%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+     0.01s  0.26% 25.46%      0.23s  6.04%  internal/runtime/maps.(*Map).growToSmall
+     0.19s  4.99% 30.45%      0.23s  6.04%  runtime.(*mspan).writeHeapBitsSmall
+     0.02s  0.52% 30.97%      0.23s  6.04%  runtime.growslice
+         0     0% 30.97%      0.23s  6.04%  runtime.heapSetTypeNoHeader (inline)
+     0.01s  0.26% 31.23%      0.22s  5.77%  runtime.(*gcWork).init
+     0.22s  5.77% 37.01%      0.22s  5.77%  runtime.nextFreeFast (inline)
+     0.21s  5.51% 42.52%      0.21s  5.51%  runtime.(*lfstack).pop
+         0     0% 42.52%      0.21s  5.51%  runtime.greyobject
+     0.02s  0.52% 43.04%      0.20s  5.25%  runtime.(*stackScanState).addObject
+         0     0% 43.04%      0.19s  4.99%  internal/runtime/maps.newGroups (inline)
+         0     0% 43.04%      0.19s  4.99%  internal/runtime/maps.newarray
+         0     0% 43.04%      0.19s  4.99%  runtime.(*gcWork).putObj
+         0     0% 43.04%      0.19s  4.99%  runtime.newarray
+     0.10s  2.62% 45.67%      0.19s  4.99%  runtime.stealWork
+     0.18s  4.72% 50.39%      0.18s  4.72%  runtime.futex
+         0     0% 50.39%      0.15s  3.94%  runtime.bgsweep
+     0.02s  0.52% 50.92%      0.15s  3.94%  runtime.sweepone
+         0     0% 50.92%      0.14s  3.67%  internal/runtime/maps.NewEmptyMap (inline)
+         0     0% 50.92%      0.14s  3.67%  runtime.(*mcache).nextFree
+         0     0% 50.92%      0.14s  3.67%  runtime.(*mcache).refill
+     0.02s  0.52% 51.44%      0.14s  3.67%  runtime.(*sweepLocked).sweep
+         0     0% 51.44%      0.14s  3.67%  runtime.makemap_small
+         0     0% 51.44%      0.13s  3.41%  runtime.(*mheap).allocSpan
+     0.13s  3.41% 54.86%      0.13s  3.41%  runtime.memclrNoHeapPointers
+     0.05s  1.31% 56.17%      0.13s  3.41%  runtime.scanObject
+     0.02s  0.52% 56.69%      0.12s  3.15%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 56.69%      0.12s  3.15%  runtime.(*mcentral).cacheSpan
+     0.01s  0.26% 56.96%      0.12s  3.15%  runtime.procyield (inline)
+     0.11s  2.89% 59.84%      0.11s  2.89%  runtime.(*lfstack).push
+     0.11s  2.89% 62.73%      0.11s  2.89%  runtime.procyieldAsm
+         0     0% 62.73%      0.11s  2.89%  sync.NewCond (inline)

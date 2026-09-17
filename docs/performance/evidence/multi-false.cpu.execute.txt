@@ -1,0 +1,71 @@
+File: multi-false.test
+Build ID: 73478c2fdd0eb85fac89cc51d0be72f1f0a3b64a
+Type: cpu
+Time: 2026-09-17 09:29:24 CST
+Duration: 37.16s, Total samples = 3.41s ( 9.18%)
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 1.97s, 57.77% of 3.41s total
+Dropped 82 nodes (cum <= 0.02s)
+Showing top 60 nodes out of 148
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      3.41s   100%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0%     0%      3.41s   100%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0%     0%      3.41s   100%  testing.(*B).runN
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%     0%      2.96s 86.80%  vortex.local/simulator/timing.Number (inline)
+     0.01s  0.29%  0.29%      2.96s 86.80%  vortex.local/simulator/timing.number
+         0     0%  0.29%      2.96s 86.80%  vortex.local/simulator/timing/effects.(*Concurrent).Begin (inline)
+         0     0%  0.29%      2.96s 86.80%  vortex.local/simulator/timing/effects.(*Concurrent).begin
+         0     0%  0.29%      2.96s 86.80%  vortex.local/simulator/timing/effects.New
+         0     0%  0.29%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).document
+         0     0%  0.29%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).mapping
+         0     0%  0.29%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).parse
+     0.03s  0.88%  1.17%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%  1.17%      2.94s 86.22%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0%  1.17%      2.94s 86.22%  go.yaml.in/yaml/v3.unmarshal
+         0     0%  1.17%      2.91s 85.34%  testing.(*B).launch
+         0     0%  1.17%      2.63s 77.13%  go.yaml.in/yaml/v3.(*parser).sequence
+         0     0%  1.17%      2.28s 66.86%  go.yaml.in/yaml/v3.(*parser).peek
+     0.03s  0.88%  2.05%      2.28s 66.86%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0%  2.05%      2.24s 65.69%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+     0.01s  0.29%  2.35%      2.11s 61.88%  go.yaml.in/yaml/v3.peek_token
+     0.02s  0.59%  2.93%      2.09s 61.29%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+     0.13s  3.81%  6.74%      2.05s 60.12%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0%  6.74%      1.50s 43.99%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+     0.50s 14.66% 21.41%      1.41s 41.35%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+     0.01s  0.29% 21.70%      1.24s 36.36%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+     0.04s  1.17% 22.87%      0.84s 24.63%  runtime.mallocgc
+         0     0% 22.87%      0.63s 18.48%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_value
+         0     0% 22.87%      0.55s 16.13%  go.yaml.in/yaml/v3.(*parser).scalar
+     0.34s  9.97% 32.84%      0.53s 15.54%  go.yaml.in/yaml/v3.read
+         0     0% 32.84%      0.50s 14.66%  testing.(*B).run1.func1
+     0.05s  1.47% 34.31%      0.44s 12.90%  go.yaml.in/yaml/v3.(*parser).node
+     0.11s  3.23% 37.54%      0.41s 12.02%  runtime.mallocgcSmallScanNoHeader
+     0.04s  1.17% 38.71%      0.31s  9.09%  runtime.growslice
+     0.01s  0.29% 39.00%      0.27s  7.92%  go.yaml.in/yaml/v3.yaml_parser_parse_indentless_sequence_entry
+     0.01s  0.29% 39.30%      0.27s  7.92%  runtime.newobject
+     0.21s  6.16% 45.45%      0.22s  6.45%  go.yaml.in/yaml/v3.yaml_parser_update_buffer
+         0     0% 45.45%      0.22s  6.45%  vortex.local/simulator/timing/model.(*Core).Evaluate
+         0     0% 45.45%      0.17s  4.99%  runtime.(*mcache).nextFree
+     0.01s  0.29% 45.75%      0.16s  4.69%  go.yaml.in/yaml/v3.resolve
+     0.01s  0.29% 46.04%      0.16s  4.69%  runtime.(*mcache).refill
+     0.01s  0.29% 46.33%      0.16s  4.69%  runtime.makeslice
+     0.03s  0.88% 47.21%      0.16s  4.69%  runtime.mallocgcSmallNoscan
+         0     0% 47.21%      0.16s  4.69%  runtime.systemstack
+     0.02s  0.59% 47.80%      0.15s  4.40%  runtime.mallocgcSmallScanHeader
+     0.13s  3.81% 51.61%      0.13s  3.81%  go.yaml.in/yaml/v3.is_blankz
+     0.01s  0.29% 51.91%      0.13s  3.81%  vortex.local/simulator/timing/model.(*Core).Resources
+     0.05s  1.47% 53.37%      0.12s  3.52%  go.yaml.in/yaml/v3.yaml_parser_fetch_value
+     0.02s  0.59% 53.96%      0.12s  3.52%  runtime.slicebytetostring
+     0.01s  0.29% 54.25%      0.11s  3.23%  runtime.(*mcentral).cacheSpan
+     0.01s  0.29% 54.55%      0.11s  3.23%  runtime.convTstring
+     0.11s  3.23% 57.77%      0.11s  3.23%  runtime.memclrNoHeapPointers
+         0     0% 57.77%      0.10s  2.93%  go.yaml.in/yaml/v3.yaml_parser_parse_flow_sequence_entry

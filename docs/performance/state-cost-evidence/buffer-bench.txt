@@ -1,0 +1,12 @@
+goos: linux
+goarch: amd64
+pkg: vortex.local/simulator/timing
+cpu: Intel(R) Xeon(R) Gold 6348H CPU @ 2.30GHz
+BenchmarkBufferIR/cached=false-96         	      10	  34449160 ns/op	 3793954 B/op	   70761 allocs/op
+BenchmarkBufferIR/cached=false-96         	      10	  32555664 ns/op	 3794781 B/op	   70760 allocs/op
+BenchmarkBufferIR/cached=false-96         	      10	  34468228 ns/op	 3796123 B/op	   70760 allocs/op
+BenchmarkBufferIR/cached=true-96          	      10	       263.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBufferIR/cached=true-96          	      10	       231.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBufferIR/cached=true-96          	      10	       303.5 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	vortex.local/simulator/timing	1.231s

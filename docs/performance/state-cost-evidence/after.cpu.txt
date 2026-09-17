@@ -1,0 +1,49 @@
+File: runner.test
+Build ID: f32a964895fe6b4e38a16970d6947834c845850f
+Type: cpu
+Time: 2026-09-17 10:59:30 CST
+Duration: 12.25s, Total samples = 18.46s (150.66%)
+Showing nodes accounting for 12.97s, 70.26% of 18.46s total
+Dropped 328 nodes (cum <= 0.09s)
+Showing top 40 nodes out of 186
+      flat  flat%   sum%        cum   cum%
+     1.85s 10.02% 10.02%      5.43s 29.41%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+     1.24s  6.72% 16.74%      1.24s  6.72%  go.yaml.in/yaml/v3.yaml_parser_update_buffer
+     1.02s  5.53% 22.26%      1.85s 10.02%  go.yaml.in/yaml/v3.read
+     0.83s  4.50% 26.76%      1.92s 10.40%  runtime.scanObjectsSmall
+     0.70s  3.79% 30.55%      1.10s  5.96%  runtime.tryDeferToSpanScan
+     0.49s  2.65% 33.21%      0.49s  2.65%  go.yaml.in/yaml/v3.is_blankz
+     0.39s  2.11% 35.32%      0.39s  2.11%  runtime.(*lfstack).pop
+     0.38s  2.06% 37.38%      0.52s  2.82%  go.yaml.in/yaml/v3.yaml_parser_parse_node
+     0.37s  2.00% 39.38%      7.73s 41.87%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+     0.34s  1.84% 41.22%      0.34s  1.84%  runtime.(*lfstack).push
+     0.33s  1.79% 43.01%      0.33s  1.79%  runtime.nextFreeFast (inline)
+     0.28s  1.52% 44.53%      0.28s  1.52%  runtime.memmove
+     0.27s  1.46% 45.99%      1.21s  6.55%  runtime.mallocgcSmallScanNoHeader
+     0.26s  1.41% 47.40%      0.26s  1.41%  runtime.(*randomEnum).next (inline)
+     0.26s  1.41% 48.81%      2.49s 13.49%  runtime.mallocgc
+     0.24s  1.30% 50.11%      0.24s  1.30%  runtime.futex
+     0.23s  1.25% 51.35%      0.23s  1.25%  runtime.pMask.read (inline)
+     0.22s  1.19% 52.55%      0.38s  2.06%  go.yaml.in/yaml/v3.yaml_insert_token
+     0.21s  1.14% 53.68%      0.69s  3.74%  runtime.mallocgcSmallNoscan
+     0.21s  1.14% 54.82%      0.21s  1.14%  runtime.procyieldAsm
+     0.20s  1.08% 55.90%      0.39s  2.11%  runtime.scanObject
+     0.20s  1.08% 56.99%      0.20s  1.08%  runtime.spanClass.sizeclass (inline)
+     0.19s  1.03% 58.02%      0.19s  1.03%  runtime.memclrNoHeapPointers
+     0.18s  0.98% 58.99%      0.18s  0.98%  go.yaml.in/yaml/v3.is_blank (inline)
+     0.17s  0.92% 59.91%      1.46s  7.91%  go.yaml.in/yaml/v3.(*parser).node
+     0.17s  0.92% 60.83%      4.17s 22.59%  runtime.gcDrain
+     0.17s  0.92% 61.76%      0.58s  3.14%  runtime.stealWork
+     0.15s  0.81% 62.57%      8.81s 47.72%  go.yaml.in/yaml/v3.yaml_parser_parse
+     0.14s  0.76% 63.33%     11.62s 62.95%  go.yaml.in/yaml/v3.(*parser).parseChild
+     0.13s   0.7% 64.03%      0.13s   0.7%  runtime.getMCache (inline)
+     0.13s   0.7% 64.73%      0.23s  1.25%  runtime.mallocgcTiny
+     0.12s  0.65% 65.38%      8.01s 43.39%  go.yaml.in/yaml/v3.peek_token
+     0.12s  0.65% 66.03%      0.24s  1.30%  runtime.(*_panic).nextDefer
+     0.12s  0.65% 66.68%      0.12s  0.65%  runtime.extractHeapBitsSmall
+     0.12s  0.65% 67.33%      0.63s  3.41%  runtime.getempty
+     0.11s   0.6% 67.93%      0.53s  2.87%  go.yaml.in/yaml/v3.yaml_parser_fetch_value
+     0.11s   0.6% 68.53%      0.19s  1.03%  go.yaml.in/yaml/v3.yaml_parser_scan_to_next_token
+     0.11s   0.6% 69.12%      0.13s   0.7%  runtime.(*mspan).writeHeapBitsSmall
+     0.11s   0.6% 69.72%      0.11s   0.6%  runtime.releasem (inline)
+     0.10s  0.54% 70.26%      0.19s  1.03%  go.yaml.in/yaml/v3.(*parser).expect

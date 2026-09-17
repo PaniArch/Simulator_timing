@@ -2,15 +2,28 @@ package timing
 
 import (
 	"fmt"
+	"sync"
 
 	"go.yaml.in/yaml/v3"
 )
+
+// Only the private, embedded IR is shared. Nodes never escape this package or
+// change after parsing; caller-provided documents still parse independently.
+var numberIR = sync.OnceValues(func() (*yaml.Node, error) {
+	var root yaml.Node
+	err := yaml.Unmarshal(document, &root)
+	return &root, err
+})
 
 // Number reads a required integer by collection, stable ID and field path.
 // Missing/null values never become zero. The static checker owns the complete
 // schema and reference validation; this accessor owns implementation inputs.
 func Number(collection, id string, path ...string) (int, error) {
-	return number(document, collection, id, path...)
+	root, err := numberIR()
+	if err != nil {
+		return 0, err
+	}
+	return numberFromRoot(root, collection, id, path...)
 }
 
 func number(data []byte, collection, id string, path ...string) (int, error) {
@@ -18,6 +31,10 @@ func number(data []byte, collection, id string, path ...string) (int, error) {
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return 0, err
 	}
+	return numberFromRoot(&root, collection, id, path...)
+}
+
+func numberFromRoot(root *yaml.Node, collection, id string, path ...string) (int, error) {
 	field := func(n *yaml.Node, key string) *yaml.Node {
 		if n != nil && n.Kind == yaml.MappingNode {
 			for i := 0; i < len(n.Content); i += 2 {

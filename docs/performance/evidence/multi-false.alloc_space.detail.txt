@@ -1,0 +1,144 @@
+File: multi-false.test
+Build ID: 73478c2fdd0eb85fac89cc51d0be72f1f0a3b64a
+Type: alloc_space
+Time: 2026-09-17 09:30:01 CST
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 534.03MB, 100% of 534.03MB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   534.03MB   100%  testing.(*B).runN
+         0     0%     0%   534.03MB   100%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%     0%   534.03MB   100%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0%     0%   534.03MB   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0%     0%   534.03MB   100%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0%     0%   534.03MB   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%     0%   533.03MB 99.81%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0%     0%   533.03MB 99.81%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0%     0%   533.03MB 99.81%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0%     0%   533.03MB 99.81%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+       2MB  0.38%  0.38%   533.03MB 99.81%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0%  0.38%   436.41MB 81.72%  testing.(*B).launch
+         0     0%  0.38%   352.56MB 66.02%  vortex.local/simulator/timing/effects.(*Concurrent).Begin (inline)
+         0     0%  0.38%   352.56MB 66.02%  vortex.local/simulator/timing/effects.(*Concurrent).begin
+    0.50MB 0.094%  0.47%   352.56MB 66.02%  vortex.local/simulator/timing/effects.New
+         0     0%  0.47%   352.06MB 65.93%  go.yaml.in/yaml/v3.(*parser).document
+         0     0%  0.47%   352.06MB 65.93%  go.yaml.in/yaml/v3.(*parser).mapping
+         0     0%  0.47%   352.06MB 65.93%  go.yaml.in/yaml/v3.(*parser).parse
+   22.50MB  4.21%  4.68%   352.06MB 65.93%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%  4.68%   352.06MB 65.93%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0%  4.68%   352.06MB 65.93%  go.yaml.in/yaml/v3.unmarshal
+         0     0%  4.68%   352.06MB 65.93%  vortex.local/simulator/timing.Number (inline)
+         0     0%  4.68%   352.06MB 65.93%  vortex.local/simulator/timing.number
+         0     0%  4.68%   329.56MB 61.71%  go.yaml.in/yaml/v3.(*parser).sequence
+   28.50MB  5.34% 10.02%   200.55MB 37.55%  go.yaml.in/yaml/v3.(*parser).scalar
+  177.03MB 33.15% 43.17%   197.05MB 36.90%  go.yaml.in/yaml/v3.(*parser).node
+         0     0% 43.17%   104.01MB 19.48%  go.yaml.in/yaml/v3.(*parser).peek
+         0     0% 43.17%   104.01MB 19.48%  go.yaml.in/yaml/v3.peek_token
+         0     0% 43.17%   104.01MB 19.48%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+         0     0% 43.17%   104.01MB 19.48%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0% 43.17%   104.01MB 19.48%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0% 43.17%   104.01MB 19.48%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+         0     0% 43.17%   102.51MB 19.20%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+    3.50MB  0.66% 43.83%   102.51MB 19.20%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+   99.51MB 18.63% 62.46%    99.51MB 18.63%  go.yaml.in/yaml/v3.read
+         0     0% 62.46%    97.62MB 18.28%  testing.(*B).run1.func1
+   33.26MB  6.23% 68.69%    91.86MB 17.20%  vortex.local/simulator/timing/model.(*Core).Resources
+         0     0% 68.69%    89.21MB 16.71%  vortex.local/simulator/timing/model.(*Core).Evaluate
+         0     0% 68.69%    74.51MB 13.95%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+   25.56MB  4.79% 73.47%    38.59MB  7.23%  vortex.local/simulator/timing/model.(*Frontend).Resources
+         0     0% 73.47%    25.61MB  4.79%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps
+   18.50MB  3.46% 76.94%    20.02MB  3.75%  go.yaml.in/yaml/v3.resolve
+         0     0% 76.94%       20MB  3.75%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_value
+   16.53MB  3.10% 80.03%    16.53MB  3.10%  vortex.local/simulator/timing/model.combine (inline)
+    6.51MB  1.22% 81.25%    15.02MB  2.81%  vortex.local/simulator/timing/effects.(*Concurrent).Observe
+         0     0% 81.25%    13.51MB  2.53%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0% 81.25%    13.51MB  2.53%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+       5MB  0.94% 82.19%    13.51MB  2.53%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+         0     0% 82.19%    10.50MB  1.97%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+       2MB  0.37% 82.56%     9.01MB  1.69%  vortex.local/simulator/timing/memsys.(*Cache).Step
+    7.51MB  1.41% 83.97%     7.51MB  1.41%  vortex.local/simulator/timing/effects.(*Adapter).validateReport
+    7.51MB  1.41% 85.38%     7.51MB  1.41%  vortex.local/simulator/timing/model.(*STDFPU).Resources
+       7MB  1.31% 86.69%     7.50MB  1.40%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+         0     0% 86.69%        6MB  1.12%  go.yaml.in/yaml/v3.yaml_parser_parse_indentless_sequence_entry
+    5.52MB  1.03% 87.72%     5.52MB  1.03%  vortex.local/simulator/timing/runner.stageEvents
+    0.50MB 0.094% 87.81%     5.51MB  1.03%  vortex.local/simulator/timing/memsys.(*cacheBank).step
+    5.51MB  1.03% 88.84%     5.51MB  1.03%  vortex.local/simulator/timing/model.(*LSU).Resources
+    5.01MB  0.94% 89.78%     5.01MB  0.94%  vortex.local/simulator/timing/memsys.(*cacheMSHR).step
+    5.01MB  0.94% 90.72%     5.01MB  0.94%  vortex.local/simulator/timing/model.CommitEdge
+       2MB  0.37% 91.09%        5MB  0.94%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+    0.50MB 0.094% 91.19%        5MB  0.94%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+         0     0% 91.19%     4.51MB  0.84%  vortex.local/simulator/timing/effects.(*Adapter).observeAt
+       4MB  0.75% 91.94%        4MB  0.75%  vortex.local/simulator/timing/model.(*ALU).Resources
+    2.50MB  0.47% 92.41%        4MB  0.75%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+       3MB  0.56% 92.97%     3.50MB  0.66%  vortex.local/simulator/timing/model.(*Scoreboard).Resources
+    3.50MB  0.66% 93.62%     3.50MB  0.66%  vortex.local/simulator/timing/model.(*Dispatch).Resources
+         0     0% 93.62%     3.50MB  0.66%  go.yaml.in/yaml/v3.yaml_parser_parse_flow_sequence_entry
+         0     0% 93.62%     3.04MB  0.57%  sync.(*Pool).Get
+         0     0% 93.62%     3.04MB  0.57%  sync.(*Pool).pin
+    3.04MB  0.57% 94.19%     3.04MB  0.57%  sync.(*Pool).pinSlow
+       3MB  0.56% 94.75%        3MB  0.56%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+       3MB  0.56% 95.32%        3MB  0.56%  vortex.local/simulator/timing/model.(*SFU).Resources
+         0     0% 95.32%        3MB  0.56%  vortex.local/simulator/timing/model.(*ALU).Evaluate
+       1MB  0.19% 95.50%     2.52MB  0.47%  fmt.Sprintf
+       2MB  0.37% 95.88%     2.50MB  0.47%  vortex.local/simulator/timing/model.(*Collector).Resources
+    0.50MB 0.094% 95.97%     2.50MB  0.47%  vortex.local/simulator/timing/model.(*Fetch).Evaluate
+    1.50MB  0.28% 96.25%     2.50MB  0.47%  vortex.local/simulator/timing/model.(*WaitPool).Evaluate
+       2MB  0.37% 96.63%        2MB  0.37%  vortex.local/simulator/timing/memsys.(*Cache).MemoryOffers (inline)
+         0     0% 96.63%        2MB  0.37%  vortex.local/simulator/timing/model.observed
+         0     0% 96.63%     1.52MB  0.28%  fmt.newPrinter
+         0     0% 96.63%     1.52MB  0.28%  regexp.(*Regexp).MatchString (inline)
+         0     0% 96.63%     1.52MB  0.28%  regexp.(*Regexp).doExecute
+         0     0% 96.63%     1.52MB  0.28%  regexp.(*Regexp).doMatch (inline)
+         0     0% 96.63%     1.52MB  0.28%  regexp.(*Regexp).doOnePass
+         0     0% 96.63%     1.52MB  0.28%  regexp.newOnePassMachine (inline)
+    1.50MB  0.28% 96.91%     1.50MB  0.28%  vortex.local/simulator/timing/memsys.(*Backend).Step
+         0     0% 96.91%     1.50MB  0.28%  vortex.local/simulator/timing/memsys.(*Cache).validate
+    1.50MB  0.28% 97.19%     1.50MB  0.28%  vortex.local/simulator/timing/model.(*Sequencer).Evaluate
+    1.50MB  0.28% 97.47%     1.50MB  0.28%  vortex.local/simulator/timing/model.(*Buffer).Residents
+         0     0% 97.47%     1.50MB  0.28%  go.yaml.in/yaml/v3.yaml_parser_fetch_flow_scalar
+         0     0% 97.47%     1.50MB  0.28%  go.yaml.in/yaml/v3.yaml_parser_scan_flow_scalar
+         0     0% 97.47%     1.50MB  0.28%  vortex.local/simulator/timing/effects.(*Concurrent).Feedback
+       1MB  0.19% 97.66%     1.50MB  0.28%  vortex.local/simulator/timing/effects.(*Concurrent).keys
+         0     0% 97.66%     1.50MB  0.28%  vortex.local/simulator/timing/runner.(*MultiRunner).cleanupRedirects
+         0     0% 97.66%     1.50MB  0.28%  vortex.local/simulator/timing/model.(*Dispatch).Evaluate
+       1MB  0.19% 97.85%        1MB  0.19%  vortex.local/simulator/emu/state.(*WarpState).StageEffects
+       1MB  0.19% 98.03%        1MB  0.19%  vortex.local/simulator/timing/memsys.(*Backend).PreviewResponses
+       1MB  0.19% 98.22%        1MB  0.19%  vortex.local/simulator/timing/model.(*WaitPool).Pending (inline)
+       1MB  0.19% 98.41%        1MB  0.19%  vortex.local/simulator/timing/model.(*instructionAccounting).evaluate
+       1MB  0.19% 98.60%        1MB  0.19%  vortex.local/simulator/timing/model.(*Divider).Evaluate
+         0     0% 98.60%        1MB  0.19%  internal/reflectlite.Swapper
+       1MB  0.19% 98.78%        1MB  0.19%  internal/reflectlite.unsafe_New
+         0     0% 98.78%        1MB  0.19%  sort.Slice
+         0     0% 98.78%        1MB  0.19%  vortex.local/simulator/timing/model.(*SFU).Evaluate
+       1MB  0.19% 98.97%        1MB  0.19%  go.yaml.in/yaml/v3.read_line
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/emu/state.(*EffectDelivery).Deliver
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/emu/state.(*EffectDelivery).stageStreamControl
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/emu/state.(*EffectStream).NewDelivery
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/emu/state.(*WarpState).stageInstructionEffects
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/timing/effects.(*Adapter).AcceptMemoryResult
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/timing/effects.(*Adapter).finishMemoryControl
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/timing/effects.(*Adapter).newDelivery
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/timing/effects.(*Adapter).serviceMemory
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/timing/effects.(*Concurrent).AcceptMemoryResult
+         0     0% 98.97%     0.50MB 0.094%  vortex.local/simulator/timing/runner.(*runnerMemory).receive
+    0.50MB 0.094% 99.06%     0.50MB 0.094%  vortex.local/simulator/timing/effects.(*Concurrent).Observe.func2
+    0.50MB 0.094% 99.16%     0.50MB 0.094%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps.func1
+    0.50MB 0.094% 99.25%     0.50MB 0.094%  vortex.local/simulator/timing/memsys.(*LocalMemory).Responses
+         0     0% 99.25%     0.50MB 0.094%  vortex.local/simulator/timing/memsys.(*LocalMemory).Step
+         0     0% 99.25%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Fetch).Resources
+    0.50MB 0.094% 99.34%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*WaitPool).Residents
+    0.50MB 0.094% 99.44%     0.50MB 0.094%  vortex.local/simulator/timing/memsys.(*GlobalAdapter).Step
+    0.50MB 0.094% 99.53%     0.50MB 0.094%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler
+         0     0% 99.53%     0.50MB 0.094%  vortex.local/simulator/timing/memsys.(*SIMDSplit).Step
+         0     0% 99.53%     0.50MB 0.094%  vortex.local/simulator/timing/memsys.(*SIMDSplit).validate
+    0.50MB 0.094% 99.63%     0.50MB 0.094%  vortex.local/simulator/timing/memsys.validateGlobal
+         0     0% 99.63%     0.50MB 0.094%  vortex.local/simulator/timing/runner.(*runnerMemory).services
+    0.50MB 0.094% 99.72%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Buffer).Contents
+         0     0% 99.72%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Scoreboard).evaluate
+         0     0% 99.72%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Commit).Evaluate
+    0.50MB 0.094% 99.81%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Merge).Evaluate
+    0.50MB 0.094% 99.91%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Scheduler).Evaluate
+         0     0% 99.91%     0.50MB 0.094%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+    0.50MB 0.094%   100%     0.50MB 0.094%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+         0     0%   100%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*Collector).Evaluate
+         0     0%   100%     0.50MB 0.094%  vortex.local/simulator/timing/model.(*edgeDriver).schedule

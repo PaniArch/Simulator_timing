@@ -1,0 +1,74 @@
+diff --git a/timing/runner/cache_flush.go b/timing/runner/cache_flush.go
+index d8f53e9..2e6ad19 100644
+--- a/timing/runner/cache_flush.go
++++ b/timing/runner/cache_flush.go
+@@ -34,7 +34,7 @@ func (k *Kernel) FlushCaches(budget uint64) (bool, error) {
+ 	if k.failed != nil {
+ 		return false, k.failed
+ 	}
+-	if !k.Status().Complete {
++	if !k.executionComplete() {
+ 		return false, fmt.Errorf("cache flush requires completed kernel execution")
+ 	}
+ 	if k.visibilityID != 0 && !k.visible {
+diff --git a/timing/runner/kernel.go b/timing/runner/kernel.go
+index c101fe6..dbcda16 100644
+--- a/timing/runner/kernel.go
++++ b/timing/runner/kernel.go
+@@ -213,10 +213,28 @@ func (k *Kernel) Status() KernelStatus {
+ 			s.Resident = append(s.Resident, copy)
+ 		}
+ 	}
+-	s.Complete = k.failed == nil && !k.retirementWrite && len(k.retirePipe[0]) == 0 && len(k.retirePipe[1]) == 0 && k.walker.Remaining() == 0 && k.pending == nil && len(s.Resident) == 0 && len(k.barrierEvents) == 0 && k.barrierReleases == 0
++	s.Complete = k.executionComplete()
+ 	return s
+ }
+ 
++// executionComplete reads the existing lifecycle owners, without building the
++// public diagnostic snapshot. Execution completion is not backing visibility or
++// memory drain; residency reclamation continues to enforce its full tail checks.
++func (k *Kernel) executionComplete() bool {
++	if k.transferredStatus != nil {
++		return k.transferredStatus.Complete
++	}
++	if k.failed != nil || k.retirementWrite || len(k.retirePipe[0]) != 0 || len(k.retirePipe[1]) != 0 || k.walker.Remaining() != 0 || k.pending != nil || len(k.barrierEvents) != 0 || k.barrierReleases != 0 {
++		return false
++	}
++	for _, c := range k.resident {
++		if c != nil {
++			return false
++		}
++	}
++	return true
++}
++
+ // Run advances at most budget actual pipeline edges. Budget exhaustion is
+ // resumable. Allocation waits leave all already-resident Warps running.
+ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
+@@ -238,7 +256,7 @@ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
+ 		// VX_cta_dispatch.busy = old DISPATCH state || kmu_bus_if_fire.
+ 		// Include the last Warp fire even though residency just returned to IDLE.
+ 		k.runner.dispatchBusy = dispatching || k.dispatch != nil
+-		if k.Status().Complete {
++		if k.executionComplete() {
+ 			return nil
+ 		}
+ 		// The CTA dispatcher remains clocked even while no Warp is active.
+@@ -325,7 +343,7 @@ func (k *Kernel) MakeVisible(budget uint64) (bool, error) {
+ 	if k.failed != nil {
+ 		return false, k.failed
+ 	}
+-	if !k.Status().Complete {
++	if !k.executionComplete() {
+ 		return false, fmt.Errorf("visibility requires completed kernel execution")
+ 	}
+ 	if k.visible {
+@@ -371,7 +389,7 @@ func (k *Kernel) MakeVisible(budget uint64) (bool, error) {
+ // Callers must serialize ownership; native runtime additionally requires a real
+ // D/I flush before host access. Failed construction leaves this Kernel usable.
+ func (k *Kernel) NextLaunch(input device.LaunchState) (*Kernel, error) {
+-	if k.transferred || k.failed != nil || k.runner.failed || !k.Status().Complete ||
++	if k.transferred || k.failed != nil || k.runner.failed || !k.executionComplete() ||
+ 		!k.runner.hierarchy.drained() || k.runner.cacheFlush != nil || (k.visibilityID != 0 && !k.visible) {
+ 		return nil, fmt.Errorf("next launch requires healthy completed drained memory owner")
+ 	}

@@ -1,0 +1,82 @@
+diff --git a/timing/ir.go b/timing/ir.go
+index 0a3ab4f..02f3308 100644
+--- a/timing/ir.go
++++ b/timing/ir.go
+@@ -4,6 +4,7 @@ package timing
+ import (
+ 	_ "embed"
+ 	"fmt"
++	"sync"
+ 
+ 	"go.yaml.in/yaml/v3"
+ )
+@@ -20,30 +21,50 @@ type BufferSpec struct {
+ 
+ // Buffer resolves a stable boundary ID directly from the embedded IR. There is
+ // no second table of numeric defaults in the implementation.
+-func Buffer(id string) (BufferSpec, error) { return buffer(document, id) }
++func Buffer(id string) (BufferSpec, error) {
++	ir, err := bufferIR()
++	if err != nil {
++		return BufferSpec{}, err
++	}
++	return bufferFromIR(ir, id)
++}
++
++// Parsed buffer parameters are private and read-only. Public results contain
++// only values; mutable per-instance component state is never cached here.
++type bufferDocument struct {
++	Boundaries []struct {
++		ID         string `yaml:"id"`
++		Kind       string `yaml:"kind"`
++		Parameters struct {
++			Size   *int `yaml:"SIZE"`
++			OutReg *int `yaml:"OUT_REG"`
++			OutBuf *int `yaml:"OUT_BUF"`
++			Depth  *int `yaml:"DEPTH"`
++		} `yaml:"rtl_parameters"`
++	} `yaml:"boundaries"`
++	Encoding struct {
++		Values map[int]struct {
++			Size   *int `yaml:"SIZE"`
++			OutReg *int `yaml:"OUT_REG"`
++		} `yaml:"values"`
++	} `yaml:"buffer_encoding"`
++}
++
++var bufferIR = sync.OnceValues(func() (*bufferDocument, error) {
++	var ir bufferDocument
++	err := yaml.Unmarshal(document, &ir)
++	return &ir, err
++})
+ 
+ func buffer(data []byte, id string) (BufferSpec, error) {
+-	var ir struct {
+-		Boundaries []struct {
+-			ID         string `yaml:"id"`
+-			Kind       string `yaml:"kind"`
+-			Parameters struct {
+-				Size   *int `yaml:"SIZE"`
+-				OutReg *int `yaml:"OUT_REG"`
+-				OutBuf *int `yaml:"OUT_BUF"`
+-				Depth  *int `yaml:"DEPTH"`
+-			} `yaml:"rtl_parameters"`
+-		} `yaml:"boundaries"`
+-		Encoding struct {
+-			Values map[int]struct {
+-				Size   *int `yaml:"SIZE"`
+-				OutReg *int `yaml:"OUT_REG"`
+-			} `yaml:"values"`
+-		} `yaml:"buffer_encoding"`
+-	}
++	var ir bufferDocument
+ 	if err := yaml.Unmarshal(data, &ir); err != nil {
+ 		return BufferSpec{}, err
+ 	}
++	return bufferFromIR(&ir, id)
++}
++
++func bufferFromIR(ir *bufferDocument, id string) (BufferSpec, error) {
+ 	for _, b := range ir.Boundaries {
+ 		if b.ID != id {
+ 			continue

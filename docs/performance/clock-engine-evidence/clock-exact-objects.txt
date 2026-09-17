@@ -1,0 +1,189 @@
+File: clock-closure.test
+Build ID: f98f4af58e5f412e0a2fd5009321b35ac08bb0e2
+Type: alloc_objects
+Time: 2026-09-17 10:18:12 CST
+Showing nodes accounting for 12618, 100% of 12618 total
+      flat  flat%   sum%        cum   cum%
+        97  0.77%  0.77%      11929 94.54%  testing.(*B).runN
+         0     0%  0.77%      11281 89.40%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+         0     0%  0.77%      11267 89.29%  vortex.local/simulator/timing/model.(*Clock).Run
+     11264 89.27% 90.04%      11267 89.29%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+         0     0% 90.04%      10250 81.23%  testing.(*B).launch
+         0     0% 90.04%       1566 12.41%  testing.(*B).run1.func1
+         0     0% 90.04%        615  4.87%  testing/internal/testdeps.TestDeps.MatchString
+         0     0% 90.04%        601  4.76%  testing.(*matcher).fullName
+         0     0% 90.04%        588  4.66%  regexp.Compile (inline)
+        29  0.23% 90.27%        588  4.66%  regexp.compile
+        15  0.12% 90.39%        521  4.13%  vortex.local/simulator/timing/model.BenchmarkClockBaseline
+         6 0.048% 90.43%        516  4.09%  testing.(*B).Run
+         0     0% 90.43%        499  3.95%  testing.simpleMatch.matches
+         0     0% 90.43%        414  3.28%  main.main
+         0     0% 90.43%        414  3.28%  runtime.main
+         3 0.024% 90.46%        414  3.28%  testing.(*M).Run
+       388  3.07% 93.53%        388  3.07%  runtime.mallocgc
+         0     0% 93.53%        331  2.62%  runtime.newobject
+         4 0.032% 93.56%        288  2.28%  testing.runBenchmarks
+         0     0% 93.56%        256  2.03%  runtime.systemstack
+         0     0% 93.56%        224  1.78%  regexp.compileOnePass
+        15  0.12% 93.68%        208  1.65%  regexp.makeOnePass
+         0     0% 93.68%        188  1.49%  regexp/syntax.Parse (inline)
+        18  0.14% 93.83%        188  1.49%  regexp/syntax.parse
+         0     0% 93.83%        183  1.45%  runtime.allocm
+         0     0% 93.83%        183  1.45%  runtime.newm
+       165  1.31% 95.13%        165  1.31%  regexp.makeOnePass.func1
+         0     0% 95.13%        154  1.22%  runtime.gcStart.func4
+         0     0% 95.13%        154  1.22%  runtime.startTheWorldWithSema
+         0     0% 95.13%        150  1.19%  runtime.malg
+         9 0.071% 95.21%        139  1.10%  testing.newMatcher
+         0     0% 95.21%        133  1.05%  regexp/syntax.(*parser).literal
+         0     0% 95.21%        130  1.03%  runtime.mcommoninit
+         0     0% 95.21%        123  0.97%  testing.simpleMatch.verify
+         0     0% 95.21%        106  0.84%  regexp/syntax.Compile
+         3 0.024% 95.23%        106  0.84%  testing.runTests
+         0     0% 95.23%        102  0.81%  runtime.newproc.func1
+         0     0% 95.23%        102  0.81%  runtime.newproc1
+         0     0% 95.23%         97  0.77%  runtime.gcBgMarkWorker
+        43  0.34% 95.57%         91  0.72%  regexp/syntax.(*parser).push
+        88   0.7% 96.27%         88   0.7%  regexp/syntax.(*compiler).inst (inline)
+         0     0% 96.27%         79  0.63%  strings.Split (inline)
+        79  0.63% 96.89%         79  0.63%  strings.genSplit
+         0     0% 96.89%         74  0.59%  testing.tRunner
+         0     0% 96.89%         71  0.56%  testing.(*T).Run
+         0     0% 96.89%         71  0.56%  testing.runTests.func1
+         0     0% 96.89%         70  0.55%  regexp/syntax.(*compiler).compile
+        61  0.48% 97.38%         61  0.48%  regexp/syntax.(*parser).newRegexp (inline)
+         0     0% 97.38%         58  0.46%  regexp/syntax.(*compiler).rune
+         0     0% 97.38%         52  0.41%  runtime.mProfStackInit (inline)
+         0     0% 97.38%         52  0.41%  runtime.makeProfStackFP (inline)
+         0     0% 97.38%         52  0.41%  runtime.makeslice
+        48  0.38% 97.76%         48  0.38%  regexp/syntax.(*parser).maybeConcat
+        18  0.14% 97.90%         36  0.29%  regexp/syntax.(*compiler).init (inline)
+         0     0% 97.90%         33  0.26%  testing.(*B).run
+         0     0% 97.90%         29  0.23%  runtime.schedule
+         0     0% 97.90%         29  0.23%  runtime.startm
+         0     0% 97.90%         29  0.23%  runtime.wakep
+        28  0.22% 98.12%         28  0.22%  regexp.newQueue (inline)
+         0     0% 98.12%         27  0.21%  regexp.(*Regexp).MatchString (inline)
+         0     0% 98.12%         27  0.21%  regexp.(*Regexp).doExecute
+         0     0% 98.12%         27  0.21%  regexp.(*Regexp).doMatch (inline)
+         0     0% 98.12%         26  0.21%  runtime.mpreinit (inline)
+         0     0% 98.12%         26  0.21%  runtime.newMWeakPointer (inline)
+         3 0.024% 98.15%         24  0.19%  testing.(*benchState).processBench
+         0     0% 98.15%         23  0.18%  strings.(*Builder).WriteRune
+        23  0.18% 98.33%         23  0.18%  testing.rewrite
+        23  0.18% 98.51%         23  0.18%  unicode/utf8.AppendRune (inline)
+         0     0% 98.51%         22  0.17%  runtime.resetspinning
+         0     0% 98.51%         21  0.17%  runtime.mcall
+         0     0% 98.51%         21  0.17%  runtime.park_m
+         0     0% 98.51%         20  0.16%  sync.(*Pool).Get
+        18  0.14% 98.65%         19  0.15%  regexp/syntax.(*parser).collapse
+         0     0% 98.65%         19  0.15%  regexp/syntax.(*parser).concat
+        18  0.14% 98.80%         18  0.14%  regexp/syntax.(*Regexp).CapNames
+         0     0% 98.80%         18  0.14%  regexp/syntax.(*parser).op
+         0     0% 98.80%         18  0.14%  sync.(*Pool).pin
+        18  0.14% 98.94%         18  0.14%  sync.(*Pool).pinSlow
+         0     0% 98.94%         17  0.13%  regexp.onePassPrefix
+         0     0% 98.94%         17  0.13%  sync.(*Once).Do
+         0     0% 98.94%         17  0.13%  sync.(*Once).doSlow
+        16  0.13% 99.06%         16  0.13%  regexp.onePassCopy
+         0     0% 99.06%         15  0.12%  fmt.Fprintf
+         0     0% 99.06%         15  0.12%  regexp.(*Regexp).backtrack
+         2 0.016% 99.08%         14  0.11%  testing.BenchmarkResult.String
+         2 0.016% 99.10%         14  0.11%  vortex.local/simulator/timing/model.NewClock
+         0     0% 99.10%         12 0.095%  regexp.(*Regexp).doOnePass
+         4 0.032% 99.13%         12 0.095%  regexp.newOnePassMachine (inline)
+         0     0% 99.13%         12 0.095%  regexp/syntax.(*compiler).empty (inline)
+        12 0.095% 99.22%         12 0.095%  testing.(*B).ResetTimer
+         5  0.04% 99.26%         10 0.079%  context.WithCancel
+         0     0% 99.26%         10 0.079%  fmt.(*pp).doPrintf
+         0     0% 99.26%         10 0.079%  fmt.(*pp).printArg
+         4 0.032% 99.29%         10 0.079%  github.com/sarchlab/akita/v5/timing.NewSerialEngine
+         0     0% 99.29%         10 0.079%  testing.runBenchmarks.func1
+         3 0.024% 99.32%          9 0.071%  regexp.newBitState
+         2 0.016% 99.33%          9 0.071%  testing.(*B).run.func1
+         8 0.063% 99.40%          8 0.063%  fmt.(*buffer).writeString
+         0     0% 99.40%          8 0.063%  fmt.(*fmt).fmtS
+         0     0% 99.40%          8 0.063%  fmt.(*fmt).padString
+         0     0% 99.40%          8 0.063%  fmt.(*pp).fmtString
+         5  0.04% 99.44%          8 0.063%  fmt.Sprintf
+         0     0% 99.44%          8 0.063%  runtime.mstart
+         0     0% 99.44%          8 0.063%  runtime.mstart0
+         0     0% 99.44%          8 0.063%  runtime.mstart1
+         0     0% 99.44%          8 0.063%  testing.(*M).after
+         0     0% 99.44%          8 0.063%  testing.(*M).after.func1
+         0     0% 99.44%          8 0.063%  testing.(*M).writeProfiles
+         7 0.055% 99.49%          7 0.055%  testing.(*matcher).unique
+         7 0.055% 99.55%          7 0.055%  testing.splitRegexp
+         0     0% 99.55%          6 0.048%  fmt.newPrinter
+         6 0.048% 99.60%          6 0.048%  regexp.(*bitState).reset
+         0     0% 99.60%          6 0.048%  regexp/syntax.(*Prog).Prefix
+         2 0.016% 99.61%          6 0.048%  testing.benchmarkName
+         3 0.024% 99.64%          6 0.048%  testing.prettyPrint
+         0     0% 99.64%          6 0.048%  testing.runExamples
+         5  0.04% 99.68%          5  0.04%  context.withCancel
+         0     0% 99.68%          5  0.04%  runtime.growslice
+         0     0% 99.68%          5  0.04%  runtime.procresize
+         0     0% 99.68%          5  0.04%  runtime.rt0_go
+         0     0% 99.68%          5  0.04%  runtime.schedinit
+         2 0.016% 99.69%          5  0.04%  testing.toOutputDir
+         4 0.032% 99.72%          4 0.032%  github.com/sarchlab/akita/v5/timing.newUnsafeEventQueue
+         0     0% 99.72%          4 0.032%  runtime.allgadd
+         4 0.032% 99.75%          4 0.032%  testing.(*B).run1
+         0     0% 99.75%          3 0.024%  os.Create
+         0     0% 99.75%          3 0.024%  os.OpenFile
+         0     0% 99.75%          3 0.024%  os.openFileNolog
+         1 0.0079% 99.76%          3 0.024%  testing.(*M).startAlarm
+         0     0% 99.76%          2 0.016%  fmt.(*fmt).fmtInteger
+         0     0% 99.76%          2 0.016%  fmt.(*fmt).pad
+         2 0.016% 99.78%          2 0.016%  fmt.(*fmt).writePadding
+         0     0% 99.78%          2 0.016%  fmt.(*pp).fmtInteger
+         2 0.016% 99.79%          2 0.016%  fmt.init.func1
+         2 0.016% 99.81%          2 0.016%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler
+         0     0% 99.81%          2 0.016%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+         2 0.016% 99.83%          2 0.016%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+         2 0.016% 99.84%          2 0.016%  os.newFile
+         2 0.016% 99.86%          2 0.016%  strings.(*Builder).Write
+         2 0.016% 99.87%          2 0.016%  sync.NewCond
+         2 0.016% 99.89%          2 0.016%  testing.(*common).setOutputWriter
+         1 0.0079% 99.90%          2 0.016%  testing.BenchmarkResult.MemString
+         1 0.0079% 99.90%          2 0.016%  testing.callerName
+         2 0.016% 99.92%          2 0.016%  testing.newTestState
+         0     0% 99.92%          2 0.016%  time.AfterFunc
+         2 0.016% 99.94%          2 0.016%  time.newTimer
+         1 0.0079% 99.94%          1 0.0079%  fmt.(*buffer).write
+         0     0% 99.94%          1 0.0079%  fmt.(*pp).doPrintln
+         0     0% 99.94%          1 0.0079%  fmt.Fprintln
+         1 0.0079%   100%          1 0.0079%  github.com/sarchlab/akita/v5/timing.GetIDGenerator
+         0     0%   100%          1 0.0079%  github.com/sarchlab/akita/v5/timing.MakeEventBase
+         1 0.0079%   100%          1 0.0079%  internal/cpu.Name
+         0     0%   100%          1 0.0079%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).Delete
+         0     0%   100%          1 0.0079%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).LoadAndDelete
+         0     0%   100%          1 0.0079%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).init
+         0     0%   100%          1 0.0079%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).initSlow
+         1 0.0079%   100%          1 0.0079%  internal/sync.newIndirectNode[go.shape.interface {},go.shape.interface {}]
+         0     0%   100%          1 0.0079%  internal/sysinfo.init.OnceValue[go.shape.string].func2
+         0     0%   100%          1 0.0079%  internal/sysinfo.init.OnceValue[go.shape.string].func2.1
+         0     0%   100%          1 0.0079%  internal/sysinfo.init.func1
+         0     0%   100%          1 0.0079%  os.ignoringEINTR
+         0     0%   100%          1 0.0079%  os.open
+         0     0%   100%          1 0.0079%  os.openFileNolog.func1
+         0     0%   100%          1 0.0079%  runtime.(*scavengerState).sleep
+         0     0%   100%          1 0.0079%  runtime.(*timer).maybeAdd
+         0     0%   100%          1 0.0079%  runtime.(*timer).modify
+         0     0%   100%          1 0.0079%  runtime.(*timer).reset
+         0     0%   100%          1 0.0079%  runtime.(*timers).addHeap
+         0     0%   100%          1 0.0079%  runtime.acquireSudog
+         0     0%   100%          1 0.0079%  runtime.bgscavenge
+         0     0%   100%          1 0.0079%  runtime.gcMarkDone
+         0     0%   100%          1 0.0079%  runtime.semacquire
+         0     0%   100%          1 0.0079%  runtime.semacquire1
+         1 0.0079%   100%          1 0.0079%  strings.(*Builder).WriteByte
+         0     0%   100%          1 0.0079%  sync.(*Map).Delete
+         0     0%   100%          1 0.0079%  syscall.BytePtrFromString
+         1 0.0079%   100%          1 0.0079%  syscall.ByteSliceFromString
+         0     0%   100%          1 0.0079%  syscall.Open
+         0     0%   100%          1 0.0079%  syscall.openat
+         1 0.0079%   100%          1 0.0079%  testing.(*B).doBench
+         1 0.0079%   100%          1 0.0079%  testing.pcToName
+         0     0%   100%          1 0.0079%  testing.tRunner.func1
+         0     0%   100%          1 0.0079%  testing.tRunner.func1.1

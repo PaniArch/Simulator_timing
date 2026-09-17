@@ -1,0 +1,68 @@
+File: multi-false.test
+Build ID: 73478c2fdd0eb85fac89cc51d0be72f1f0a3b64a
+Type: alloc_objects
+Time: 2026-09-17 09:30:01 CST
+Showing nodes accounting for 83075528, 94.25% of 88139648 total
+Dropped 158 nodes (cum <= 440698)
+Showing top 60 nodes out of 95
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   87996944 99.84%  testing.(*B).runN
+         0     0%     0%   87996944 99.84%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%     0%   87162437 98.89%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0%     0%   87162437 98.89%  go.yaml.in/yaml/v3.unmarshal
+         0     0%     0%   86627058 98.28%  go.yaml.in/yaml/v3.(*parser).parse
+         0     0%     0%   86624418 98.28%  go.yaml.in/yaml/v3.(*parser).document
+         0     0%     0%   86624418 98.28%  go.yaml.in/yaml/v3.(*parser).mapping
+   7259820  8.24%  8.24%   86624418 98.28%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%  8.24%   80561695 91.40%  vortex.local/simulator/timing/runner.NewMulti
+         0     0%  8.24%   80561695 91.40%  vortex.local/simulator/timing/runner.newBaselineFixture
+         0     0%  8.24%   77926415 88.41%  go.yaml.in/yaml/v3.(*parser).sequence
+         0     0%  8.24%   73432799 83.31%  testing.(*B).launch
+         0     0%  8.24%   53078159 60.22%  vortex.local/simulator/timing.Number (inline)
+         0     0%  8.24%   53078159 60.22%  vortex.local/simulator/timing.number
+         0     0%  8.24%   47165651 53.51%  vortex.local/simulator/timing/model.NewScheduledCore
+         0     0%  8.24%   45870621 52.04%  vortex.local/simulator/timing/model.NewCore
+         0     0%  8.24%   40045523 45.43%  go.yaml.in/yaml/v3.peek_token
+         0     0%  8.24%   40045523 45.43%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0%  8.24%   40045523 45.43%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+         0     0%  8.24%   40042883 45.43%  go.yaml.in/yaml/v3.(*parser).peek
+         0     0%  8.24%   40042246 45.43%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+         0     0%  8.24%   40042246 45.43%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0%  8.24%   39419949 44.72%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+    269589  0.31%  8.54%   39418129 44.72%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+   9542531 10.83% 19.37%   37106422 42.10%  go.yaml.in/yaml/v3.(*parser).scalar
+  36223993 41.10% 60.47%   36223993 41.10%  go.yaml.in/yaml/v3.read
+         0     0% 60.47%   31064856 35.25%  vortex.local/simulator/timing/memsys.NewSystem
+         0     0% 60.47%   31064856 35.25%  vortex.local/simulator/timing/runner.newRunnerMemory
+  15606159 17.71% 78.17%   29779184 33.79%  go.yaml.in/yaml/v3.(*parser).node
+         0     0% 78.17%   29247637 33.18%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+         0     0% 78.17%   26919567 30.54%  vortex.local/simulator/timing.Buffer (inline)
+         0     0% 78.17%   26919567 30.54%  vortex.local/simulator/timing.buffer
+         0     0% 78.17%   20168577 22.88%  vortex.local/simulator/timing/memsys.NewCache
+         0     0% 78.17%   19306442 21.90%  vortex.local/simulator/timing/memsys.FrozenCacheSpec
+         0     0% 78.17%   17634554 20.01%  vortex.local/simulator/timing/model.NewFrontend
+         0     0% 78.17%   16062063 18.22%  vortex.local/simulator/timing/model.NewBuffer
+         0     0% 78.17%   14564145 16.52%  testing.(*B).run1.func1
+  14155861 16.06% 94.23%   14173025 16.08%  go.yaml.in/yaml/v3.resolve
+         0     0% 94.23%   13216247 14.99%  vortex.local/simulator/timing/memsys.FrozenCacheSpec.func1 (inline)
+         0     0% 94.23%   11428328 12.97%  vortex.local/simulator/timing/model.NewSTDFPU
+         0     0% 94.23%    7808383  8.86%  vortex.local/simulator/timing/model.NewSTDPath
+         0     0% 94.23%    7578641  8.60%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_value
+         0     0% 94.23%    7435249  8.44%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0% 94.23%    7435249  8.44%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0% 94.23%    7435249  8.44%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0% 94.23%    7435249  8.44%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0% 94.23%    7411584  8.41%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 94.23%    7411584  8.41%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0% 94.23%    7411584  8.41%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0% 94.23%    7411584  8.41%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+      1191 0.0014% 94.24%    7411584  8.41%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0% 94.24%    7164711  8.13%  vortex.local/simulator/timing.Arbiter (inline)
+         0     0% 94.24%    7164711  8.13%  vortex.local/simulator/timing.arbiter
+         0     0% 94.24%    6889310  7.82%  vortex.local/simulator/timing/model.NewLSU
+         0     0% 94.24%    6888471  7.82%  vortex.local/simulator/timing/memsys.FrozenCacheSpec.func2 (inline)
+         0     0% 94.24%    6617711  7.51%  vortex.local/simulator/timing/effects.(*Concurrent).Begin (inline)
+         0     0% 94.24%    6617711  7.51%  vortex.local/simulator/timing/effects.(*Concurrent).begin
+     16384 0.019% 94.25%    6617711  7.51%  vortex.local/simulator/timing/effects.New
+         0     0% 94.25%    5616261  6.37%  vortex.local/simulator/timing/model.NewALU
+         0     0% 94.25%    4999952  5.67%  vortex.local/simulator/timing/model.NewScoreboard

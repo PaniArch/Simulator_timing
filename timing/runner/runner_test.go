@@ -174,14 +174,17 @@ func TestFlushAfterExecutionFaultAdvancesPastFailedEdge(t *testing.T) {
 		t.Fatal("expected execution fault")
 	}
 	failedCycle := r.Cycle()
+	if err = r.Run(1, nil); err == nil || r.Cycle() != failedCycle {
+		t.Fatal("failed edge was replayed before explicit reset", err)
+	}
 	if err = owner.SetPC(0x11c); err != nil {
 		t.Fatal(err)
 	}
 	if err = r.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	if r.Cycle() <= failedCycle {
-		t.Fatal("failed edge was reused")
+	if r.Cycle() != failedCycle+1 {
+		t.Fatal("reset must skip exactly the memory-committed failed edge")
 	}
 	if err = r.Run(100, nil); err != nil {
 		t.Fatal(err)

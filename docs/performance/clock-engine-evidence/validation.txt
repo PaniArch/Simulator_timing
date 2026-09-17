@@ -1,0 +1,3 @@
+ok  	vortex.local/simulator/timing/model	83.160s
+ok  	vortex.local/simulator/timing/runner	1021.466s
+ok  	vortex.local/simulator/timing/memsys	67.603s

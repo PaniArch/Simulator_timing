@@ -1,0 +1,7 @@
+goos: linux
+goarch: amd64
+pkg: vortex.local/simulator/timing/model
+cpu: Intel(R) Xeon(R) Gold 6348H CPU @ 2.30GHz
+BenchmarkClockBaseline/single/execute-96         	      10	   2322250 ns/op	      1024 edges/op	   49154 B/op	    1024 allocs/op
+PASS
+ok  	vortex.local/simulator/timing/model	0.142s

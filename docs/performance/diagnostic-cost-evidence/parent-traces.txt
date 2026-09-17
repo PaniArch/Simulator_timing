@@ -1,0 +1,30 @@
+=== RUN   TestDiagnosticTraceCompatibility
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=false
+    diagnostic_compatibility_test.go:30: multi/fault=false a5d1f03d1219b62db4d33d606fb7571c5cc3e9edd00c35aaadb1f438ec2f970f
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=true
+    diagnostic_compatibility_test.go:30: multi/fault=true 9df8a12a605ac385cb512987c3b0411a7ef0bde7c683b4a7fca6f4e72b9e2bac
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=false
+    diagnostic_compatibility_test.go:30: kernel/fault=false 94b802f0ca665dd2b00fc3e18b59a219bea6a7ff549d2610b62a2021e92ea1f3
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=true
+    diagnostic_compatibility_test.go:30: kernel/fault=true b36a91dd1e0303bcae49b6e8635a34bab415bf26bbf0acee6a367e11667d2ed2
+--- PASS: TestDiagnosticTraceCompatibility (2.62s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=false (0.86s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=true (0.48s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=false (0.72s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=true (0.57s)
+=== RUN   TestDiagnosticTraceCompatibility
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=false
+    diagnostic_compatibility_test.go:30: multi/fault=false a5d1f03d1219b62db4d33d606fb7571c5cc3e9edd00c35aaadb1f438ec2f970f
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=true
+    diagnostic_compatibility_test.go:30: multi/fault=true 9df8a12a605ac385cb512987c3b0411a7ef0bde7c683b4a7fca6f4e72b9e2bac
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=false
+    diagnostic_compatibility_test.go:30: kernel/fault=false 94b802f0ca665dd2b00fc3e18b59a219bea6a7ff549d2610b62a2021e92ea1f3
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=true
+    diagnostic_compatibility_test.go:30: kernel/fault=true b36a91dd1e0303bcae49b6e8635a34bab415bf26bbf0acee6a367e11667d2ed2
+--- PASS: TestDiagnosticTraceCompatibility (2.62s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=false (0.76s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=true (0.60s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=false (0.75s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=true (0.51s)
+PASS
+ok  	vortex.local/simulator/timing/runner	5.295s

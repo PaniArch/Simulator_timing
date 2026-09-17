@@ -1,0 +1,22 @@
+File: clock-closure.test
+Build ID: f98f4af58e5f412e0a2fd5009321b35ac08bb0e2
+Type: alloc_objects
+Time: 2026-09-17 10:19:35 CST
+Showing nodes accounting for 1192034, 100% of 1192172 total
+Dropped 32 nodes (cum <= 5960)
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    1157855 97.12%  testing.(*B).runN
+         0     0%     0%    1146932 96.21%  testing.(*B).launch
+         0     0%     0%    1146932 96.21%  vortex.local/simulator/timing/model.(*Clock).Run
+   1146932 96.21% 96.21%    1146932 96.21%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+         0     0% 96.21%    1146932 96.21%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+     34179  2.87% 99.07%      34179  2.87%  runtime.mallocgc
+         0     0% 99.07%      32768  2.75%  runtime.(*scavengerState).sleep
+         0     0% 99.07%      32768  2.75%  runtime.(*timer).maybeAdd
+         0     0% 99.07%      32768  2.75%  runtime.(*timer).modify
+         0     0% 99.07%      32768  2.75%  runtime.(*timer).reset (inline)
+         0     0% 99.07%      32768  2.75%  runtime.(*timers).addHeap
+         0     0% 99.07%      32768  2.75%  runtime.bgscavenge
+         0     0% 99.07%      32768  2.75%  runtime.growslice
+     10923  0.92%   100%      10923  0.92%  testing.(*B).ResetTimer
+         0     0%   100%      10923  0.92%  testing.(*B).run1.func1

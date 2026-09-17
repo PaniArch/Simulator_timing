@@ -1,0 +1,185 @@
+diff --git a/timing/model/core.go b/timing/model/core.go
+index fbcc660..1cf4643 100644
+--- a/timing/model/core.go
++++ b/timing/model/core.go
+@@ -117,7 +117,20 @@ func (c *Core) Idle(serviceIdle bool) bool {
+ 	}
+ 	return true
+ }
++
++// Evaluate returns the full old-edge diagnostic report, including detached resources.
+ func (c *Core) Evaluate(in CoreInputs) (CoreTransition, error) {
++	p, err := c.EvaluateExecution(in)
++	if err == nil {
++		p.Report.Resources = c.Resources()
++	}
++	return p, err
++}
++
++// EvaluateExecution computes the same proposal and control report as Evaluate,
++// but leaves Resources nil. Callers needing diagnostics can sample Resources
++// before CommitEdge. No proposal, handshake, effect or accounting work is skipped.
++func (c *Core) EvaluateExecution(in CoreInputs) (CoreTransition, error) {
+ 	wb := c.commit.Evaluate([4]Signal{c.alu.Output(), c.lsu.Output(), c.sfu.Output(), c.fpu.Output()})
+ 	outputs := c.front.Outputs()
+ 	alu, err := c.alu.Evaluate(outputs[0], wb.Ready[0])
+@@ -145,7 +158,7 @@ func (c *Core) Evaluate(in CoreInputs) (CoreTransition, error) {
+ 	executed[0].Valid = alu.Accepted
+ 	executed[3].Valid = fpu.Accepted
+ 	scheduler, scheduled := c.front.SchedulerState()
+-	report := CoreReport{IssueCandidates: c.IssueCandidates(), IssueSelected: front.IssueSelected, Wakeups: append([]SchedulerFeedback(nil), in.Feedback...), Scheduler: scheduler, Scheduled: scheduled, Scoreboard: c.front.ScoreboardState(), Issued: front.Issued, Decoded: front.Decoded, IBufferPop: front.IBufferPop, MemoryResponse: in.MemoryResponse, Executed: executed, CSRRequest: sfu.CSRRequest, Resources: c.Resources(), Credits: c.front.Credits(), Offered: front.Offered, FetchRequest: front.Request, MemoryRequest: lsu.Request, InstructionAccepted: front.Accepted, FetchAccepted: front.RequestAccepted, FetchResponseReady: front.ResponseReady, MemoryAccepted: lsu.RequestAccepted, MemoryResponseReady: lsu.ResponseReady, Dispatched: front.Releases, Read: front.Read, Writeback: wb.Writeback, PendingRelease: wb.PendingRelease, Branch: alu.Branch, Control: sfu.Control, Flags: fpu.Flags, CSRRequestWindow: sfu.CSRRequestWindow}
++	report := CoreReport{IssueCandidates: c.IssueCandidates(), IssueSelected: front.IssueSelected, Wakeups: append([]SchedulerFeedback(nil), in.Feedback...), Scheduler: scheduler, Scheduled: scheduled, Scoreboard: c.front.ScoreboardState(), Issued: front.Issued, Decoded: front.Decoded, IBufferPop: front.IBufferPop, MemoryResponse: in.MemoryResponse, Executed: executed, CSRRequest: sfu.CSRRequest, Credits: c.front.Credits(), Offered: front.Offered, FetchRequest: front.Request, MemoryRequest: lsu.Request, InstructionAccepted: front.Accepted, FetchAccepted: front.RequestAccepted, FetchResponseReady: front.ResponseReady, MemoryAccepted: lsu.RequestAccepted, MemoryResponseReady: lsu.ResponseReady, Dispatched: front.Releases, Read: front.Read, Writeback: wb.Writeback, PendingRelease: wb.PendingRelease, Branch: alu.Branch, Control: sfu.Control, Flags: fpu.Flags, CSRRequestWindow: sfu.CSRRequestWindow}
+ 	activeNext := c.ActiveWarps()
+ 	for _, event := range orderedFeedback(in.Feedback) {
+ 		switch event.Kind {
+diff --git a/timing/runner/kernel.go b/timing/runner/kernel.go
+index dbcda16..25362dd 100644
+--- a/timing/runner/kernel.go
++++ b/timing/runner/kernel.go
+@@ -261,7 +261,7 @@ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
+ 		}
+ 		// The CTA dispatcher remains clocked even while no Warp is active.
+ 		k.runner.stopped = false
+-		if err := k.runner.Run(1, func(record MultiRecord) {
++		if err := k.runner.run(1, observe != nil, func(record MultiRecord) {
+ 			if err := k.advanceRetirement(record); err != nil {
+ 				k.failed = err
+ 			}
+diff --git a/timing/runner/multi.go b/timing/runner/multi.go
+index aaff51d..09cb3a3 100644
+--- a/timing/runner/multi.go
++++ b/timing/runner/multi.go
+@@ -150,6 +150,13 @@ func (r *MultiRunner) Completed() bool    { return r.stopped && !r.failed }
+ func (r *MultiRunner) Retired() [4]uint64 { return r.retired }
+ func (r *MultiRunner) InFlight() int      { return r.effects.InFlight() }
+ func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
++	return r.run(budget, observe != nil, observe)
++}
++
++// run keeps Kernel's post-edge control callback independent of external diagnostics.
++// With diagnostics disabled, the private callback still receives the execution
++// report (including Wakeups), Finished, counters and errors at the same boundary.
++func (r *MultiRunner) run(budget uint64, diagnostics bool, observe func(MultiRecord)) error {
+ 	if r.cacheFlush != nil {
+ 		return fmt.Errorf("finish FlushCaches before Run")
+ 	}
+@@ -160,7 +167,7 @@ func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
+ 		return nil
+ 	}
+ 	err := r.clock.Run(budget, func(cycle uint64) (bool, error) {
+-		record, err := r.step(cycle)
++		record, err := r.step(cycle, diagnostics)
+ 		if observe != nil {
+ 			observe(record)
+ 		}
+@@ -171,12 +178,16 @@ func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
+ 	}
+ 	return err
+ }
+-func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
++func (r *MultiRunner) step(cycle uint64, diagnostics bool) (MultiRecord, error) {
+ 	r.memoryVisible = false
+ 	if err := r.cleanupRedirects(cycle); err != nil {
+ 		return MultiRecord{Cycle: cycle}, err
+ 	}
+-	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Events: append([]StageEvent(nil), r.recoveryEvents...), Cycle: cycle, Cancelled: append([]model.Token(nil), r.cancelled...)}
++	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Cycle: cycle}
++	if diagnostics {
++		record.Events = append([]StageEvent(nil), r.recoveryEvents...)
++		record.Cancelled = append([]model.Token(nil), r.cancelled...)
++	}
+ 	r.cancelled = nil
+ 	r.recoveryEvents = nil
+ 	if r.hierarchy != nil {
+@@ -225,7 +236,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
+ 		inputs.FetchReady = false
+ 		inputs.MemoryReady = false
+ 	}
+-	p, err := r.core.Evaluate(inputs)
++	p, err := r.core.EvaluateExecution(inputs)
+ 	if err == nil && r.hierarchy != nil {
+ 		var edgeErr error
+ 		edge, e := r.hierarchy.step(r, cycle, p.Report)
+@@ -236,14 +247,19 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
+ 		}
+ 		inputs.FetchReady = edge.FetchAccepted
+ 		inputs.MemoryReady = edge.MemoryAccepted
+-		p, err = r.core.Evaluate(inputs)
++		p, err = r.core.EvaluateExecution(inputs)
+ 	}
+ 	if err != nil {
+ 		return record, err
+ 	}
+-	record.Warps = r.observeWarps(p.Report.Scheduler)
+-	if control.Valid && !r.effects.ControlAllowed(control, context) {
+-		record.Warps[control.Token.Warp].StallReason = "control-drain"
++	if diagnostics {
++		// Both evaluations used the same old Core state. Capture it once after
++		// memory acceptance feedback and before any functional or model commit.
++		p.Report.Resources = r.core.Resources()
++		record.Warps = r.observeWarps(p.Report.Scheduler, p.Report.Resources)
++		if control.Valid && !r.effects.ControlAllowed(control, context) {
++			record.Warps[control.Token.Warp].StallReason = "control-drain"
++		}
+ 	}
+ 	if p.Report.Decoded.Valid {
+ 		tok := p.Report.Decoded.Token
+@@ -294,20 +310,22 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
+ 		r.retired[token.Warp]++
+ 	}
+ 	record.Retired = r.retired
+-	record.ResourcesAfter = r.core.Resources()
+-	record.Events = append(record.Events, stageEvents(p.Report.Resources, record.ResourcesAfter)...)
+-	record.Events = append(record.Events, boundaryEvents(p.Report)...)
+-	for _, f := range p.Report.Wakeups {
+-		record.Events = append(record.Events, StageEvent{Resource: "scheduler", Kind: "wakeup", Token: f.Token, Reason: string(f.Kind)})
+-	}
+-	for _, entry := range r.fetch {
+-		record.Services = append(record.Services, ServiceState{"fetch-service", entry.token, entry.due})
+-	}
+-	for _, entry := range r.loads {
+-		record.Services = append(record.Services, ServiceState{"memory-service", entry.token, entry.due})
+-	}
+-	if r.hierarchy != nil {
+-		record.Services = append(record.Services, r.hierarchy.services()...)
++	if diagnostics {
++		record.ResourcesAfter = r.core.Resources()
++		record.Events = append(record.Events, stageEvents(p.Report.Resources, record.ResourcesAfter)...)
++		record.Events = append(record.Events, boundaryEvents(p.Report)...)
++		for _, f := range p.Report.Wakeups {
++			record.Events = append(record.Events, StageEvent{Resource: "scheduler", Kind: "wakeup", Token: f.Token, Reason: string(f.Kind)})
++		}
++		for _, entry := range r.fetch {
++			record.Services = append(record.Services, ServiceState{"fetch-service", entry.token, entry.due})
++		}
++		for _, entry := range r.loads {
++			record.Services = append(record.Services, ServiceState{"memory-service", entry.token, entry.due})
++		}
++		if r.hierarchy != nil {
++			record.Services = append(record.Services, r.hierarchy.services()...)
++		}
+ 	}
+ 	allStopped := true
+ 	for _, owner := range r.owners {
+diff --git a/timing/runner/observe_multi.go b/timing/runner/observe_multi.go
+index 600071e..59dd5f0 100644
+--- a/timing/runner/observe_multi.go
++++ b/timing/runner/observe_multi.go
+@@ -13,7 +13,7 @@ type WarpObservation struct {
+ 	StallReason               string
+ }
+ 
+-func (r *MultiRunner) observeWarps(s model.SchedulerState) (result [4]WarpObservation) {
++func (r *MultiRunner) observeWarps(s model.SchedulerState, resources []model.ResourceState) (result [4]WarpObservation) {
+ 	type identity struct {
+ 		warp      uint8
+ 		epoch, id uint64
+@@ -40,7 +40,7 @@ func (r *MultiRunner) observeWarps(s model.SchedulerState) (result [4]WarpObserv
+ 			result[w].StallReason = "ibuffer-full"
+ 		}
+ 	}
+-	for _, resource := range r.core.Resources() {
++	for _, resource := range resources {
+ 		for _, entry := range resource.Residents {
+ 			add(entry.Token)
+ 		}

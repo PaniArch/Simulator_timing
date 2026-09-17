@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: vortex.local/simulator/timing/model
+cpu: Intel(R) Xeon(R) Gold 6348H CPU @ 2.30GHz
+BenchmarkClockBaseline/single/init-96         	    1000	       111.8 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/single/init-96         	    1000	        99.56 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/single/init-96         	    1000	        98.35 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/single/execute-96      	    1000	   2185725 ns/op	      1024 edges/op	  696337 B/op	    9216 allocs/op
+BenchmarkClockBaseline/single/execute-96      	    1000	   2155241 ns/op	      1024 edges/op	  696331 B/op	    9216 allocs/op
+BenchmarkClockBaseline/single/execute-96      	    1000	   2202104 ns/op	      1024 edges/op	  696324 B/op	    9216 allocs/op
+BenchmarkClockBaseline/fixed/init-96          	    1000	       118.0 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/fixed/init-96          	    1000	       116.2 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/fixed/init-96          	    1000	       120.9 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/fixed/execute-96       	    1000	    391953 ns/op	      1024 edges/op	   69376 B/op	    1280 allocs/op
+BenchmarkClockBaseline/fixed/execute-96       	    1000	    398908 ns/op	      1024 edges/op	   69376 B/op	    1280 allocs/op
+BenchmarkClockBaseline/fixed/execute-96       	    1000	    395729 ns/op	      1024 edges/op	   69376 B/op	    1280 allocs/op
+BenchmarkClockBaseline/irregular/init-96      	    1000	       110.4 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/irregular/init-96      	    1000	       119.6 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/irregular/init-96      	    1000	        97.99 ns/op	      16 B/op	       1 allocs/op
+BenchmarkClockBaseline/irregular/execute-96   	    1000	    529605 ns/op	      1024 edges/op	  114880 B/op	    1856 allocs/op
+BenchmarkClockBaseline/irregular/execute-96   	    1000	    530317 ns/op	      1024 edges/op	  114880 B/op	    1856 allocs/op
+BenchmarkClockBaseline/irregular/execute-96   	    1000	    529118 ns/op	      1024 edges/op	  114880 B/op	    1856 allocs/op
+PASS
+ok  	vortex.local/simulator/timing/model	9.448s

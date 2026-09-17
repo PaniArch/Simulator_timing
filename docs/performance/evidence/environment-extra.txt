@@ -1,0 +1,10 @@
+gcc (Ubuntu 9.4.0-1ubuntu1~20.04.1) 9.4.0
+Copyright (C) 2019 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+b992b38dc378fb439093dc28aca788d56311de26bb7289274846f3d726e11415  /opt/simulator-environment/softfloat/lib/softfloat.a
+
+Cpus_allowed_list:	0-95
+Mems_allowed_list:	0-3
+GOMAXPROCS=unset GOGC=unset GOMEMLIMIT=unset

@@ -1,0 +1,68 @@
+File: kernel-true.test
+Build ID: 73478c2fdd0eb85fac89cc51d0be72f1f0a3b64a
+Type: alloc_space
+Time: 2026-09-17 09:32:08 CST
+Showing nodes accounting for 4153.16MB, 90.20% of 4604.29MB total
+Dropped 159 nodes (cum <= 23.02MB)
+Showing top 60 nodes out of 93
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%  4588.78MB 99.66%  testing.(*B).runN
+         0     0%     0%  4588.78MB 99.66%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%     0%  4445.92MB 96.56%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0%     0%  4445.92MB 96.56%  go.yaml.in/yaml/v3.unmarshal
+         0     0%     0%  4424.91MB 96.10%  go.yaml.in/yaml/v3.(*parser).parse
+         0     0%     0%  4421.40MB 96.03%  go.yaml.in/yaml/v3.(*parser).document
+         0     0%     0%  4421.40MB 96.03%  go.yaml.in/yaml/v3.(*parser).mapping
+  272.07MB  5.91%  5.91%  4421.40MB 96.03%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%  5.91%  4336.39MB 94.18%  vortex.local/simulator/timing/runner.NewKernel
+         0     0%  5.91%  4336.39MB 94.18%  vortex.local/simulator/timing/runner.newBaselineFixture
+         0     0%  5.91%  4336.39MB 94.18%  vortex.local/simulator/timing/runner.newKernel
+         0     0%  5.91%  4226.86MB 91.80%  vortex.local/simulator/timing/runner.NewMulti
+         0     0%  5.91%  4021.33MB 87.34%  go.yaml.in/yaml/v3.(*parser).sequence
+         0     0%  5.91%  3806.05MB 82.66%  testing.(*B).launch
+         0     0%  5.91%  2599.56MB 56.46%  vortex.local/simulator/timing.Number (inline)
+         0     0%  5.91%  2599.56MB 56.46%  vortex.local/simulator/timing.number
+         0     0%  5.91%  2554.50MB 55.48%  vortex.local/simulator/timing/model.NewScheduledCore
+ 2287.35MB 49.68% 55.59%  2501.09MB 54.32%  go.yaml.in/yaml/v3.(*parser).node
+         0     0% 55.59%  2493.99MB 54.17%  vortex.local/simulator/timing/model.NewCore
+  281.56MB  6.12% 61.70%  2463.11MB 53.50%  go.yaml.in/yaml/v3.(*parser).scalar
+         0     0% 61.70%  1672.37MB 36.32%  vortex.local/simulator/timing/memsys.NewSystem
+         0     0% 61.70%  1672.37MB 36.32%  vortex.local/simulator/timing/runner.newRunnerMemory
+         0     0% 61.70%  1470.28MB 31.93%  vortex.local/simulator/timing.Buffer (inline)
+         0     0% 61.70%  1470.28MB 31.93%  vortex.local/simulator/timing.buffer
+         0     0% 61.70%  1370.19MB 29.76%  go.yaml.in/yaml/v3.peek_token
+         0     0% 61.70%  1370.19MB 29.76%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0% 61.70%  1370.19MB 29.76%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+         0     0% 61.70%  1369.69MB 29.75%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+         0     0% 61.70%  1369.69MB 29.75%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0% 61.70%  1366.68MB 29.68%  go.yaml.in/yaml/v3.(*parser).peek
+         0     0% 61.70%  1342.18MB 29.15%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+   43.02MB  0.93% 62.64%  1341.68MB 29.14%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+ 1268.16MB 27.54% 90.18%  1268.16MB 27.54%  go.yaml.in/yaml/v3.read
+         0     0% 90.18%  1101.75MB 23.93%  vortex.local/simulator/timing/memsys.NewCache
+         0     0% 90.18%  1057.74MB 22.97%  vortex.local/simulator/timing/memsys.FrozenCacheSpec
+         0     0% 90.18%  1043.67MB 22.67%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+         0     0% 90.18%   953.69MB 20.71%  vortex.local/simulator/timing/model.NewFrontend
+         0     0% 90.18%   862.16MB 18.73%  vortex.local/simulator/timing/model.NewBuffer
+         0     0% 90.18%   782.72MB 17.00%  testing.(*B).run1.func1
+         0     0% 90.18%   708.17MB 15.38%  vortex.local/simulator/timing/memsys.FrozenCacheSpec.func1 (inline)
+         0     0% 90.18%   598.12MB 12.99%  vortex.local/simulator/timing/model.NewSTDFPU
+         0     0% 90.18%   422.08MB  9.17%  vortex.local/simulator/timing/model.NewLSU
+         0     0% 90.18%   406.57MB  8.83%  vortex.local/simulator/timing/model.NewSTDPath
+         0     0% 90.18%   387.09MB  8.41%  vortex.local/simulator/timing/memsys.FrozenCacheSpec.func2 (inline)
+         0     0% 90.18%   376.08MB  8.17%  vortex.local/simulator/timing.Arbiter (inline)
+         0     0% 90.18%   376.08MB  8.17%  vortex.local/simulator/timing.arbiter
+         0     0% 90.18%   301.56MB  6.55%  vortex.local/simulator/timing/model.NewALU
+         0     0% 90.18%   281.56MB  6.12%  vortex.local/simulator/timing/model.NewMerge
+         0     0% 90.18%   263.55MB  5.72%  vortex.local/simulator/timing/model.NewScoreboard
+         0     0% 90.18%   252.39MB  5.48%  vortex.local/simulator/timing/runner.(*Kernel).Run
+         0     0% 90.18%   252.39MB  5.48%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0% 90.18%   252.39MB  5.48%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0% 90.18%   250.88MB  5.45%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0% 90.18%   250.88MB  5.45%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0% 90.18%   250.38MB  5.44%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 90.18%   250.38MB  5.44%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0% 90.18%   250.38MB  5.44%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0% 90.18%   250.38MB  5.44%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+       1MB 0.022% 90.20%   250.38MB  5.44%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0% 90.20%   246.55MB  5.35%  vortex.local/simulator/timing/model.NewSequencer

@@ -1,0 +1,20 @@
+File: clock.test
+Build ID: d43518f5c417fe74df174d5b02f6028e55e8fee5
+Type: alloc_objects
+Time: 2026-09-17 09:29:07 CST
+Active filters:
+   focus=model\.\(\*Clock\)\.Run
+Showing nodes accounting for 9556181, 100% of 9556181 total
+Dropped 1 node (cum <= 47780)
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    9556181   100%  testing.(*B).runN
+    950315  9.94%  9.94%    9556181   100%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%  9.94%    9556181   100%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+         0     0%  9.94%    9554361   100%  testing.(*B).launch
+   2064524 21.60% 31.55%    5144841 53.84%  github.com/sarchlab/akita/v5/timing.NewSerialEngine (inline)
+   1365395 14.29% 45.84%    2457686 25.72%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+   2048062 21.43% 67.27%    2048062 21.43%  github.com/sarchlab/akita/v5/timing.newUnsafeEventQueue (inline)
+         0     0% 67.27%    1092291 11.43%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+   1092291 11.43% 78.70%    1092291 11.43%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+   1032255 10.80% 89.50%    1032255 10.80%  sync.NewCond (inline)
+   1003339 10.50%   100%    1003339 10.50%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler (inline)

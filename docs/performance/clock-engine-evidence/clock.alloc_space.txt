@@ -1,0 +1,53 @@
+File: clock-closure.test
+Build ID: f98f4af58e5f412e0a2fd5009321b35ac08bb0e2
+Type: alloc_space
+Time: 2026-09-17 10:19:35 CST
+Showing nodes accounting for 61.11MB, 100% of 61.11MB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%       53MB 86.73%  testing.(*B).runN
+         0     0%     0%    52.50MB 85.91%  testing.(*B).launch
+         0     0%     0%    52.50MB 85.91%  vortex.local/simulator/timing/model.(*Clock).Run
+   52.50MB 85.91% 85.91%    52.50MB 85.91%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+         0     0% 85.91%    52.50MB 85.91%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+    5.04MB  8.24% 94.16%     5.04MB  8.24%  runtime.mallocgc
+         0     0% 94.16%     4.54MB  7.42%  runtime.newobject
+         0     0% 94.16%     2.50MB  4.10%  runtime.allocm
+         0     0% 94.16%     2.50MB  4.10%  runtime.newm
+         0     0% 94.16%     2.50MB  4.10%  runtime.schedule
+         0     0% 94.16%     2.50MB  4.10%  runtime.startm
+         0     0% 94.16%     2.50MB  4.10%  runtime.wakep
+         0     0% 94.16%     2.03MB  3.32%  runtime.procresize
+         0     0% 94.16%     2.03MB  3.32%  runtime.rt0_go
+         0     0% 94.16%     2.03MB  3.32%  runtime.schedinit
+         0     0% 94.16%        2MB  3.28%  runtime.resetspinning
+         0     0% 94.16%     1.92MB  3.13%  runtime/pprof.(*profileBuilder).build
+         0     0% 94.16%     1.92MB  3.13%  runtime/pprof.profileWriter
+         0     0% 94.16%     1.50MB  2.46%  runtime.mcall
+         0     0% 94.16%     1.50MB  2.46%  runtime.park_m
+    0.88MB  1.44% 95.60%     1.41MB  2.31%  compress/flate.NewWriter (inline)
+         0     0% 95.60%     1.41MB  2.31%  compress/gzip.(*Writer).Write
+         0     0% 95.60%     1.16MB  1.89%  main.main
+         0     0% 95.60%     1.16MB  1.89%  runtime.main
+    1.16MB  1.89% 97.49%     1.16MB  1.89%  runtime/pprof.StartCPUProfile
+         0     0% 97.49%     1.16MB  1.89%  testing.(*M).Run
+         0     0% 97.49%     1.16MB  1.89%  testing.(*M).before
+         0     0% 97.49%     1.16MB  1.89%  testing/internal/testdeps.TestDeps.StartCPUProfile
+         0     0% 97.49%        1MB  1.64%  runtime.mstart
+         0     0% 97.49%        1MB  1.64%  runtime.mstart0
+         0     0% 97.49%        1MB  1.64%  runtime.mstart1
+         0     0% 97.49%     0.53MB  0.87%  compress/flate.(*compressor).init
+    0.53MB  0.87% 98.36%     0.53MB  0.87%  compress/flate.newDeflateFast (inline)
+         0     0% 98.36%     0.50MB  0.82%  runtime/pprof.(*profileBuilder).appendLocsForStack
+         0     0% 98.36%     0.50MB  0.82%  runtime/pprof.(*profileBuilder).emitLocation
+         0     0% 98.36%     0.50MB  0.82%  runtime/pprof.(*protobuf).endMessage
+         0     0% 98.36%     0.50MB  0.82%  runtime/pprof.(*protobuf).length (inline)
+    0.50MB  0.82% 99.18%     0.50MB  0.82%  runtime/pprof.(*protobuf).varint (inline)
+    0.50MB  0.82%   100%     0.50MB  0.82%  testing.(*B).ResetTimer
+         0     0%   100%     0.50MB  0.82%  testing.(*B).run1.func1
+         0     0%   100%     0.50MB  0.82%  runtime.(*scavengerState).sleep
+         0     0%   100%     0.50MB  0.82%  runtime.(*timer).maybeAdd
+         0     0%   100%     0.50MB  0.82%  runtime.(*timer).modify
+         0     0%   100%     0.50MB  0.82%  runtime.(*timer).reset (inline)
+         0     0%   100%     0.50MB  0.82%  runtime.(*timers).addHeap
+         0     0%   100%     0.50MB  0.82%  runtime.bgscavenge
+         0     0%   100%     0.50MB  0.82%  runtime.growslice

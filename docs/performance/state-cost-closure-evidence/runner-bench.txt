@@ -1,0 +1,18 @@
+goos: linux
+goarch: amd64
+pkg: vortex.local/simulator/timing/runner
+cpu: Intel(R) Xeon(R) Gold 6348H CPU @ 2.30GHz
+BenchmarkRunnerBaseline/multi/single/diag=false/execute-96         	       1	  37338332 ns/op	       155.0 edges/op	13877088 B/op	   74286 allocs/op
+BenchmarkRunnerBaseline/multi/single/diag=false/execute-96         	       1	  39940618 ns/op	       155.0 edges/op	13863144 B/op	   74280 allocs/op
+BenchmarkRunnerBaseline/multi/single/diag=false/execute-96         	       1	  42037856 ns/op	       155.0 edges/op	13876928 B/op	   74283 allocs/op
+BenchmarkRunnerBaseline/multi/single/diag=true/execute-96          	       1	  64915962 ns/op	       155.0 edges/op	23038664 B/op	   93119 allocs/op
+BenchmarkRunnerBaseline/multi/single/diag=true/execute-96          	       1	  57017179 ns/op	       155.0 edges/op	23024928 B/op	   93116 allocs/op
+BenchmarkRunnerBaseline/multi/single/diag=true/execute-96          	       1	  61217329 ns/op	       155.0 edges/op	23024752 B/op	   93114 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/execute-96        	       1	  36084415 ns/op	       160.0 edges/op	11404768 B/op	   73966 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/execute-96        	       1	  24041048 ns/op	       160.0 edges/op	11404800 B/op	   73966 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=false/execute-96        	       1	  29399221 ns/op	       160.0 edges/op	11404800 B/op	   73966 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=true/execute-96         	       1	  54268920 ns/op	       160.0 edges/op	19163792 B/op	   90916 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=true/execute-96         	       1	  56071841 ns/op	       160.0 edges/op	19177400 B/op	   90918 allocs/op
+BenchmarkRunnerBaseline/kernel/single/diag=true/execute-96         	       1	  49228481 ns/op	       160.0 edges/op	19163304 B/op	   90911 allocs/op
+PASS
+ok  	vortex.local/simulator/timing/runner	6.415s

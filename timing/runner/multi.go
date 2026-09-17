@@ -150,6 +150,13 @@ func (r *MultiRunner) Completed() bool    { return r.stopped && !r.failed }
 func (r *MultiRunner) Retired() [4]uint64 { return r.retired }
 func (r *MultiRunner) InFlight() int      { return r.effects.InFlight() }
 func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
+	return r.run(budget, observe != nil, observe)
+}
+
+// run keeps Kernel's post-edge control callback independent of external diagnostics.
+// With diagnostics disabled, the private callback still receives the execution
+// report (including Wakeups), Finished, counters and errors at the same boundary.
+func (r *MultiRunner) run(budget uint64, diagnostics bool, observe func(MultiRecord)) error {
 	if r.cacheFlush != nil {
 		return fmt.Errorf("finish FlushCaches before Run")
 	}
@@ -160,7 +167,7 @@ func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
 		return nil
 	}
 	err := r.clock.Run(budget, func(cycle uint64) (bool, error) {
-		record, err := r.step(cycle)
+		record, err := r.step(cycle, diagnostics)
 		if observe != nil {
 			observe(record)
 		}
@@ -171,12 +178,16 @@ func (r *MultiRunner) Run(budget uint64, observe func(MultiRecord)) error {
 	}
 	return err
 }
-func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
+func (r *MultiRunner) step(cycle uint64, diagnostics bool) (MultiRecord, error) {
 	r.memoryVisible = false
 	if err := r.cleanupRedirects(cycle); err != nil {
 		return MultiRecord{Cycle: cycle}, err
 	}
-	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Events: append([]StageEvent(nil), r.recoveryEvents...), Cycle: cycle, Cancelled: append([]model.Token(nil), r.cancelled...)}
+	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Cycle: cycle}
+	if diagnostics {
+		record.Events = append([]StageEvent(nil), r.recoveryEvents...)
+		record.Cancelled = append([]model.Token(nil), r.cancelled...)
+	}
 	r.cancelled = nil
 	r.recoveryEvents = nil
 	if r.hierarchy != nil {
@@ -225,7 +236,7 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		inputs.FetchReady = false
 		inputs.MemoryReady = false
 	}
-	p, err := r.core.Evaluate(inputs)
+	p, err := r.core.EvaluateExecution(inputs)
 	if err == nil && r.hierarchy != nil {
 		var edgeErr error
 		edge, e := r.hierarchy.step(r, cycle, p.Report)
@@ -236,14 +247,19 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		}
 		inputs.FetchReady = edge.FetchAccepted
 		inputs.MemoryReady = edge.MemoryAccepted
-		p, err = r.core.Evaluate(inputs)
+		p, err = r.core.EvaluateExecution(inputs)
 	}
 	if err != nil {
 		return record, err
 	}
-	record.Warps = r.observeWarps(p.Report.Scheduler)
-	if control.Valid && !r.effects.ControlAllowed(control, context) {
-		record.Warps[control.Token.Warp].StallReason = "control-drain"
+	if diagnostics {
+		// Both evaluations used the same old Core state. Capture it once after
+		// memory acceptance feedback and before any functional or model commit.
+		p.Report.Resources = r.core.Resources()
+		record.Warps = r.observeWarps(p.Report.Scheduler, p.Report.Resources)
+		if control.Valid && !r.effects.ControlAllowed(control, context) {
+			record.Warps[control.Token.Warp].StallReason = "control-drain"
+		}
 	}
 	if p.Report.Decoded.Valid {
 		tok := p.Report.Decoded.Token
@@ -294,20 +310,22 @@ func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
 		r.retired[token.Warp]++
 	}
 	record.Retired = r.retired
-	record.ResourcesAfter = r.core.Resources()
-	record.Events = append(record.Events, stageEvents(p.Report.Resources, record.ResourcesAfter)...)
-	record.Events = append(record.Events, boundaryEvents(p.Report)...)
-	for _, f := range p.Report.Wakeups {
-		record.Events = append(record.Events, StageEvent{Resource: "scheduler", Kind: "wakeup", Token: f.Token, Reason: string(f.Kind)})
-	}
-	for _, entry := range r.fetch {
-		record.Services = append(record.Services, ServiceState{"fetch-service", entry.token, entry.due})
-	}
-	for _, entry := range r.loads {
-		record.Services = append(record.Services, ServiceState{"memory-service", entry.token, entry.due})
-	}
-	if r.hierarchy != nil {
-		record.Services = append(record.Services, r.hierarchy.services()...)
+	if diagnostics {
+		record.ResourcesAfter = r.core.Resources()
+		record.Events = append(record.Events, stageEvents(p.Report.Resources, record.ResourcesAfter)...)
+		record.Events = append(record.Events, boundaryEvents(p.Report)...)
+		for _, f := range p.Report.Wakeups {
+			record.Events = append(record.Events, StageEvent{Resource: "scheduler", Kind: "wakeup", Token: f.Token, Reason: string(f.Kind)})
+		}
+		for _, entry := range r.fetch {
+			record.Services = append(record.Services, ServiceState{"fetch-service", entry.token, entry.due})
+		}
+		for _, entry := range r.loads {
+			record.Services = append(record.Services, ServiceState{"memory-service", entry.token, entry.due})
+		}
+		if r.hierarchy != nil {
+			record.Services = append(record.Services, r.hierarchy.services()...)
+		}
 	}
 	allStopped := true
 	for _, owner := range r.owners {

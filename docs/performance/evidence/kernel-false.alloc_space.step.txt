@@ -1,0 +1,153 @@
+Total: 248.88MB
+ROUTINE ======================== vortex.local/simulator/timing/runner.(*MultiRunner).step in /hpc2hdd/home/zekaiwang/vortex-work/harness-user-runs/worktrees/20260917T010639544Z-e1af6d378aea/delivery/timing/runner/multi.go
+  512.14kB   245.38MB (flat, cum) 98.59% of Total
+         .          .    174:func (r *MultiRunner) step(cycle uint64) (MultiRecord, error) {
+         .          .    175:	r.memoryVisible = false
+         .        1MB    176:	if err := r.cleanupRedirects(cycle); err != nil {
+         .          .    177:		return MultiRecord{Cycle: cycle}, err
+         .          .    178:	}
+         .          .    179:	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Events: append([]StageEvent(nil), r.recoveryEvents...), Cycle: cycle, Cancelled: append([]model.Token(nil), r.cancelled...)}
+         .          .    180:	r.cancelled = nil
+         .          .    181:	r.recoveryEvents = nil
+         .          .    182:	if r.hierarchy != nil {
+         .          .    183:		if err := r.hierarchy.receive(r, cycle); err != nil {
+         .          .    184:			return record, err
+         .          .    185:		}
+         .          .    186:	}
+         .          .    187:	var contexts [4]state.ReadContext
+         .          .    188:	if r.options.Contexts != nil {
+         .          .    189:		contexts = r.options.Contexts()
+         .          .    190:	} else if r.options.Context != nil {
+         .          .    191:		c := r.options.Context()
+         .          .    192:		for w := range contexts {
+         .          .    193:			contexts[w] = c
+         .          .    194:		}
+         .          .    195:	}
+         .          .    196:	// CSR snapshots observe model state before this edge, independently of
+         .          .    197:	// software receipt completion and caller-provided CTA/barrier context.
+         .          .    198:	for w := range contexts {
+         .          .    199:		contexts[w].Counters = isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}
+         .          .    200:		contexts[w].ActiveWarps = r.core.ActiveWarps()
+         .          .    201:	}
+         .          .    202:	ready := true
+         .          .    203:	if r.options.Ready != nil {
+         .          .    204:		ready = r.options.Ready(cycle)
+         .          .    205:	}
+         .          .    206:	control := r.core.ControlInput()
+         .          .    207:	context := state.ReadContext{}
+         .          .    208:	if control.Valid {
+         .          .    209:		context = contexts[control.Token.Warp]
+         .          .    210:		// WSYNC samples the registered pending count (including itself).
+         .          .    211:		// BAR samples the shared LSU scheduler request queue, not service tails.
+         .          .    212:		context.PendingPriorWork = r.core.HardwarePending()[control.Token.Warp] > 1
+         .          .    213:		context.PendingLSU = !r.core.LSUSchedulerDrained()
+         .          .    214:
+         .          .    215:		contexts[control.Token.Warp] = context
+         .          .    216:	}
+         .          .    217:	branch, simt := r.core.FeedbackSignals()
+         .          .    218:	feedback, err := r.effects.Feedback(cycle, branch, simt, r.core.SingleActive())
+         .          .    219:	if err != nil {
+         .          .    220:		return record, err
+         .          .    221:	}
+         .          .    222:	feedback = append(feedback, r.externalFeedback()...)
+         .          .    223:	inputs := model.CoreInputs{DispatchBusy: r.dispatchBusy, Feedback: feedback, FetchResponse: r.fetchResponse, MemoryResponse: r.response, FetchReady: ready, MemoryReady: ready, ControlAllowed: r.effects.ControlAllowed(control, context)}
+         .          .    224:	if r.hierarchy != nil {
+         .          .    225:		inputs.FetchReady = false
+         .          .    226:		inputs.MemoryReady = false
+         .          .    227:	}
+         .    38.58MB    228:	p, err := r.core.Evaluate(inputs)
+         .          .    229:	if err == nil && r.hierarchy != nil {
+         .          .    230:		var edgeErr error
+         .    12.01MB    231:		edge, e := r.hierarchy.step(r, cycle, p.Report)
+         .          .    232:		record.Memory = edge
+         .          .    233:		edgeErr = e
+         .          .    234:		if edgeErr != nil {
+         .          .    235:			return record, edgeErr
+         .          .    236:		}
+         .          .    237:		inputs.FetchReady = edge.FetchAccepted
+         .          .    238:		inputs.MemoryReady = edge.MemoryAccepted
+         .    39.60MB    239:		p, err = r.core.Evaluate(inputs)
+         .          .    240:	}
+         .          .    241:	if err != nil {
+         .          .    242:		return record, err
+         .          .    243:	}
+         .    18.06MB    244:	record.Warps = r.observeWarps(p.Report.Scheduler)
+         .          .    245:	if control.Valid && !r.effects.ControlAllowed(control, context) {
+         .          .    246:		record.Warps[control.Token.Warp].StallReason = "control-drain"
+         .          .    247:	}
+         .          .    248:	if p.Report.Decoded.Valid {
+         .          .    249:		tok := p.Report.Decoded.Token
+         .          .    250:		decoded, e := isa.Decode(tok.Word)
+         .          .    251:		if e != nil {
+         .          .    252:			return record, e
+         .          .    253:		}
+         .          .    254:		if decoded.Control == isa.ControlWarpSpawn && r.options.Spawn != nil {
+         .          .    255:			binding, e := r.options.Spawn(tok)
+         .          .    256:			if e != nil {
+         .          .    257:				return record, e
+         .          .    258:			}
+         .          .    259:			err = r.effects.BeginSpawn(tok, binding)
+         .          .    260:		} else {
+         .   105.02MB    261:			err = r.effects.Begin(tok)
+         .          .    262:		}
+         .          .    263:		if err != nil {
+         .          .    264:			return record, err
+         .          .    265:		}
+         .          .    266:	}
+         .     6.51MB    267:	if err = model.CommitEdge(p.Transition); err != nil {
+         .          .    268:		return record, err
+         .          .    269:	}
+         .     4.51MB    270:	if err = r.effects.Observe(cycle, p.Report, contexts); err != nil {
+         .          .    271:		return record, err
+         .          .    272:	}
+         .          .    273:	for _, f := range p.Report.Wakeups {
+         .          .    274:		r.parked[f.Token.Warp] = false
+         .          .    275:		delete(r.blocked, f.Token.Warp)
+         .          .    276:	}
+         .          .    277:	r.releases = nil
+         .          .    278:	if err = r.trackExternalWait(p.Report); err != nil {
+         .          .    279:		return record, err
+         .          .    280:	}
+         .          .    281:	record.Report = p.Report
+         .          .    282:	record.InFlight = r.effects.InFlight()
+         .          .    283:	if r.fetchResponse.Valid && p.Report.FetchResponseReady {
+         .          .    284:		r.fetchResponse = model.Response{}
+         .          .    285:	}
+         .          .    286:	if r.response.Valid && p.Report.MemoryResponseReady {
+         .          .    287:		r.response = model.Response{}
+         .          .    288:	}
+         .   512.04kB    289:	record.Finished, err = r.effects.Reap()
+         .          .    290:	if err != nil {
+         .          .    291:		return record, err
+         .          .    292:	}
+         .          .    293:	for _, token := range record.Finished {
+         .          .    294:		r.retired[token.Warp]++
+         .          .    295:	}
+         .          .    296:	record.Retired = r.retired
+         .    18.09MB    297:	record.ResourcesAfter = r.core.Resources()
+  512.14kB        1MB    298:	record.Events = append(record.Events, stageEvents(p.Report.Resources, record.ResourcesAfter)...)
+         .          .    299:	record.Events = append(record.Events, boundaryEvents(p.Report)...)
+         .          .    300:	for _, f := range p.Report.Wakeups {
+         .          .    301:		record.Events = append(record.Events, StageEvent{Resource: "scheduler", Kind: "wakeup", Token: f.Token, Reason: string(f.Kind)})
+         .          .    302:	}
+         .          .    303:	for _, entry := range r.fetch {
+         .          .    304:		record.Services = append(record.Services, ServiceState{"fetch-service", entry.token, entry.due})
+         .          .    305:	}
+         .          .    306:	for _, entry := range r.loads {
+         .          .    307:		record.Services = append(record.Services, ServiceState{"memory-service", entry.token, entry.due})
+         .          .    308:	}
+         .          .    309:	if r.hierarchy != nil {
+         .          .    310:		record.Services = append(record.Services, r.hierarchy.services()...)
+         .          .    311:	}
+         .          .    312:	allStopped := true
+         .          .    313:	for _, owner := range r.owners {
+         .          .    314:		s, err := owner.Snapshot()
+         .          .    315:		if err != nil {
+         .          .    316:			return record, err
+         .          .    317:		}
+         .          .    318:		allStopped = allStopped && (s.ActiveMask() == 0 || s.Lifecycle() != state.WarpRunning)
+         .          .    319:	}
+         .          .    320:	memoryDrained := r.hierarchy == nil || r.hierarchy.drained()
+         .   516.01kB    321:	r.stopped = memoryDrained && allStopped && r.effects.InFlight() == 0 && r.core.Idle(len(r.fetch) == 0 && len(r.loads) == 0 && !r.fetchResponse.Valid && !r.response.Valid)
+         .          .    322:	return record, nil
+         .          .    323:}

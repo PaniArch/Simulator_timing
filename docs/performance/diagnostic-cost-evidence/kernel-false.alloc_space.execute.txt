@@ -1,0 +1,69 @@
+File: runner.test
+Build ID: f122b4ab434ae849f7753576fe9a2afdab9765ba
+Type: alloc_space
+Time: 2026-09-17 11:14:47 CST
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 61.07MB, 98.39% of 62.07MB total
+Showing top 60 nodes out of 66
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%    62.07MB   100%  testing.(*B).runN
+    0.50MB  0.81%  0.81%    62.07MB   100%  vortex.local/simulator/timing/runner.(*Kernel).Run
+         0     0%  0.81%    62.07MB   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0%  0.81%    62.07MB   100%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0%  0.81%    62.07MB   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%  0.81%    60.06MB 96.77%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0%  0.81%    60.06MB 96.77%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0%  0.81%    60.06MB 96.77%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%  0.81%    60.06MB 96.77%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0%  0.81%    60.06MB 96.77%  vortex.local/simulator/timing/runner.(*MultiRunner).run
+         0     0%  0.81%    60.06MB 96.77%  vortex.local/simulator/timing/runner.(*MultiRunner).run.func1
+         0     0%  0.81%    60.06MB 96.77%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0%  0.81%    52.56MB 84.67%  testing.(*B).launch
+         0     0%  0.81%    39.03MB 62.88%  vortex.local/simulator/timing/model.(*Core).EvaluateExecution
+   14.52MB 23.39% 24.20%    14.52MB 23.39%  vortex.local/simulator/timing/model.combine (inline)
+         0     0% 24.20%    13.01MB 20.95%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+       4MB  6.45% 30.64%    11.51MB 18.54%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+         0     0% 30.64%     9.51MB 15.33%  testing.(*B).run1.func1
+    0.50MB  0.81% 31.45%     9.01MB 14.52%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0% 31.45%     9.01MB 14.52%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+       1MB  1.61% 33.06%     7.51MB 12.09%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+         0     0% 33.06%     7.01MB 11.30%  vortex.local/simulator/timing/memsys.(*Cache).Step
+         0     0% 33.06%     7.01MB 11.29%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+    6.51MB 10.48% 43.54%     6.51MB 10.48%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+    0.50MB  0.81% 44.35%     6.01MB  9.69%  vortex.local/simulator/timing/memsys.(*cacheBank).step
+    2.51MB  4.04% 48.38%     6.01MB  9.68%  vortex.local/simulator/timing/effects.(*Concurrent).Observe
+    5.51MB  8.88% 57.27%     5.51MB  8.88%  vortex.local/simulator/timing/memsys.(*cacheMSHR).step
+    5.01MB  8.07% 65.33%     5.01MB  8.07%  vortex.local/simulator/timing/model.CommitEdge
+    4.50MB  7.25% 72.58%        5MB  8.06%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+       2MB  3.22% 75.81%     3.50MB  5.64%  vortex.local/simulator/timing/model.(*Scoreboard).evaluate
+         0     0% 75.81%     3.50MB  5.64%  vortex.local/simulator/timing/model.(*ALU).Evaluate
+       3MB  4.84% 80.65%        3MB  4.84%  vortex.local/simulator/timing/effects.(*Adapter).validateReport
+         0     0% 80.65%     2.50MB  4.03%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+    1.50MB  2.42% 83.06%        2MB  3.22%  vortex.local/simulator/timing/model.(*Merge).Evaluate
+    0.50MB  0.81% 83.87%     1.51MB  2.43%  vortex.local/simulator/timing/model.(*Core).Resources
+    0.50MB  0.81% 84.68%     1.51MB  2.43%  vortex.local/simulator/timing/runner.(*Kernel).residency
+    1.50MB  2.42% 87.10%     1.50MB  2.42%  vortex.local/simulator/timing/memsys.(*Cache).MemoryOffers (inline)
+         0     0% 87.10%     1.01MB  1.62%  vortex.local/simulator/timing/model.(*Core).WarpQuiescent
+    0.50MB  0.81% 87.90%     1.01MB  1.62%  vortex.local/simulator/timing/model.(*Frontend).Resources
+         0     0% 87.90%     1.01MB  1.62%  vortex.local/simulator/timing/runner.(*MultiRunner).WarpQuiescent
+         0     0% 87.90%        1MB  1.61%  vortex.local/simulator/timing/effects.(*Adapter).observeAt
+         0     0% 87.90%        1MB  1.61%  vortex.local/simulator/timing/memsys.(*Cache).validate
+       1MB  1.61% 89.51%        1MB  1.61%  vortex.local/simulator/timing/model.(*Sequencer).Evaluate
+         0     0% 89.51%        1MB  1.61%  vortex.local/simulator/timing/model.(*Dispatch).Evaluate
+       1MB  1.61% 91.13%        1MB  1.61%  vortex.local/simulator/timing/model.(*WaitPool).Evaluate
+         0     0% 91.13%        1MB  1.61%  vortex.local/simulator/timing/model.(*SFU).Evaluate
+         0     0% 91.13%     0.51MB  0.82%  fmt.Sprintf
+         0     0% 91.13%     0.51MB  0.82%  fmt.newPrinter
+         0     0% 91.13%     0.51MB  0.82%  sync.(*Pool).Get
+         0     0% 91.13%     0.51MB  0.82%  sync.(*Pool).pin
+    0.51MB  0.82% 91.94%     0.51MB  0.82%  sync.(*Pool).pinSlow
+         0     0% 91.94%     0.50MB  0.81%  vortex.local/simulator/timing/model.(*Core).Idle
+    0.50MB  0.81% 92.75%     0.50MB  0.81%  vortex.local/simulator/timing/effects.(*Concurrent).Observe.func2 (inline)
+    0.50MB  0.81% 93.55%     0.50MB  0.81%  vortex.local/simulator/timing/memsys.(*Backend).PreviewResponses
+    0.50MB  0.81% 94.36%     0.50MB  0.81%  vortex.local/simulator/timing/memsys.(*Backend).Step
+    0.50MB  0.81% 95.17%     0.50MB  0.81%  vortex.local/simulator/timing/model.(*Scheduler).Evaluate
+    0.50MB  0.81% 95.97%     0.50MB  0.81%  vortex.local/simulator/timing/model.(*Buffer).Contents (inline)
+    0.50MB  0.81% 96.78%     0.50MB  0.81%  vortex.local/simulator/timing/model.(*Divider).Evaluate
+    0.50MB  0.81% 97.58%     0.50MB  0.81%  vortex.local/simulator/timing/model.(*Fetch).Evaluate
+    0.50MB  0.81% 98.39%     0.50MB  0.81%  internal/reflectlite.Swapper

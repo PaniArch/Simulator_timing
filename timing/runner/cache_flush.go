@@ -34,7 +34,7 @@ func (k *Kernel) FlushCaches(budget uint64) (bool, error) {
 	if k.failed != nil {
 		return false, k.failed
 	}
-	if !k.Status().Complete {
+	if !k.executionComplete() {
 		return false, fmt.Errorf("cache flush requires completed kernel execution")
 	}
 	if k.visibilityID != 0 && !k.visible {

@@ -1,0 +1,18 @@
+File: clock-closure.test
+Build ID: f98f4af58e5f412e0a2fd5009321b35ac08bb0e2
+Type: alloc_objects
+Time: 2026-09-17 10:18:12 CST
+Active filters:
+   focus=model\.\(\*Clock\)\.Run
+Showing nodes accounting for 11267, 89.29% of 12618 total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      11267 89.29%  testing.(*B).runN
+         0     0%     0%      11267 89.29%  vortex.local/simulator/timing/model.(*Clock).Run
+     11264 89.27% 89.27%      11267 89.29%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+         0     0% 89.27%      11267 89.29%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+         0     0% 89.27%      10241 81.16%  testing.(*B).launch
+         0     0% 89.27%       1026  8.13%  testing.(*B).run1.func1
+         0     0% 89.27%          2 0.016%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+         2 0.016% 89.29%          2 0.016%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+         1 0.0079% 89.29%          1 0.0079%  github.com/sarchlab/akita/v5/timing.GetIDGenerator
+         0     0% 89.29%          1 0.0079%  github.com/sarchlab/akita/v5/timing.MakeEventBase

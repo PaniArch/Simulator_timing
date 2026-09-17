@@ -13,7 +13,7 @@ type WarpObservation struct {
 	StallReason               string
 }
 
-func (r *MultiRunner) observeWarps(s model.SchedulerState) (result [4]WarpObservation) {
+func (r *MultiRunner) observeWarps(s model.SchedulerState, resources []model.ResourceState) (result [4]WarpObservation) {
 	type identity struct {
 		warp      uint8
 		epoch, id uint64
@@ -40,7 +40,7 @@ func (r *MultiRunner) observeWarps(s model.SchedulerState) (result [4]WarpObserv
 			result[w].StallReason = "ibuffer-full"
 		}
 	}
-	for _, resource := range r.core.Resources() {
+	for _, resource := range resources {
 		for _, entry := range resource.Residents {
 			add(entry.Token)
 		}

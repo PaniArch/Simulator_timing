@@ -1,0 +1,7 @@
+timing/ir.go: OK
+timing/number.go: OK
+timing/runner/kernel.go: OK
+timing/runner/cache_flush.go: OK
+timing/number_cache_test.go: OK
+timing/runner/kernel_completion_test.go: OK
+timing/runner/performance_baseline_test.go: OK

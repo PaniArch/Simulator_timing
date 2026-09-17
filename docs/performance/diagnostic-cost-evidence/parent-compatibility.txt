@@ -1,0 +1,22 @@
+=== RUN   TestDiagnosticTraceCompatibility
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=false
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=true
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=false
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=true
+--- PASS: TestDiagnosticTraceCompatibility (2.62s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=false (0.85s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=true (0.56s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=false (0.67s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=true (0.54s)
+=== RUN   TestDiagnosticTraceCompatibility
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=false
+=== RUN   TestDiagnosticTraceCompatibility/multi/fault=true
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=false
+=== RUN   TestDiagnosticTraceCompatibility/kernel/fault=true
+--- PASS: TestDiagnosticTraceCompatibility (2.46s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=false (0.71s)
+    --- PASS: TestDiagnosticTraceCompatibility/multi/fault=true (0.51s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=false (0.72s)
+    --- PASS: TestDiagnosticTraceCompatibility/kernel/fault=true (0.51s)
+PASS
+ok  	vortex.local/simulator/timing/runner	5.136s

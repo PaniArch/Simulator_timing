@@ -1,0 +1,89 @@
+File: runner.test
+Build ID: 8f5080232704b0d499188e47eb80582a5befcfe2
+Type: cpu
+Time: 2026-09-17 11:04:51 CST
+Duration: 2.95s, Total samples = 4.58s (155.28%)
+Showing nodes accounting for 3.63s, 79.26% of 4.58s total
+Dropped 191 nodes (cum <= 0.02s)
+Showing top 80 nodes out of 214
+      flat  flat%   sum%        cum   cum%
+     0.38s  8.30%  8.30%      1.21s 26.42%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+     0.29s  6.33% 14.63%      0.29s  6.33%  go.yaml.in/yaml/v3.yaml_parser_update_buffer
+     0.24s  5.24% 19.87%      0.42s  9.17%  runtime.scanObjectsSmall
+     0.17s  3.71% 23.58%      0.21s  4.59%  runtime.tryDeferToSpanScan
+     0.15s  3.28% 26.86%      0.40s  8.73%  go.yaml.in/yaml/v3.read
+     0.12s  2.62% 29.48%      0.12s  2.62%  go.yaml.in/yaml/v3.is_blankz
+     0.11s  2.40% 31.88%      0.11s  2.40%  runtime.(*lfstack).pop
+     0.09s  1.97% 33.84%      0.09s  1.97%  runtime.(*randomEnum).next (inline)
+     0.09s  1.97% 35.81%      0.09s  1.97%  runtime.futex
+     0.08s  1.75% 37.55%      0.08s  1.75%  runtime.(*lfstack).push
+     0.08s  1.75% 39.30%      0.08s  1.75%  runtime.procyieldAsm
+     0.07s  1.53% 40.83%      0.07s  1.53%  go.yaml.in/yaml/v3.is_blank (inline)
+     0.07s  1.53% 42.36%      0.07s  1.53%  runtime.getMCache (inline)
+     0.07s  1.53% 43.89%      0.07s  1.53%  runtime.nextFreeFast (inline)
+     0.07s  1.53% 45.41%      0.07s  1.53%  runtime.releasem (inline)
+     0.07s  1.53% 46.94%      0.21s  4.59%  runtime.stealWork
+     0.06s  1.31% 48.25%      0.22s  4.80%  runtime.mallocgcSmallNoscan
+     0.06s  1.31% 49.56%      0.06s  1.31%  runtime.memclrNoHeapPointers
+     0.05s  1.09% 50.66%      0.41s  8.95%  go.yaml.in/yaml/v3.(*parser).node
+     0.05s  1.09% 51.75%      2.60s 56.77%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+     0.05s  1.09% 52.84%      1.68s 36.68%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+     0.05s  1.09% 53.93%      0.08s  1.75%  go.yaml.in/yaml/v3.yaml_parser_parse_node
+     0.05s  1.09% 55.02%      0.73s 15.94%  runtime.mallocgc
+     0.05s  1.09% 56.11%      0.05s  1.09%  runtime.memhash64
+     0.05s  1.09% 57.21%      0.05s  1.09%  runtime.memmove
+     0.04s  0.87% 58.08%      0.05s  1.09%  go.yaml.in/yaml/v3.yaml_insert_token
+     0.04s  0.87% 58.95%      0.06s  1.31%  runtime.(*_panic).nextDefer
+     0.04s  0.87% 59.83%      0.05s  1.09%  runtime.(*mspan).writeHeapBitsSmall
+     0.03s  0.66% 60.48%      0.04s  0.87%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token.func1
+     0.03s  0.66% 61.14%      0.07s  1.53%  go.yaml.in/yaml/v3.yaml_parser_fetch_value
+     0.03s  0.66% 61.79%      0.03s  0.66%  runtime.(*spanSet).push
+     0.03s  0.66% 62.45%      0.12s  2.62%  runtime.(*sweepLocked).sweep
+     0.03s  0.66% 63.10%      0.03s  0.66%  runtime.deferprocStack
+     0.03s  0.66% 63.76%      0.94s 20.52%  runtime.gcDrain
+     0.03s  0.66% 64.41%      0.26s  5.68%  runtime.growslice
+     0.03s  0.66% 65.07%      0.06s  1.31%  runtime.lock2
+     0.03s  0.66% 65.72%      0.31s  6.77%  runtime.mallocgcSmallScanNoHeader
+     0.03s  0.66% 66.38%      0.07s  1.53%  runtime.mapassign_fast64
+     0.03s  0.66% 67.03%      0.03s  0.66%  runtime.pMask.read (inline)
+     0.03s  0.66% 67.69%      0.05s  1.09%  runtime.unlock2
+     0.02s  0.44% 68.12%      0.03s  0.66%  go.yaml.in/yaml/v3.(*parser).expect
+     0.02s  0.44% 68.56%      2.60s 56.77%  go.yaml.in/yaml/v3.(*parser).parse
+     0.02s  0.44% 69.00%      1.85s 40.39%  go.yaml.in/yaml/v3.(*parser).peek
+     0.02s  0.44% 69.43%      0.05s  1.09%  go.yaml.in/yaml/v3.read_line
+     0.02s  0.44% 69.87%      1.83s 39.96%  go.yaml.in/yaml/v3.yaml_parser_parse
+     0.02s  0.44% 70.31%      0.91s 19.87%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+     0.02s  0.44% 70.74%      0.03s  0.66%  go.yaml.in/yaml/v3.yaml_parser_scan_to_next_token
+     0.02s  0.44% 71.18%      0.03s  0.66%  internal/runtime/maps.(*Map).putSlotSmallFast64
+     0.02s  0.44% 71.62%      0.03s  0.66%  runtime.(*pallocBits).summarize
+     0.02s  0.44% 72.05%      0.20s  4.37%  runtime.getempty
+     0.02s  0.44% 72.49%      0.05s  1.09%  runtime.mallocgcTiny
+     0.02s  0.44% 72.93%      0.47s 10.26%  runtime.scanSpan
+     0.02s  0.44% 73.36%      0.10s  2.18%  runtime.scanblock
+     0.02s  0.44% 73.80%      0.16s  3.49%  runtime.slicebytetostring
+     0.02s  0.44% 74.24%      0.04s  0.87%  runtime.wbBufFlush1
+     0.01s  0.22% 74.45%      2.60s 56.77%  go.yaml.in/yaml/v3.(*parser).mapping
+     0.01s  0.22% 74.67%      0.52s 11.35%  go.yaml.in/yaml/v3.(*parser).scalar
+     0.01s  0.22% 74.89%      1.72s 37.55%  go.yaml.in/yaml/v3.peek_token
+     0.01s  0.22% 75.11%      1.70s 37.12%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+     0.01s  0.22% 75.33%      0.09s  1.97%  go.yaml.in/yaml/v3.yaml_parser_save_simple_key
+     0.01s  0.22% 75.55%      0.06s  1.31%  runtime.(*gcWork).tryStealSpan
+     0.01s  0.22% 75.76%      0.03s  0.66%  runtime.(*mcache).releaseAll
+     0.01s  0.22% 75.98%      0.08s  1.75%  runtime.(*mcentral).cacheSpan
+     0.01s  0.22% 76.20%      0.04s  0.87%  runtime.(*pageAlloc).update
+     0.01s  0.22% 76.42%      0.16s  3.49%  runtime.makeslice
+     0.01s  0.22% 76.64%      0.03s  0.66%  runtime.mapaccess2_faststr
+     0.01s  0.22% 76.86%      0.26s  5.68%  runtime.markroot
+     0.01s  0.22% 77.07%      0.03s  0.66%  runtime.markrootSpans
+     0.01s  0.22% 77.29%      0.03s  0.66%  runtime.newMarkBits
+     0.01s  0.22% 77.51%      0.15s  3.28%  runtime.newobject
+     0.01s  0.22% 77.73%      0.03s  0.66%  runtime.notewakeup
+     0.01s  0.22% 77.95%      0.03s  0.66%  runtime.runqsteal
+     0.01s  0.22% 78.17%      0.03s  0.66%  runtime.signalM
+     0.01s  0.22% 78.38%      0.03s  0.66%  runtime.startTheWorldWithSema
+     0.01s  0.22% 78.60%      0.07s  1.53%  runtime.stopm
+     0.01s  0.22% 78.82%      0.04s  0.87%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+     0.01s  0.22% 79.04%      0.03s  0.66%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+     0.01s  0.22% 79.26%      0.34s  7.42%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0% 79.26%      0.34s  7.42%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 79.26%      0.34s  7.42%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext

@@ -1,0 +1,8 @@
+go version go1.26.2 linux/amd64
+linux
+amd64
+1
+/usr/bin/gcc
+local
+d416aead9294874d9c4526790e9e09eebc82f28d
+Linux 5.4.0-155-generic

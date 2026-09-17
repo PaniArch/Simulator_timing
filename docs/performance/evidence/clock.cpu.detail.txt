@@ -1,0 +1,122 @@
+File: clock.test
+Build ID: d43518f5c417fe74df174d5b02f6028e55e8fee5
+Type: cpu
+Time: 2026-09-17 09:29:05 CST
+Duration: 2.04s, Total samples = 2.07s (101.64%)
+Active filters:
+   focus=model\.\(\*Clock\)\.Run
+Showing nodes accounting for 2.07s, 100% of 2.07s total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      2.07s   100%  testing.(*B).launch
+         0     0%     0%      2.07s   100%  testing.(*B).runN
+     0.05s  2.42%  2.42%      2.07s   100%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%  2.42%      2.07s   100%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1
+     0.12s  5.80%  8.21%      1.43s 69.08%  runtime.mallocgc
+     0.36s 17.39% 25.60%      1.27s 61.35%  runtime.mallocgcSmallScanNoHeader
+     0.04s  1.93% 27.54%         1s 48.31%  runtime.newobject
+     0.03s  1.45% 28.99%      0.92s 44.44%  github.com/sarchlab/akita/v5/timing.NewSerialEngine (inline)
+     0.11s  5.31% 34.30%      0.54s 26.09%  vortex.local/simulator/timing/model.(*edgeDriver).schedule
+         0     0% 34.30%      0.39s 18.84%  github.com/sarchlab/akita/v5/timing.newUnsafeEventQueue (inline)
+     0.01s  0.48% 34.78%      0.31s 14.98%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).RegisterHandler (inline)
+     0.03s  1.45% 36.23%      0.30s 14.49%  runtime.mapassign_faststr
+     0.03s  1.45% 37.68%      0.28s 13.53%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Schedule
+     0.02s  0.97% 38.65%      0.25s 12.08%  github.com/sarchlab/akita/v5/timing.(*unsafeEventQueue).Push
+     0.01s  0.48% 39.13%      0.23s 11.11%  internal/runtime/maps.(*Map).growToSmall
+     0.19s  9.18% 48.31%      0.23s 11.11%  runtime.(*mspan).writeHeapBitsSmall
+     0.02s  0.97% 49.28%      0.23s 11.11%  runtime.growslice
+         0     0% 49.28%      0.23s 11.11%  runtime.heapSetTypeNoHeader (inline)
+     0.22s 10.63% 59.90%      0.22s 10.63%  runtime.nextFreeFast (inline)
+         0     0% 59.90%      0.19s  9.18%  internal/runtime/maps.newGroups (inline)
+         0     0% 59.90%      0.19s  9.18%  internal/runtime/maps.newarray
+         0     0% 59.90%      0.19s  9.18%  runtime.newarray
+         0     0% 59.90%      0.15s  7.25%  runtime.systemstack
+         0     0% 59.90%      0.14s  6.76%  internal/runtime/maps.NewEmptyMap (inline)
+         0     0% 59.90%      0.14s  6.76%  runtime.(*mcache).nextFree
+         0     0% 59.90%      0.14s  6.76%  runtime.(*mcache).refill
+         0     0% 59.90%      0.14s  6.76%  runtime.makemap_small
+     0.13s  6.28% 66.18%      0.13s  6.28%  runtime.memclrNoHeapPointers
+     0.02s  0.97% 67.15%      0.12s  5.80%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0% 67.15%      0.12s  5.80%  runtime.(*mcentral).cacheSpan
+         0     0% 67.15%      0.11s  5.31%  sync.NewCond (inline)
+         0     0% 67.15%      0.10s  4.83%  runtime.(*mcentral).grow
+         0     0% 67.15%      0.09s  4.35%  runtime.convT
+         0     0% 67.15%      0.07s  3.38%  runtime.(*mheap).alloc
+         0     0% 67.15%      0.07s  3.38%  runtime.(*mheap).alloc.func1
+         0     0% 67.15%      0.07s  3.38%  runtime.(*mheap).allocSpan
+     0.01s  0.48% 67.63%      0.06s  2.90%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+     0.03s  1.45% 69.08%      0.06s  2.90%  github.com/sarchlab/akita/v5/timing.MakeEventBase
+         0     0% 69.08%      0.06s  2.90%  runtime.gcStart
+     0.06s  2.90% 71.98%      0.06s  2.90%  runtime.releasem (inline)
+     0.03s  1.45% 73.43%      0.03s  1.45%  github.com/sarchlab/akita/v5/timing.(*sequentialIDGenerator).Generate
+     0.03s  1.45% 74.88%      0.03s  1.45%  internal/runtime/maps.(*Map).putSlotSmallFastStr
+     0.03s  1.45% 76.33%      0.03s  1.45%  internal/runtime/maps.(*ctrlGroup).setEmpty (inline)
+     0.03s  1.45% 77.78%      0.03s  1.45%  internal/sync.(*Mutex).Unlock (inline)
+     0.03s  1.45% 79.23%      0.03s  1.45%  runtime.(*gcBitsArena).tryAlloc (inline)
+         0     0% 79.23%      0.03s  1.45%  runtime.(*mheap).initSpan
+     0.01s  0.48% 79.71%      0.03s  1.45%  runtime.(*mspan).initHeapBits
+     0.03s  1.45% 81.16%      0.03s  1.45%  runtime.acquirem (inline)
+         0     0% 81.16%      0.03s  1.45%  runtime.deductAssistCredit
+         0     0% 81.16%      0.03s  1.45%  runtime.gcAssistAlloc
+         0     0% 81.16%      0.03s  1.45%  runtime.gcAssistAlloc.func2
+         0     0% 81.16%      0.03s  1.45%  runtime.gcAssistAlloc1
+         0     0% 81.16%      0.03s  1.45%  runtime.gcDrainN
+         0     0% 81.16%      0.03s  1.45%  runtime.gcStart.func4
+     0.02s  0.97% 82.13%      0.03s  1.45%  runtime.makeSpanClass (inline)
+         0     0% 82.13%      0.03s  1.45%  runtime.newMarkBits
+         0     0% 82.13%      0.03s  1.45%  runtime.startTheWorldWithSema
+         0     0% 82.13%      0.03s  1.45%  sync.(*Mutex).Unlock
+     0.02s  0.97% 83.09%      0.02s  0.97%  internal/runtime/atomic.(*Uint32).Add (inline)
+     0.02s  0.97% 84.06%      0.02s  0.97%  internal/runtime/maps.(*Map).getWithoutKeySmallFastStr
+         0     0% 84.06%      0.02s  0.97%  internal/runtime/maps.rand
+     0.02s  0.97% 85.02%      0.02s  0.97%  runtime.(*lfstack).pop
+     0.01s  0.48% 85.51%      0.02s  0.97%  runtime.(*mheap).allocMSpanLocked
+     0.02s  0.97% 86.47%      0.02s  0.97%  runtime.futex
+         0     0% 86.47%      0.02s  0.97%  runtime.futexwakeup
+         0     0% 86.47%      0.02s  0.97%  runtime.gcmarknewobject
+         0     0% 86.47%      0.02s  0.97%  runtime.getempty
+         0     0% 86.47%      0.02s  0.97%  runtime.mapaccess1_faststr
+         0     0% 86.47%      0.02s  0.97%  runtime.newAllocBits (inline)
+         0     0% 86.47%      0.02s  0.97%  runtime.notewakeup
+     0.02s  0.97% 87.44%      0.02s  0.97%  runtime.rand
+     0.02s  0.97% 88.41%      0.02s  0.97%  runtime.spanHeapBitsRange (inline)
+     0.01s  0.48% 88.89%      0.02s  0.97%  runtime.typedmemmove
+         0     0% 88.89%      0.02s  0.97%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+     0.02s  0.97% 89.86%      0.02s  0.97%  vortex.local/simulator/timing/model.BenchmarkClockBaseline.func1.1
+     0.01s  0.48% 90.34%      0.01s  0.48%  aeshashbody
+     0.01s  0.48% 90.82%      0.01s  0.48%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).nextEvent
+     0.01s  0.48% 91.30%      0.01s  0.48%  internal/abi.(*Type).Pointers (inline)
+     0.01s  0.48% 91.79%      0.01s  0.48%  internal/runtime/atomic.(*Uint64).Add (inline)
+     0.01s  0.48% 92.27%      0.01s  0.48%  internal/sync.(*Mutex).Lock (inline)
+         0     0% 92.27%      0.01s  0.48%  runtime.(*atomicHeadTailIndex).incTail
+         0     0% 92.27%      0.01s  0.48%  runtime.(*consistentHeapStats).acquire
+         0     0% 92.27%      0.01s  0.48%  runtime.(*consistentHeapStats).release
+     0.01s  0.48% 92.75%      0.01s  0.48%  runtime.(*fixalloc).alloc
+     0.01s  0.48% 93.24%      0.01s  0.48%  runtime.(*gcControllerState).startCycle
+         0     0% 93.24%      0.01s  0.48%  runtime.(*gcWork).balance
+         0     0% 93.24%      0.01s  0.48%  runtime.(*gcWork).init
+         0     0% 93.24%      0.01s  0.48%  runtime.(*gcWork).tryGetObj
+         0     0% 93.24%      0.01s  0.48%  runtime.(*mcentral).uncacheSpan
+     0.01s  0.48% 93.72%      0.01s  0.48%  runtime.(*mspan).base (inline)
+     0.01s  0.48% 94.20%      0.01s  0.48%  runtime.(*mspan).init
+     0.01s  0.48% 94.69%      0.01s  0.48%  runtime.(*mspan).markBitsForIndex (inline)
+     0.01s  0.48% 95.17%      0.01s  0.48%  runtime.(*mspan).typePointersOfUnchecked
+         0     0% 95.17%      0.01s  0.48%  runtime.(*spanSet).push
+     0.01s  0.48% 95.65%      0.01s  0.48%  runtime.(*spanSet).reset
+         0     0% 95.65%      0.01s  0.48%  runtime.(*sweepLocked).sweep
+     0.01s  0.48% 96.14%      0.01s  0.48%  runtime.(*sysMemStat).add
+     0.01s  0.48% 96.62%      0.01s  0.48%  runtime.add (inline)
+     0.01s  0.48% 97.10%      0.01s  0.48%  runtime.bool2int (inline)
+         0     0% 97.10%      0.01s  0.48%  runtime.deductSweepCredit
+         0     0% 97.10%      0.01s  0.48%  runtime.finishsweep_m
+         0     0% 97.10%      0.01s  0.48%  runtime.gcStart.func2
+         0     0% 97.10%      0.01s  0.48%  runtime.gcStart.func3
+     0.01s  0.48% 97.58%      0.01s  0.48%  runtime.getGCMask (inline)
+     0.01s  0.48% 98.07%      0.01s  0.48%  runtime.getMCache (inline)
+         0     0% 98.07%      0.01s  0.48%  runtime.handoff
+     0.01s  0.48% 98.55%      0.01s  0.48%  runtime.memmove
+     0.01s  0.48% 99.03%      0.01s  0.48%  runtime.pidleget
+     0.01s  0.48% 99.52%      0.01s  0.48%  runtime.procresize
+         0     0% 99.52%      0.01s  0.48%  runtime.scanObject
+         0     0% 99.52%      0.01s  0.48%  runtime.stopTheWorldWithSema
+     0.01s  0.48%   100%      0.01s  0.48%  runtime.sweepone
+         0     0%   100%      0.01s  0.48%  sync.(*Mutex).Lock (inline)

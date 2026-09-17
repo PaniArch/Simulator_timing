@@ -1,0 +1,4 @@
+evidence: 69 SHA256 entries verified
+clock-engine-evidence: 25 SHA256 entries verified
+state-cost-evidence: 45 SHA256 entries verified
+diagnostic-cost-evidence: 31 SHA256 entries verified

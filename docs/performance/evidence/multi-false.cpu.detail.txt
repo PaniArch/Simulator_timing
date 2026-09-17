@@ -1,0 +1,239 @@
+File: multi-false.test
+Build ID: 73478c2fdd0eb85fac89cc51d0be72f1f0a3b64a
+Type: cpu
+Time: 2026-09-17 09:29:24 CST
+Duration: 37.16s, Total samples = 3.41s ( 9.18%)
+Active filters:
+   focus=runner\.\(\*baselineFixture\)\.drive
+Showing nodes accounting for 3.41s, 100% of 3.41s total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      3.41s   100%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).Run
+         0     0%     0%      3.41s   100%  github.com/sarchlab/akita/v5/timing.(*SerialEngine).dispatchNext
+         0     0%     0%      3.41s   100%  testing.(*B).runN
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/model.(*Clock).Run
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/model.(*edgeDriver).Handle
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*MultiRunner).Run
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*MultiRunner).Run.func1
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*MultiRunner).step
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*baselineFixture).drive
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.(*baselineFixture).run
+         0     0%     0%      3.41s   100%  vortex.local/simulator/timing/runner.BenchmarkRunnerBaseline.func1
+         0     0%     0%      2.96s 86.80%  vortex.local/simulator/timing.Number (inline)
+     0.01s  0.29%  0.29%      2.96s 86.80%  vortex.local/simulator/timing.number
+         0     0%  0.29%      2.96s 86.80%  vortex.local/simulator/timing/effects.(*Concurrent).Begin (inline)
+         0     0%  0.29%      2.96s 86.80%  vortex.local/simulator/timing/effects.(*Concurrent).begin
+         0     0%  0.29%      2.96s 86.80%  vortex.local/simulator/timing/effects.New
+         0     0%  0.29%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).document
+         0     0%  0.29%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).mapping
+         0     0%  0.29%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).parse
+     0.03s  0.88%  1.17%      2.94s 86.22%  go.yaml.in/yaml/v3.(*parser).parseChild (inline)
+         0     0%  1.17%      2.94s 86.22%  go.yaml.in/yaml/v3.Unmarshal (inline)
+         0     0%  1.17%      2.94s 86.22%  go.yaml.in/yaml/v3.unmarshal
+         0     0%  1.17%      2.91s 85.34%  testing.(*B).launch
+         0     0%  1.17%      2.63s 77.13%  go.yaml.in/yaml/v3.(*parser).sequence
+         0     0%  1.17%      2.28s 66.86%  go.yaml.in/yaml/v3.(*parser).peek
+     0.03s  0.88%  2.05%      2.28s 66.86%  go.yaml.in/yaml/v3.yaml_parser_parse
+         0     0%  2.05%      2.24s 65.69%  go.yaml.in/yaml/v3.yaml_parser_state_machine
+     0.01s  0.29%  2.35%      2.11s 61.88%  go.yaml.in/yaml/v3.peek_token
+     0.02s  0.59%  2.93%      2.09s 61.29%  go.yaml.in/yaml/v3.yaml_parser_fetch_more_tokens
+     0.13s  3.81%  6.74%      2.05s 60.12%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token
+         0     0%  6.74%      1.50s 43.99%  go.yaml.in/yaml/v3.yaml_parser_fetch_plain_scalar
+     0.50s 14.66% 21.41%      1.41s 41.35%  go.yaml.in/yaml/v3.yaml_parser_scan_plain_scalar
+     0.01s  0.29% 21.70%      1.24s 36.36%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_key
+     0.04s  1.17% 22.87%      0.84s 24.63%  runtime.mallocgc
+         0     0% 22.87%      0.63s 18.48%  go.yaml.in/yaml/v3.yaml_parser_parse_block_mapping_value
+         0     0% 22.87%      0.55s 16.13%  go.yaml.in/yaml/v3.(*parser).scalar
+     0.34s  9.97% 32.84%      0.53s 15.54%  go.yaml.in/yaml/v3.read
+         0     0% 32.84%      0.50s 14.66%  testing.(*B).run1.func1
+     0.05s  1.47% 34.31%      0.44s 12.90%  go.yaml.in/yaml/v3.(*parser).node
+     0.11s  3.23% 37.54%      0.41s 12.02%  runtime.mallocgcSmallScanNoHeader
+     0.04s  1.17% 38.71%      0.31s  9.09%  runtime.growslice
+     0.01s  0.29% 39.00%      0.27s  7.92%  go.yaml.in/yaml/v3.yaml_parser_parse_indentless_sequence_entry
+     0.01s  0.29% 39.30%      0.27s  7.92%  runtime.newobject
+     0.21s  6.16% 45.45%      0.22s  6.45%  go.yaml.in/yaml/v3.yaml_parser_update_buffer
+         0     0% 45.45%      0.22s  6.45%  vortex.local/simulator/timing/model.(*Core).Evaluate
+         0     0% 45.45%      0.17s  4.99%  runtime.(*mcache).nextFree
+     0.01s  0.29% 45.75%      0.16s  4.69%  go.yaml.in/yaml/v3.resolve
+     0.01s  0.29% 46.04%      0.16s  4.69%  runtime.(*mcache).refill
+     0.01s  0.29% 46.33%      0.16s  4.69%  runtime.makeslice
+     0.03s  0.88% 47.21%      0.16s  4.69%  runtime.mallocgcSmallNoscan
+         0     0% 47.21%      0.16s  4.69%  runtime.systemstack
+     0.02s  0.59% 47.80%      0.15s  4.40%  runtime.mallocgcSmallScanHeader
+     0.13s  3.81% 51.61%      0.13s  3.81%  go.yaml.in/yaml/v3.is_blankz
+     0.01s  0.29% 51.91%      0.13s  3.81%  vortex.local/simulator/timing/model.(*Core).Resources
+     0.05s  1.47% 53.37%      0.12s  3.52%  go.yaml.in/yaml/v3.yaml_parser_fetch_value
+     0.02s  0.59% 53.96%      0.12s  3.52%  runtime.slicebytetostring
+     0.01s  0.29% 54.25%      0.11s  3.23%  runtime.(*mcentral).cacheSpan
+     0.01s  0.29% 54.55%      0.11s  3.23%  runtime.convTstring
+     0.11s  3.23% 57.77%      0.11s  3.23%  runtime.memclrNoHeapPointers
+         0     0% 57.77%      0.10s  2.93%  go.yaml.in/yaml/v3.yaml_parser_parse_flow_sequence_entry
+     0.08s  2.35% 60.12%      0.09s  2.64%  go.yaml.in/yaml/v3.yaml_insert_token
+     0.05s  1.47% 61.58%      0.09s  2.64%  go.yaml.in/yaml/v3.yaml_parser_parse_node
+         0     0% 61.58%      0.09s  2.64%  runtime.(*mcentral).grow
+     0.08s  2.35% 63.93%      0.08s  2.35%  go.yaml.in/yaml/v3.is_blank (inline)
+     0.07s  2.05% 65.98%      0.08s  2.35%  runtime.(*mspan).writeHeapBitsSmall
+         0     0% 65.98%      0.08s  2.35%  runtime.heapSetTypeNoHeader (inline)
+     0.08s  2.35% 68.33%      0.08s  2.35%  runtime.nextFreeFast (inline)
+     0.05s  1.47% 69.79%      0.07s  2.05%  go.yaml.in/yaml/v3.yaml_parser_scan_to_next_token
+     0.05s  1.47% 71.26%      0.07s  2.05%  runtime.mallocgcTiny
+     0.07s  2.05% 73.31%      0.07s  2.05%  runtime.memmove
+     0.01s  0.29% 73.61%      0.07s  2.05%  vortex.local/simulator/timing/model.(*STDFPU).Evaluate
+     0.04s  1.17% 74.78%      0.06s  1.76%  runtime.(*_panic).nextDefer
+         0     0% 74.78%      0.06s  1.76%  runtime.(*mheap).alloc
+         0     0% 74.78%      0.06s  1.76%  runtime.(*mheap).alloc.func1
+         0     0% 74.78%      0.06s  1.76%  runtime.mProf_Malloc
+         0     0% 74.78%      0.06s  1.76%  runtime.profilealloc
+         0     0% 74.78%      0.05s  1.47%  go.yaml.in/yaml/v3.read_line
+     0.01s  0.29% 75.07%      0.05s  1.47%  go.yaml.in/yaml/v3.yaml_parser_save_simple_key
+     0.05s  1.47% 76.54%      0.05s  1.47%  go.yaml.in/yaml/v3.yaml_parser_set_event_comments (inline)
+         0     0% 76.54%      0.05s  1.47%  runtime.(*mheap).allocSpan
+         0     0% 76.54%      0.05s  1.47%  runtime.callers
+         0     0% 76.54%      0.05s  1.47%  runtime.callers.func1
+     0.01s  0.29% 76.83%      0.05s  1.47%  runtime.mapassign_fast64ptr
+         0     0% 76.83%      0.05s  1.47%  runtime.tracebackPCs
+     0.01s  0.29% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/effects.(*Concurrent).Observe
+         0     0% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/memsys.(*System).Step
+         0     0% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/model.(*Frontend).Resources
+         0     0% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/model.CommitEdge
+         0     0% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/model.combine (inline)
+         0     0% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps
+         0     0% 77.13%      0.05s  1.47%  vortex.local/simulator/timing/runner.(*runnerMemory).step
+     0.02s  0.59% 77.71%      0.04s  1.17%  go.yaml.in/yaml/v3.yaml_parser_fetch_next_token.func1
+     0.01s  0.29% 78.01%      0.04s  1.17%  internal/runtime/maps.(*table).grow
+         0     0% 78.01%      0.04s  1.17%  internal/runtime/maps.(*table).rehash
+     0.01s  0.29% 78.30%      0.04s  1.17%  runtime.(*mheap).initSpan
+     0.04s  1.17% 79.47%      0.04s  1.17%  runtime.getMCache (inline)
+     0.01s  0.29% 79.77%      0.04s  1.17%  runtime.mapassign_fast64
+     0.02s  0.59% 80.35%      0.04s  1.17%  runtime.mapdelete_fast64
+         0     0% 80.35%      0.04s  1.17%  runtime.typedslicecopy
+         0     0% 80.35%      0.03s  0.88%  go.yaml.in/yaml/v3.yaml_parser_fetch_block_entry
+         0     0% 80.35%      0.03s  0.88%  go.yaml.in/yaml/v3.yaml_parser_fetch_flow_scalar
+         0     0% 80.35%      0.03s  0.88%  go.yaml.in/yaml/v3.yaml_parser_scan_flow_scalar
+     0.02s  0.59% 80.94%      0.03s  0.88%  internal/runtime/maps.(*table).uncheckedPutSlot
+         0     0% 80.94%      0.03s  0.88%  regexp.(*Regexp).MatchString (inline)
+         0     0% 80.94%      0.03s  0.88%  regexp.(*Regexp).doExecute
+         0     0% 80.94%      0.03s  0.88%  regexp.(*Regexp).doMatch (inline)
+         0     0% 80.94%      0.03s  0.88%  regexp.(*Regexp).doOnePass
+         0     0% 80.94%      0.03s  0.88%  regexp.newOnePassMachine (inline)
+     0.03s  0.88% 81.82%      0.03s  0.88%  runtime.(*mspan).init
+         0     0% 81.82%      0.03s  0.88%  runtime.(*mspan).initHeapBits
+         0     0% 81.82%      0.03s  0.88%  runtime.(*unwinder).next
+     0.01s  0.29% 82.11%      0.03s  0.88%  runtime.(*unwinder).resolveInternal
+     0.01s  0.29% 82.40%      0.03s  0.88%  runtime.bulkBarrierPreWrite
+     0.01s  0.29% 82.70%      0.03s  0.88%  runtime.pcvalue
+     0.03s  0.88% 83.58%      0.03s  0.88%  runtime.releasem (inline)
+         0     0% 83.58%      0.03s  0.88%  runtime.wbBufFlush
+         0     0% 83.58%      0.03s  0.88%  runtime.wbBufFlush.func1
+     0.01s  0.29% 83.87%      0.03s  0.88%  runtime.wbBufFlush1
+         0     0% 83.87%      0.03s  0.88%  sync.(*Pool).Get
+         0     0% 83.87%      0.03s  0.88%  vortex.local/simulator/timing/effects.(*Adapter).validateReport
+     0.01s  0.29% 84.16%      0.03s  0.88%  vortex.local/simulator/timing/memsys.(*Cache).Step
+         0     0% 84.16%      0.03s  0.88%  vortex.local/simulator/timing/model.(*Frontend).Evaluate
+         0     0% 84.16%      0.03s  0.88%  vortex.local/simulator/timing/model.(*LSU).Evaluate
+     0.01s  0.29% 84.46%      0.03s  0.88%  vortex.local/simulator/timing/model.(*STDPath).Evaluate
+         0     0% 84.46%      0.03s  0.88%  vortex.local/simulator/timing/model.(*WaitPool).Evaluate
+     0.01s  0.29% 84.75%      0.02s  0.59%  go.yaml.in/yaml/v3.yaml_parser_remove_simple_key (inline)
+         0     0% 84.75%      0.02s  0.59%  go.yaml.in/yaml/v3.yaml_parser_roll_indent
+     0.02s  0.59% 85.34%      0.02s  0.59%  go.yaml.in/yaml/v3.yaml_parser_scan_line_comment
+         0     0% 85.34%      0.02s  0.59%  internal/runtime/maps.(*Map).Delete
+     0.01s  0.29% 85.63%      0.02s  0.59%  internal/runtime/maps.(*Map).putSlotSmallFast64
+     0.02s  0.59% 86.22%      0.02s  0.59%  internal/runtime/maps.(*groupReference).key (inline)
+     0.02s  0.59% 86.80%      0.02s  0.59%  runtime.(*_panic).start
+         0     0% 86.80%      0.02s  0.59%  runtime.(*gcControllerState).update
+         0     0% 86.80%      0.02s  0.59%  runtime.(*mcentral).uncacheSpan
+     0.02s  0.59% 87.39%      0.02s  0.59%  runtime.(*spanSet).push
+         0     0% 87.39%      0.02s  0.59%  runtime.(*wbBuf).get1 (inline)
+     0.02s  0.59% 87.98%      0.02s  0.59%  runtime.acquirem (inline)
+         0     0% 87.98%      0.02s  0.59%  runtime.bulkBarrierPreWriteSrcOnly
+     0.02s  0.59% 88.56%      0.02s  0.59%  runtime.deferprocStack
+         0     0% 88.56%      0.02s  0.59%  runtime.funcspdelta (inline)
+     0.01s  0.29% 88.86%      0.02s  0.59%  runtime.gcStart
+     0.02s  0.59% 89.44%      0.02s  0.59%  runtime.mapaccess2_fast64
+     0.02s  0.59% 90.03%      0.02s  0.59%  runtime.memhash64
+     0.02s  0.59% 90.62%      0.02s  0.59%  runtime.step
+     0.01s  0.29% 90.91%      0.02s  0.59%  runtime.tryDeferToSpanScan
+         0     0% 90.91%      0.02s  0.59%  sync.(*Pool).pin
+         0     0% 90.91%      0.02s  0.59%  sync.(*Pool).pinSlow
+     0.02s  0.59% 91.50%      0.02s  0.59%  vortex.local/simulator/timing/model.(*Buffer).Evaluate
+         0     0% 91.50%      0.01s  0.29%  go.yaml.in/yaml/v3.(*parser).expect
+     0.01s  0.29% 91.79%      0.01s  0.29%  go.yaml.in/yaml/v3.is_break (inline)
+         0     0% 91.79%      0.01s  0.29%  go.yaml.in/yaml/v3.skip
+     0.01s  0.29% 92.08%      0.01s  0.29%  go.yaml.in/yaml/v3.skip_token (inline)
+     0.01s  0.29% 92.38%      0.01s  0.29%  go.yaml.in/yaml/v3.yaml_event_delete (inline)
+     0.01s  0.29% 92.67%      0.01s  0.29%  go.yaml.in/yaml/v3.yaml_parser_unfold_comments
+         0     0% 92.67%      0.01s  0.29%  go.yaml.in/yaml/v3.yaml_parser_update_raw_buffer
+         0     0% 92.67%      0.01s  0.29%  go.yaml.in/yaml/v3.yaml_string_read_handler
+     0.01s  0.29% 92.96%      0.01s  0.29%  internal/runtime/atomic.(*Uint64).Add (inline)
+     0.01s  0.29% 93.26%      0.01s  0.29%  internal/runtime/atomic.(*Uint64).CompareAndSwap (inline)
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.(*Map).deleteSmall
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.(*Map).growToTable
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.(*table).reset
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.newGroups (inline)
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.newTable
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.newarray
+         0     0% 93.26%      0.01s  0.29%  internal/runtime/maps.typedmemclr
+         0     0% 93.26%      0.01s  0.29%  internal/strconv.ParseInt
+     0.01s  0.29% 93.55%      0.01s  0.29%  internal/strconv.ParseUint
+     0.01s  0.29% 93.84%      0.01s  0.29%  runtime.(*_panic).nextFrame
+         0     0% 93.84%      0.01s  0.29%  runtime.(*atomicHeadTailIndex).cas (inline)
+     0.01s  0.29% 94.13%      0.01s  0.29%  runtime.(*gcControllerState).revise
+         0     0% 94.13%      0.01s  0.29%  runtime.(*inlineUnwinder).resolveInternal (inline)
+     0.01s  0.29% 94.43%      0.01s  0.29%  runtime.(*inlineUnwinder).srcFunc (inline)
+         0     0% 94.43%      0.01s  0.29%  runtime.(*mheap).reclaim
+         0     0% 94.43%      0.01s  0.29%  runtime.(*mheap).reclaimChunk
+     0.01s  0.29% 94.72%      0.01s  0.29%  runtime.(*mspan).nextFreeIndex
+         0     0% 94.72%      0.01s  0.29%  runtime.(*pageAlloc).allocToCache
+         0     0% 94.72%      0.01s  0.29%  runtime.(*pageAlloc).update
+     0.01s  0.29% 95.01%      0.01s  0.29%  runtime.(*pallocBits).summarize
+         0     0% 95.01%      0.01s  0.29%  runtime.(*spanSet).pop
+     0.01s  0.29% 95.31%      0.01s  0.29%  runtime.(*sweepLocker).tryAcquire
+         0     0% 95.31%      0.01s  0.29%  runtime.(*wbBuf).get2 (inline)
+         0     0% 95.31%      0.01s  0.29%  runtime.casgstatus
+         0     0% 95.31%      0.01s  0.29%  runtime.concatstring2
+         0     0% 95.31%      0.01s  0.29%  runtime.concatstrings
+         0     0% 95.31%      0.01s  0.29%  runtime.deductAssistCredit
+     0.01s  0.29% 95.60%      0.01s  0.29%  runtime.futex
+         0     0% 95.60%      0.01s  0.29%  runtime.futexwakeup
+         0     0% 95.60%      0.01s  0.29%  runtime.gcAssistAlloc
+         0     0% 95.60%      0.01s  0.29%  runtime.gcAssistAlloc.func2
+         0     0% 95.60%      0.01s  0.29%  runtime.gcAssistAlloc1
+         0     0% 95.60%      0.01s  0.29%  runtime.gcStart.func4
+     0.01s  0.29% 95.89%      0.01s  0.29%  runtime.gcmarknewobject
+     0.01s  0.29% 96.19%      0.01s  0.29%  runtime.getGCMask (inline)
+         0     0% 96.19%      0.01s  0.29%  runtime.mapassign
+         0     0% 96.19%      0.01s  0.29%  runtime.newInlineUnwinder
+         0     0% 96.19%      0.01s  0.29%  runtime.newarray
+         0     0% 96.19%      0.01s  0.29%  runtime.notewakeup
+         0     0% 96.19%      0.01s  0.29%  runtime.pcdatavalue1
+     0.01s  0.29% 96.48%      0.01s  0.29%  runtime.popDefer
+         0     0% 96.48%      0.01s  0.29%  runtime.procyield (inline)
+     0.01s  0.29% 96.77%      0.01s  0.29%  runtime.procyieldAsm
+         0     0% 96.77%      0.01s  0.29%  runtime.rawstring (inline)
+         0     0% 96.77%      0.01s  0.29%  runtime.rawstringtmp
+     0.01s  0.29% 97.07%      0.01s  0.29%  runtime.spanClass.sizeclass (inline)
+         0     0% 97.07%      0.01s  0.29%  runtime.startTheWorldWithSema
+     0.01s  0.29% 97.36%      0.01s  0.29%  runtime.typePointers.next
+     0.01s  0.29% 97.65%      0.01s  0.29%  runtime.typedmemclr
+         0     0% 97.65%      0.01s  0.29%  runtime.unlock (inline)
+     0.01s  0.29% 97.95%      0.01s  0.29%  runtime.unlock2
+         0     0% 97.95%      0.01s  0.29%  runtime.unlockWithRank (inline)
+         0     0% 97.95%      0.01s  0.29%  runtime.wbMove
+         0     0% 97.95%      0.01s  0.29%  runtime.wbZero
+         0     0% 97.95%      0.01s  0.29%  strconv.ParseInt
+         0     0% 97.95%      0.01s  0.29%  sync.(*Pool).getSlow
+     0.01s  0.29% 98.24%      0.01s  0.29%  sync.indexLocal (inline)
+     0.01s  0.29% 98.53%      0.01s  0.29%  vortex.local/simulator/emu/state.(*WarpState).Snapshot
+         0     0% 98.53%      0.01s  0.29%  vortex.local/simulator/timing/effects.(*Adapter).observeAt
+         0     0% 98.53%      0.01s  0.29%  vortex.local/simulator/timing/memsys.(*Cache).MemoryOffers (inline)
+         0     0% 98.53%      0.01s  0.29%  vortex.local/simulator/timing/memsys.(*Cache).validate
+         0     0% 98.53%      0.01s  0.29%  vortex.local/simulator/timing/memsys.(*Coalescer).Step
+     0.01s  0.29% 98.83%      0.01s  0.29%  vortex.local/simulator/timing/memsys.(*LocalMemory).Responses (inline)
+     0.01s  0.29% 99.12%      0.01s  0.29%  vortex.local/simulator/timing/memsys.makeBatch
+         0     0% 99.12%      0.01s  0.29%  vortex.local/simulator/timing/model.(*Collector).Evaluate
+         0     0% 99.12%      0.01s  0.29%  vortex.local/simulator/timing/model.(*Core).Idle
+         0     0% 99.12%      0.01s  0.29%  vortex.local/simulator/timing/model.(*Pipeline).Evaluate
+         0     0% 99.12%      0.01s  0.29%  vortex.local/simulator/timing/model.(*Pipeline).Stages (inline)
+     0.01s  0.29% 99.41%      0.01s  0.29%  vortex.local/simulator/timing/model.(*STDFPU).Resources
+     0.01s  0.29% 99.71%      0.01s  0.29%  vortex.local/simulator/timing/model.observed
+         0     0% 99.71%      0.01s  0.29%  vortex.local/simulator/timing/runner.(*MultiRunner).observeWarps.func1 (inline)
+     0.01s  0.29%   100%      0.01s  0.29%  vortex.local/simulator/timing/runner.(*runnerMemory).receive

@@ -9,16 +9,22 @@ import (
 
 // Clock schedules one Akita event per common core edge. The period is an
 // explicit simulation time scale, not an inferred external RTL frequency.
+// A Clock owns its engine and must not be copied or run concurrently/reentrantly.
 type Clock struct {
 	period akita.VTimeInPicoSec
 	cycle  uint64
+	driver edgeDriver
 }
 
 func NewClock(period akita.VTimeInPicoSec) (*Clock, error) {
 	if period == 0 {
 		return nil, fmt.Errorf("zero clock period")
 	}
-	return &Clock{period: period}, nil
+	c := &Clock{period: period}
+	c.driver.clock = c
+	c.driver.engine = akita.NewSerialEngine()
+	c.driver.engine.RegisterHandler("core-edge", &c.driver)
+	return c, nil
 }
 
 func (c *Clock) Cycle() uint64 { return c.cycle }
@@ -36,8 +42,13 @@ func (c *Clock) Run(budget uint64, step func(uint64) (bool, error)) error {
 	if budget > math.MaxUint64-c.cycle || c.cycle+budget-1 > math.MaxUint64/uint64(c.period) {
 		return fmt.Errorf("clock time overflow")
 	}
-	d := &edgeDriver{clock: c, remaining: budget, step: step, engine: akita.NewSerialEngine()}
-	d.engine.RegisterHandler("core-edge", d)
+	d := &c.driver
+	d.remaining, d.step = budget, step
+	defer func() {
+		// The engine drains: Handle schedules a successor only after a successful
+		// non-terminal edge. Do not retain the caller or an error between runs.
+		d.remaining, d.step, d.err = 0, nil, nil
+	}()
 	d.schedule()
 	if err := d.engine.Run(); err != nil {
 		return err
