@@ -1,5 +1,11 @@
 # 外部 memory backend
 
+下述 `New` 合约对应固定延迟后端。可选 `NewAsync(owner, config, clients, banks, driver)`
+使用外部 DramSim completion，不叠加固定 latency；返回按交错的物理 bus bank 排序，
+不是按 Cache client 或全局 FIFO 排序。冻结平台为64B、2 banks；同 bank 的 I/D 请求共享
+FIFO，不同 bank 可乱序返回。完整接口、可见性和近似边界见
+[DramSim 说明](../../integration/dramsim/README.md)。
+
 `DefaultConfig()` 从 `timing/ir.yaml` 的 `mc-backend.parameters` 读取默认值。
 `New(originalBacking, config, clients)` 绑定原 `warp.AtomicMemoryService`，可直接传入
 `support/memory.Memory`。后端没有另一份 backing storage；有限队列只保存已接受请求和返回数据。
@@ -83,7 +89,9 @@ Kernel、Fetch、LSU 和 FENCE 的运行时接线留给后续里程碑。
 
 `NewSIMDSplit()` 提供 mixed 路由组件：先读取 `Outputs()` 递交两条子路径，再以实际
 ready/响应调用 `Step`。`SubsetAccepted` 表示进入子缓冲，`OutputDelivered` 表示子路径
-释放该输入；`Progress` 可报告更早的部分批次进展。`Reads` 通过轮转返回缓冲，
+释放该输入；`Progress` 可报告更早的部分批次进展。`Reads` 通过固定优先级返回缓冲，
+global（输入 0）优先于 local；依据 `VX_mem_unit.lmem_switch.ARBITER="P"`，
+不是 `VX_lmem_switch` 模块默认的 `R`。
 `Stores` 是应用事件，`Complete` 等待全部 lane 完成和子请求引用释放。
 这些软件事件须由调用方消费；它们不代表 backing visibility。
 

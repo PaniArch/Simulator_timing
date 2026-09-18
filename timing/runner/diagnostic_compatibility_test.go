@@ -7,16 +7,22 @@ import (
 	"testing"
 )
 
-// Fingerprints were captured from the state-construction-cost parent before
-// diagnostic optimization. JSON includes every record field and ordered slice;
+// Fingerprints include the RTL response-handshake / registered CTA-fire repair
+// and the TokenBindings trace namespace / RTL I/O aperture classification.
+// Cached-data fixtures now reside at 0x10800, outside the RTL I/O aperture.
+// Includes the registered KMU start edge and separate hardware completion fields.
+// The earlier pre-repair fingerprints
+// deliberately no longer apply: CTA activation moves one edge and an extra
+// response holding slot was removed (see rtl_response_regression_test.go).
+// JSON includes every record field and ordered slice;
 // the fixture fixes device identity, and does not cross epochs (Services has a
 // separately documented cross-epoch inventory ordering limitation).
 func TestDiagnosticTraceCompatibility(t *testing.T) {
 	want := map[string]string{
-		"multi/fault=false":  "a5d1f03d1219b62db4d33d606fb7571c5cc3e9edd00c35aaadb1f438ec2f970f",
-		"multi/fault=true":   "9df8a12a605ac385cb512987c3b0411a7ef0bde7c683b4a7fca6f4e72b9e2bac",
-		"kernel/fault=false": "94b802f0ca665dd2b00fc3e18b59a219bea6a7ff549d2610b62a2021e92ea1f3",
-		"kernel/fault=true":  "b36a91dd1e0303bcae49b6e8635a34bab415bf26bbf0acee6a367e11667d2ed2",
+		"multi/fault=false":  "0ee7889214dafc3a960f2588540c2cd59efc38f0690b086c8714ae8454b8a05d",
+		"multi/fault=true":   "a4458928cb55091cead9db3333f13ca5549a870d841d0e3c073ff4529521b8b2",
+		"kernel/fault=false": "ddd42137478fd6f02308441558010f6f64bef715623ff4dbf5b2ddc3beea1c0a",
+		"kernel/fault=true":  "6791e66bda7ef55269b85f07e6bd84c258b16f1152ceb3c75c9a871be4c8150a",
 	}
 	for _, kind := range []string{"multi", "kernel"} {
 		for _, fault := range []bool{false, true} {

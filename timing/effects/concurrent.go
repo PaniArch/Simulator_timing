@@ -206,7 +206,9 @@ func (c *Concurrent) Observe(cycle uint64, r model.CoreReport, contexts [4]state
 			return err
 		}
 	}
-	if r.MemoryResponse.Valid {
+	// A stalled wire offer is not a functional receipt. The RTL mem_rsp_fire
+	// event, not valid alone, transfers the fragment into the LSU result path.
+	if r.MemoryResponse.Valid && r.MemoryResponseReady {
 		rsp := r.MemoryResponse
 		key := Identity{rsp.Epoch, rsp.Warp, rsp.ID}
 		a := c.entries[key]
@@ -342,6 +344,11 @@ func (c *Concurrent) Observe(cycle uint64, r model.CoreReport, contexts [4]state
 	c.lastCycle = cycle
 	return nil
 }
+
+// ActivateWarp advances the control frontier without cancelling old register
+// or memory receipts, matching physical register ownership across CTA reuse.
+func (c *Concurrent) ActivateWarp(w uint8) { c.streams[w].RecordActivation(c.lastID[w]) }
+
 func (c *Concurrent) Service(cycle uint64, token model.Token, mask uint8) (r model.Response, err error) {
 	if c.failed {
 		return r, fmt.Errorf("concurrent effects require reset")

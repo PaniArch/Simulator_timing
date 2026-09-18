@@ -9,8 +9,9 @@ import (
 	"vortex.local/simulator/emu/device"
 )
 
-// Keep the previous predicate as an independent regression oracle; do not
-// compare only Status.Complete, which now delegates to executionComplete.
+// Independent lifecycle oracle: hardware slot release no longer implies that
+// software receipts and transport tails are drained. Do not compare only
+// Status.Complete, which delegates to executionComplete.
 func legacyCompletion(k *Kernel) bool {
 	if k.transferredStatus != nil {
 		return k.transferredStatus.Complete
@@ -21,7 +22,8 @@ func legacyCompletion(k *Kernel) bool {
 			count++
 		}
 	}
-	return k.failed == nil && !k.retirementWrite && len(k.retirePipe[0]) == 0 && len(k.retirePipe[1]) == 0 && k.walker.Remaining() == 0 && k.pending == nil && count == 0 && len(k.barrierEvents) == 0 && k.barrierReleases == 0
+	tails := k.runner.effects.InFlight() == 0 && k.runner.hierarchy.drained() && k.runner.core.Idle(len(k.runner.fetch) == 0 && len(k.runner.loads) == 0 && !k.runner.fetchResponse.Valid && !k.runner.response.Valid)
+	return tails && !k.runner.core.SchedulerBusy() && k.failed == nil && !k.retirementWrite && len(k.retirePipe[0]) == 0 && len(k.retirePipe[1]) == 0 && k.walker.Remaining() == 0 && k.pending == nil && count == 0 && len(k.barrierEvents) == 0 && k.barrierReleases == 0
 }
 
 func TestKernelCompletionAndStatusOwnership(t *testing.T) {

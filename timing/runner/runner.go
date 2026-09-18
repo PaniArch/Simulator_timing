@@ -13,8 +13,9 @@ import (
 type Options struct {
 	TraceMemory bool // capture detached accepted fragment/transport events
 	// DataMemory is the explicit lifetime-stable local route for a single Warp.
-	DataMemory   warp.MemoryService
-	MemoryConfig *memsys.Config // nil selects the IR external-backend default for every runner
+	DataMemory    warp.MemoryService
+	MemoryConfig  *memsys.Config        // nil selects the IR external-backend default for every runner
+	MemoryBackend memsys.BackendFactory // nil retains the fixed-latency backend
 
 	Backend  string
 	PeriodPS uint64

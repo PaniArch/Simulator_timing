@@ -59,6 +59,9 @@ func TestSplitAsymmetricAcceptanceAndCompletion(t *testing.T) {
 				r.Lanes[1].Local = true
 				offer := SIMDOffer{true, r}
 				e := h.step(SplitInput{Request: offer})
+				if h.s.RTLTimingIssue() != "mixed-local-global-asymmetric-acceptance" {
+					t.Fatal("asymmetric software protection silently certified as RTL timing")
+				}
 				if e.Accepted || !e.SubsetAccepted[fast] || e.SubsetAccepted[slow] {
 					t.Fatal("asymmetric child buffer acceptance")
 				}
@@ -135,6 +138,9 @@ func TestSplitResponseArbitrationAndDuplicateProtection(t *testing.T) {
 	r.Mask = 3
 	r.Lanes[1].Local = true
 	h.step(SplitInput{Request: SIMDOffer{true, r}})
+	if h.s.RTLTimingIssue() != "" {
+		t.Fatal("symmetric mixed acceptance incorrectly flagged")
+	}
 	// A response before the child is accepted must fail without advancing edge.
 	bad := SplitInput{}
 	bad.Reads[0] = SIMDReply{true, completion(r, 1)}
@@ -145,7 +151,7 @@ func TestSplitResponseArbitrationAndDuplicateProtection(t *testing.T) {
 	reads := [2]SIMDReply{{true, completion(r, 1)}, {true, completion(r, 2)}}
 	e := h.step(SplitInput{Reads: reads})
 	if !e.ReadReady[0] || e.ReadReady[1] {
-		t.Fatal("initial round robin winner")
+		t.Fatal("global priority winner")
 	}
 	reads[0] = SIMDReply{}
 	e = h.step(SplitInput{Reads: reads})
@@ -169,6 +175,41 @@ func TestSplitResponseArbitrationAndDuplicateProtection(t *testing.T) {
 		t.Fatal("response tail not retired")
 	}
 }
+func TestSplitGlobalPriorityPersistsAcrossAcceptedResponses(t *testing.T) {
+	h := newSplitHarness(t)
+	r := simd(1)
+	r.Mask = 3
+	r.Lanes[1].Local = true
+	g := simd(2)
+	g.Mask = 1
+	h.step(SplitInput{Request: SIMDOffer{true, r}})
+	h.step(SplitInput{Request: SIMDOffer{true, g}, PathReady: [2]bool{true, true}})
+	reads := [2]SIMDReply{{true, completion(r, 1)}, {true, completion(r, 2)}}
+	e := h.step(SplitInput{PathReady: [2]bool{true, true}, Reads: reads})
+	if e.ReadReady != [2]bool{true, false} {
+		t.Fatal(e.ReadReady)
+	}
+	reads[0] = SIMDReply{true, completion(g, 1)}
+	// A stalled output cannot accept either input or rotate priority.
+	e = h.step(SplitInput{Reads: reads})
+	if e.ReadReady != [2]bool{} {
+		t.Fatal(e.ReadReady)
+	}
+	e = h.step(SplitInput{Reads: reads, ResponseReady: true})
+	if e.ReadReady != [2]bool{true, false} {
+		t.Fatal("used module default R instead of instance P", e.ReadReady)
+	}
+	reads[0] = SIMDReply{}
+	e = h.step(SplitInput{Reads: reads, ResponseReady: true})
+	if e.ReadReady != [2]bool{false, true} {
+		t.Fatal(e.ReadReady)
+	}
+	h.step(SplitInput{ResponseReady: true})
+	if !h.s.Drained() {
+		t.Fatal("response ownership leaked")
+	}
+}
+
 func TestSplitUnresolvedBeforeLocalSideEffect(t *testing.T) {
 	h := newSplitHarness(t)
 	r := simd(1)

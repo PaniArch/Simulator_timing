@@ -20,7 +20,16 @@ host benchmark → libvortex.so → 原生 CommandProcessor
 新驱动名称为 `simtiming`，不与 Simulator_dev 的 `simdev` 混用。
 `SIMTIMING_MODE=timing|functional` 在 Device 创建时确定；非法值拒绝，不静默回退。
 
-## 100-cycle 外部服务与 Cache 边界
+## 外部后端选择
+
+`SIMTIMING_MEMORY_BACKEND=fixed|rtlsim-dram` 在 timing Device 创建时选择后端，默认仍为
+`fixed`。`rtlsim-dram` 直接编译复用原生 RTLSim 的 `dram_sim.cpp` 和既有 Ramulator，
+通过 `SIMTIMING_DRAM_LIBRARY` 指定桥接动态库的绝对路径；缺失时明确失败，不自动降级。
+该模式不叠加100周期，运行汇总的 `memory_backend` 字段记录选择。
+功能型模式不加载DRAM。构建、边界语义及已知限制见
+[DramSim接入说明](../../integration/dramsim/README.md)。
+
+## 默认 fixed 模式的 100-cycle 外部服务与 Cache 边界
 
 已核对 `timing/ir.yaml` 的 `mc-backend` 及 `timing/memsys/backend.go`：
 
@@ -45,6 +54,15 @@ Start 异步运行，首个 Busy 查询至少返回一次 true，避免短 Kerne
 原生 runtime 在 launch 后发送 `CMD_CACHE_FLUSH`，CP 对 core 0 发 DCR read：
 适配层调用现有 `Kernel.FlushCaches`，实际推进 D 写回、I 失效及外部响应，完成后才应答。
 JSONL 分别记录 execution_cycles 和 flush_cycles，backing_visible 仅在真实刷新成功后置位。
+启动修复后还输出 `initialization_cycles`、`hardware_execution_cycles`、`hardware_complete`。
+周期设备在创建时通过 `PowerOn/Initialize` 逐拍执行 Cache reset 扫描，随后移交同一内存层级和
+时钟给首次 launch；初始化不计入 Kernel 的 busy-qualified PERF，既不跳过扫描也不减固定常数。
+`hardware_execution_cycles` 从 KMU start 到 KMU/Core 硬件 busy 条件消失；
+`execution_cycles` 仍到软件安全排空，可能更长。原生 Busy 返回仍受安全排空及 host 轮询影响，
+不可将其 wall time 或轮询次数当成 RTL busy 信号的逐周期波形。
+若出现 mixed local/global 子缓冲不对称接受，JSONL 的 `rtl_timing_issue` 会记录
+`mixed-local-global-asymmetric-acceptance`。该标记在同一设备生命周期内保持：功能成功不代表
+此执行满足 RTL 时序等价，精度统计必须排除此类记录并单独列为不支持的协议边界。
 未刷新或已失败的旧 Kernel 不允许被新 launch 替换。功能型 flush 是统一内存语义下的空操作。
 
 进入原有执行器后发生的 decode、ISA、存储组件、控制协议异常归类为 `simulator-internal`；

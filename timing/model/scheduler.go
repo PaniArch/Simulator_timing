@@ -30,6 +30,7 @@ type SchedulerState struct {
 // itself is combinational, just like VX_scheduler.schedule_warps.
 type Scheduler struct {
 	state  SchedulerState
+	launch Signal // CTA fire sampled on this edge, not a pre-edge active-bit edit
 	nextID uint64
 	rev    revision
 }
@@ -94,6 +95,15 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 	next.SingleActive = activeCount == 1
 	if err := s.validateFeedback(feedback); err != nil {
 		return Transition{}, err
+	}
+	// VX_scheduler: cta_fire updates active/PC/mask in the next-state mux.
+	// Selection above must still see the OLD active bits on the fire edge.
+	if s.launch.Valid {
+		tok := s.launch.Token
+		next.Parked[tok.Warp] = false
+		next.Warps[tok.Warp].Active = true
+		next.Warps[tok.Warp].PC = tok.PC
+		next.Warps[tok.Warp].Mask = tok.Mask
 	}
 	// Local RTL assignment order is explicit. None of these edits is installed
 	// until the same CommitEdge as schedule/Fetch/IBuffer component proposals.
@@ -162,7 +172,7 @@ func (s *Scheduler) Evaluate(scheduleReady bool, fetchAccepted Signal, pops [4]b
 		tok := fetchAccepted.Token
 		next.Warps[tok.Warp].PC = tok.PC + 4
 	}
-	t.edits = []mutation{s.rev.propose(func() { s.state, s.nextID = next, nextID })}
+	t.edits = []mutation{s.rev.propose(func() { s.state, s.nextID, s.launch = next, nextID, Signal{} })}
 	return t, nil
 }
 
@@ -181,5 +191,5 @@ func (s *Scheduler) Flush() Transition {
 	next.IBufferFull = [4]bool{}
 	next.AllIBuffersFull = false
 	next.DecodeUnlock = Signal{}
-	return Transition{edits: []mutation{s.rev.propose(func() { s.state = next })}}
+	return Transition{edits: []mutation{s.rev.propose(func() { s.state, s.launch = next, Signal{} })}}
 }

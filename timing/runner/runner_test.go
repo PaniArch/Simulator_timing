@@ -17,14 +17,14 @@ func setup(t *testing.T) (*state.WarpState, *memory.Memory) {
 	init := state.WarpInitial{Topology: state.FrozenTopology(), PC: 0x100, ActiveMask: 15, Lifecycle: state.WarpRunning}
 	for lane := uint8(0); lane < 4; lane++ {
 		v := state.LaneInitial{ID: lane}
-		v.GPR[1] = 64 + 8*uint32(lane)
+		v.GPR[1] = 0x10040 + 8*uint32(lane)
 		init.Lanes = append(init.Lanes, v)
 	}
 	owner, err := state.NewWarp(init)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ram, err := memory.New(512)
+	ram, err := memory.New(0x10200)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestProgramAndDeterminism(t *testing.T) {
 		}
 	}
 	want, _ := reference.Snapshot()
-	wantBytes, _ := refRAM.ReadBytes(0, 512)
+	wantBytes, _ := refRAM.ReadBytes(0, 0x10200)
 	var previous []runner.Record
 	for run := 0; run < 4; run++ {
 		owner, ram := setup(t)
@@ -95,7 +95,7 @@ func TestProgramAndDeterminism(t *testing.T) {
 			t.Fatal("visibility", visible, err)
 		}
 		got, _ := owner.Snapshot()
-		bytes, _ := ram.ReadBytes(0, 512)
+		bytes, _ := ram.ReadBytes(0, 0x10200)
 		if !r.Completed() || r.Pending() || r.Retired() != 7 || got != want || !reflect.DeepEqual(bytes, wantBytes) {
 			t.Fatal("program differs", r.Retired(), got, want)
 		}
@@ -123,7 +123,7 @@ func TestFlushPreservesAcceptedStoreTail(t *testing.T) {
 			t.Fatal(err)
 		}
 		if last.Report.MemoryAccepted {
-			before, _ := ram.ReadBytes(64, 28)
+			before, _ := ram.ReadBytes(0x10040, 28)
 			if err = owner.SetPC(0x11c); err != nil {
 				t.Fatal(err)
 			}
@@ -136,7 +136,7 @@ func TestFlushPreservesAcceptedStoreTail(t *testing.T) {
 			if err = r.Run(1000, nil); err != nil {
 				t.Fatal(err)
 			}
-			after, _ := ram.ReadBytes(64, 28)
+			after, _ := ram.ReadBytes(0x10040, 28)
 			if !r.Completed() || !reflect.DeepEqual(before, after) {
 				t.Fatal("execution completion unexpectedly made backing visible")
 			}
@@ -144,7 +144,7 @@ func TestFlushPreservesAcceptedStoreTail(t *testing.T) {
 				t.Fatal("visibility", visible, err)
 			}
 			for lane := uint32(0); lane < 4; lane++ {
-				b, _ := ram.ReadBytes(64+lane*8, 4)
+				b, _ := ram.ReadBytes(0x10040+lane*8, 4)
 				if binary.LittleEndian.Uint32(b) != 9 {
 					t.Fatal("accepted store was lost", lane, b)
 				}

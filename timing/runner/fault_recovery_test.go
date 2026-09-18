@@ -18,7 +18,7 @@ type recoveryReadFault struct {
 }
 
 func (m *recoveryReadFault) Read(address uint32, dst []byte) error {
-	if address == 0x800 {
+	if address == 0x10800 {
 		m.reads++
 		if m.fail {
 			m.fail = false
@@ -31,7 +31,7 @@ func (m *recoveryReadFault) Read(address uint32, dst []byte) error {
 func TestMemoryFaultResetAlignsCommittedEdges(t *testing.T) {
 	for _, afterMemory := range []bool{false, true} {
 		t.Run(map[bool]string{false: "response-before-step", true: "effects-after-step"}[afterMemory], func(t *testing.T) {
-			ram, _ := memory.New(4096)
+			ram, _ := memory.New(0x12000)
 			put := func(addr, word uint32) {
 				var b [4]byte
 				binary.LittleEndian.PutUint32(b[:], word)
@@ -39,7 +39,7 @@ func TestMemoryFaultResetAlignsCommittedEdges(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			put(0x800, 42)
+			put(0x10800, 42)
 			put(0x100, 0x0000a183) // lw x3,0(x1)
 			put(0x104, 0x00118213) // addi x4,x3,1: keep TMC behind the faulting load
 			put(0x108, 0x0000000b)
@@ -65,7 +65,7 @@ func TestMemoryFaultResetAlignsCommittedEdges(t *testing.T) {
 				}
 				for l := uint8(0); l < 4; l++ {
 					lane := state.LaneInitial{ID: l}
-					lane.GPR[1] = 0x800
+					lane.GPR[1] = 0x10800
 					init.Lanes = append(init.Lanes, lane)
 				}
 				var err error

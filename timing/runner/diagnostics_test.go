@@ -13,8 +13,8 @@ import (
 	"vortex.local/simulator/timing/model"
 )
 
-// Poison every exported slice in a delivered record, including nested resource,
-// feedback and memory slices. This must not affect owners or subsequent records.
+// Poison exported containers in a delivered record, including nested resource,
+// feedback/memory slices and per-token binding maps. Owners must stay unchanged.
 func poisonDiagnosticSlices(v reflect.Value) {
 	switch v.Kind() {
 	case reflect.Struct:
@@ -32,6 +32,10 @@ func poisonDiagnosticSlices(v reflect.Value) {
 				v.Index(i).SetZero()
 			}
 		}
+	case reflect.Map:
+		for _, key := range v.MapKeys() {
+			v.SetMapIndex(key, reflect.Value{})
+		}
 	}
 }
 
@@ -46,7 +50,7 @@ func diagnosticState(t *testing.T, f *baselineFixture) baselineResult {
 		}
 	}
 	var err error
-	r.Before, err = f.ram.ReadBytes(0, 4096)
+	r.Before, err = f.ram.ReadBytes(0, f.ram.Size())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"vortex.local/simulator/emu/warp"
+	"vortex.local/simulator/timing"
 )
 
 // System connects the independently clocked L1 and LSU components. The backend
@@ -13,7 +14,7 @@ import (
 // Owners retain all backing bytes; System never services an ISA request itself.
 type System struct {
 	instruction, data *Cache
-	backend           *Backend
+	backend           ExternalBackend
 	local             *LocalMemory
 	split             *SIMDSplit
 	coalescer         *Coalescer
@@ -25,6 +26,7 @@ type System struct {
 	started           bool
 	cycle             uint64
 	fault             error
+	ioBase, ioEnd     uint32
 }
 
 type SystemInput struct {
@@ -53,15 +55,36 @@ type SystemEdge struct {
 }
 
 func NewSystem(owner warp.AtomicMemoryService, localOwner LocalOwner, config Config) (*System, error) {
+	return NewSystemWithBackend(owner, localOwner, config, nil)
+}
+
+func NewSystemWithBackend(owner warp.AtomicMemoryService, localOwner LocalOwner, config Config, factory BackendFactory) (*System, error) {
 	s := &System{progress: make(map[Identity]uint8), released: make(map[Identity]bool)}
 	var err error
+	ioBase, err := timing.Number("config", "cfg-memory", "values", "io_base_address")
+	if err != nil {
+		return nil, err
+	}
+	ioEnd, err := timing.Number("config", "cfg-memory", "values", "io_end_address")
+	if err != nil {
+		return nil, err
+	}
+	if ioBase < 0 || ioEnd <= ioBase || uint64(ioEnd) > math.MaxUint32 || ioBase%SectorBytes != 0 || ioEnd%SectorBytes != 0 {
+		return nil, fmt.Errorf("unsupported RTL I/O aperture")
+	}
+	s.ioBase, s.ioEnd = uint32(ioBase), uint32(ioEnd)
 	if s.instruction, err = NewCache(InstructionCache); err != nil {
 		return nil, err
 	}
 	if s.data, err = NewCache(DataCache); err != nil {
 		return nil, err
 	}
-	if s.backend, err = New(owner, config, s.instruction.Spec().MemoryPorts+s.data.Spec().MemoryPorts); err != nil {
+	if factory == nil {
+		factory = func(o warp.AtomicMemoryService, c Config, ports int) (ExternalBackend, error) {
+			return New(o, c, ports)
+		}
+	}
+	if s.backend, err = factory(owner, config, s.instruction.Spec().MemoryPorts+s.data.Spec().MemoryPorts); err != nil {
 		return nil, err
 	}
 	if s.local, err = NewLocalMemory(localOwner); err != nil {
@@ -273,6 +296,28 @@ func (s *System) Step(cycle uint64, in SystemInput) (out SystemEdge, err error) 
 func (s *System) IsLocal(address uint32) bool {
 	return uint64(address) >= uint64(s.local.base) && uint64(address) < uint64(s.local.base)+uint64(s.local.size)
 }
+
+// VX_lsu_slice classifies whole memory blocks. Both frozen bounds are block
+// aligned; the resulting is_addr_io bit selects VX_cache_bypass, not LMEM.
+func (s *System) IsIO(address uint32) bool { return address >= s.ioBase && address < s.ioEnd }
+
+// ResetSettled is a host observation, not an extra hardware admission gate.
+// Include init operations still in the bank pipeline, not just the scan index.
+func (s *System) ResetSettled() bool {
+	for _, c := range []*Cache{s.instruction, s.data} {
+		for _, b := range c.banks {
+			if b.initNext < b.spec.Sets || b.s0 != nil && b.s0.kind == bankInit || b.s1 != nil && b.s1.op.kind == bankInit {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// VX_mem_unit.empty counts the coalescer, not cache or external memory tails.
+func (s *System) MemUnitEmpty() bool { return s.coalescer.Empty(s.split.Outputs()[GlobalPath].Valid) }
+
+func (s *System) RTLTimingIssue() string { return s.split.RTLTimingIssue() }
 
 // NextCycle exposes clock alignment for software recovery without advancing any
 // component. Protocol faults are terminal: some components may have advanced

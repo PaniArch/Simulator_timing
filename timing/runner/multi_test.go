@@ -21,7 +21,7 @@ func multiSetup(t *testing.T) ([4]*state.WarpState, *memory.Memory) {
 // functional references use identical addresses/data; no service delay callback.
 func multiSetupMemory(t *testing.T, localPacked bool) ([4]*state.WarpState, *memory.Memory, warp.MemoryService) {
 	t.Helper()
-	ram, err := memory.New(4096)
+	ram, err := memory.New(0x12000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func multiSetupMemory(t *testing.T, localPacked bool) ([4]*state.WarpState, *mem
 		init := state.WarpInitial{Topology: state.FrozenTopology(), WarpID: uint8(w), PC: uint32(0x100 * (w + 1)), ActiveMask: 15, Lifecycle: state.WarpRunning}
 		for lane := uint8(0); lane < 4; lane++ {
 			l := state.LaneInitial{ID: lane}
-			l.GPR[1] = uint32(0x800 + w*0x100 + int(lane)*16)
+			l.GPR[1] = uint32(0x10800 + w*0x100 + int(lane)*16)
 			l.GPR[2] = 3
 			if w == 3 {
 				l.GPR[2] = 1
@@ -144,8 +144,8 @@ func TestMultiRunnerConcurrentFunctionalResults(t *testing.T) {
 		if done, err := r.MakeVisible(10000); err != nil || !done {
 			t.Fatal("visibility", done, err)
 		}
-		got, _ := ram.ReadBytes(0, 4096)
-		want, _ := refRAM.ReadBytes(0, 4096)
+		got, _ := ram.ReadBytes(0, 0x12000)
+		want, _ := refRAM.ReadBytes(0, 0x12000)
 		if !reflect.DeepEqual(got, want) {
 			t.Fatal("final memory differs")
 		}

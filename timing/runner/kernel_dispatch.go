@@ -16,6 +16,30 @@ type ctaDispatch struct {
 	selectedMask isa.WarpMask
 }
 
+type contextWrite struct {
+	cycle, generation uint64
+	warp              uint8
+}
+
+// Frozen VX_cta_dispatch: ceil((4-1)/TID_STEP=2) = two pipeline
+// registers, followed by cta_warp_ram's write edge. A read at that edge
+// still observes old RAM (RDW_MODE=R); expose the new view afterwards.
+func (k *Kernel) commitContextWrites(cycle uint64) {
+	remaining := k.contextWrites[:0]
+	for _, w := range k.contextWrites {
+		if w.cycle > cycle {
+			remaining = append(remaining, w)
+			continue
+		}
+		if k.warpGenerations[w.warp] != w.generation {
+			k.failed = fmt.Errorf("stale CTA context pipeline write")
+			continue
+		}
+		k.contextReady[w.warp] = true
+	}
+	k.contextWrites = remaining
+}
+
 func (k *Kernel) warpEvent(kind string, slot uint32, m core.WarpMembership) {
 	k.event(kind, k.resident[slot].Launch.ID, int(slot), 1<<m.WarpID)
 	e := &k.events[len(k.events)-1]
@@ -24,7 +48,10 @@ func (k *Kernel) warpEvent(kind string, slot uint32, m core.WarpMembership) {
 
 func (k *Kernel) residency() error {
 	for slot, c := range k.resident {
-		if c != nil && k.observeCTA(slot, c).Reclaimable {
+		// VX_cta_dispatch clears slot_valid on the last delayed warp_done,
+		// independently of commit/pending/memory tails. Token bindings and
+		// physical LMEM leases retain those tails outside the slot table.
+		if c != nil && c.Dispatched == k.launch.WarpsPerCTA && c.RetiredRanks == isa.WarpMask((1<<k.launch.WarpsPerCTA)-1) && !k.memory.BarrierPending(uint32(slot)) {
 			for _, m := range c.Resident.Members {
 				k.warpEvent("warp-released", uint32(slot), m)
 			}
@@ -46,7 +73,7 @@ func (k *Kernel) residency() error {
 		// nor a wid already dispatched for this CTA (dispatched_warps in RTL).
 		candidate := uint8(4)
 		for w := uint8(0); w < 4; w++ {
-			if d.selectedMask.Active(w) || !k.runner.WarpQuiescent(w) || k.runner.parked[w] {
+			if d.selectedMask.Active(w) || !k.runner.warpDispatchable(w) {
 				continue
 			}
 			if view, err := k.memory.ViewForWarp(w); err == nil && k.memory.BarrierPending(view.ID) {
@@ -61,6 +88,8 @@ func (k *Kernel) residency() error {
 				return err
 			}
 			k.used[m.WarpID] = true
+			k.contextReady[m.WarpID] = false
+			k.contextWrites = append(k.contextWrites, contextWrite{k.runner.Cycle() + 2, k.warpGenerations[m.WarpID], m.WarpID})
 			c.Dispatched++
 			k.warpEvent("warp-dispatched", d.slot, m)
 			d.selected = nil
@@ -95,6 +124,11 @@ func (k *Kernel) residency() error {
 		c.Resident = snapshot
 		m := snapshot.Members[len(snapshot.Members)-1]
 		k.warpGenerations[candidate]++
+		owner, err := k.memory.PinLocal(candidate)
+		if err != nil {
+			return err
+		}
+		k.localOwners[[2]uint64{uint64(candidate), k.warpGenerations[candidate]}] = owner
 		d.selected = &m
 		d.selectedMask |= 1 << candidate
 		k.warpEvent("warp-selected", d.slot, m)

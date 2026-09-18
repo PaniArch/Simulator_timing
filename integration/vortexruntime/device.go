@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"vortex.local/simulator/emu/device"
+	"vortex.local/simulator/emu/warp"
+	"vortex.local/simulator/integration/dramsim"
 	"vortex.local/simulator/isa"
 	"vortex.local/simulator/support/memory"
 	"vortex.local/simulator/timing/memsys"
@@ -80,9 +82,14 @@ func (e *ClassifiedError) Unwrap() error {
 
 // RunSummary is the detached result of the most recent native launch.
 type RunSummary struct {
-	DeviceID         uint64           `json:"trace_device_id,omitempty"`
-	LaunchID         uint64           `json:"trace_launch_id,omitempty"`
-	HardwareCounters *isa.CounterView `json:"hardware_counters"` // nil means unavailable; device cumulative
+	MemoryBackend        string           `json:"memory_backend,omitempty"`
+	RTLTimingIssue       string           `json:"rtl_timing_issue,omitempty"`
+	DeviceID             uint64           `json:"trace_device_id,omitempty"`
+	LaunchID             uint64           `json:"trace_launch_id,omitempty"`
+	HardwareCounters     *isa.CounterView `json:"hardware_counters"` // nil means unavailable; device cumulative
+	InitializationCycles uint64           `json:"initialization_cycles"`
+	HardwareCycles       uint64           `json:"hardware_execution_cycles"`
+	HardwareComplete     bool             `json:"hardware_complete"`
 
 	Mode           Mode                 `json:"mode"`
 	Cycles         uint64               `json:"execution_cycles"`
@@ -111,9 +118,13 @@ type auditRecord struct {
 // Device owns the one canonical sparse device-memory image and the native
 // launch adapter. Existing ISA/Warp/Core/Device owners remain unchanged.
 type Device struct {
-	mu     sync.Mutex
-	mode   Mode
-	kernel *runner.Kernel // retained until native CP explicitly flushes D and I
+	mu                   sync.Mutex
+	mode                 Mode
+	kernel               *runner.Kernel // retained until native CP explicitly flushes D and I
+	powered              *runner.PoweredDevice
+	initializationCycles uint64
+	dram                 *dramsim.Driver
+	memoryBackend        string
 
 	memory *memory.Sparse
 	dcr    [0x1000]uint32
@@ -154,12 +165,62 @@ func NewDeviceWithMode(mode Mode) (*Device, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Device{
+	d := &Device{
 		mode:      mode,
 		memory:    backing,
 		stepChunk: defaultStepChunk,
 		auditPath: os.Getenv("SIMTIMING_EVENT_LOG"),
-	}, nil
+	}
+	if mode == Timing {
+		// Device power/reset precedes host program upload and KMU start. Clock
+		// actual bank initialization; never synthesize a warm cache or subtract
+		// a fitted constant from the first kernel's counters.
+		config, err := memsys.DefaultConfig()
+		if err != nil {
+			return nil, err
+		}
+		config.Latency = 100
+		d.memoryBackend = os.Getenv("SIMTIMING_MEMORY_BACKEND")
+		if d.memoryBackend == "" {
+			d.memoryBackend = "fixed"
+		}
+		var factory memsys.BackendFactory
+		switch d.memoryBackend {
+		case "fixed":
+		case "rtlsim-dram":
+			// Frozen platform: two 64-byte memory banks; RTLSim default MEM_CLOCK_RATIO=1.
+			d.dram, err = dramsim.Open(os.Getenv("SIMTIMING_DRAM_LIBRARY"), 2, memsys.SectorBytes, 1)
+			if err != nil {
+				return nil, err
+			}
+			factory = func(owner warp.AtomicMemoryService, c memsys.Config, ports int) (memsys.ExternalBackend, error) {
+				return memsys.NewAsync(owner, c, ports, 2, d.dram)
+			}
+		default:
+			return nil, fmt.Errorf("invalid SIMTIMING_MEMORY_BACKEND %q", d.memoryBackend)
+		}
+		d.powered, err = runner.PowerOn(backing, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config, MemoryBackend: factory})
+		if err != nil {
+			if d.dram != nil {
+				_ = d.dram.Close()
+			}
+			return nil, err
+		}
+		for {
+			done, err := d.powered.Initialize(32)
+			if err != nil {
+				if d.dram != nil {
+					_ = d.dram.Close()
+				}
+				return nil, err
+			}
+			if done {
+				break
+			}
+		}
+		d.initializationCycles = d.powered.Cycle()
+	}
+	return d, nil
 }
 
 // Close prevents new launches. A caller must wait for Busy to become false.
@@ -173,6 +234,9 @@ func (d *Device) Close() error {
 		return fmt.Errorf("cannot close while a kernel is running")
 	}
 	d.closed = true
+	if d.dram != nil {
+		return d.dram.Close()
+	}
 	return nil
 }
 
@@ -351,15 +415,12 @@ func (d *Device) runFunctional(launch device.LaunchState, summary *RunSummary) e
 }
 
 func (d *Device) runTiming(launch device.LaunchState, summary *RunSummary) error {
-	config, err := memsys.DefaultConfig()
-	if err != nil {
-		return err
-	}
-	// Only the external service latency is selected here, never cache geometry.
-	config.Latency = 100
+	// The external configuration and cache hierarchy belong to the powered
+	// device; a launch neither reconstructs them nor selects new latencies.
+	var err error
 	var k *runner.Kernel
 	if d.kernel == nil {
-		k, err = runner.NewKernel(launch, d.memory, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config})
+		k, err = d.powered.Start(launch)
 	} else {
 		k, err = d.kernel.NextLaunch(launch)
 	}
@@ -381,6 +442,10 @@ func (d *Device) runTiming(launch device.LaunchState, summary *RunSummary) error
 		counters := k.Counters()
 		summary.HardwareCounters = &counters
 		summary.Cycles, summary.Generated, summary.Completed = status.LaunchCycles, status.Generated, status.Completed
+		summary.InitializationCycles = d.initializationCycles
+		summary.MemoryBackend = d.memoryBackend
+		summary.HardwareCycles, summary.HardwareComplete = status.HardwareCycles, status.HardwareComplete
+		summary.RTLTimingIssue = status.RTLTimingIssue
 		for _, e := range k.TakeEvents() {
 			if e.Kind == "admitted" {
 				summary.Admitted++

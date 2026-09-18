@@ -99,7 +99,7 @@ func (c *Core) Resources() []ResourceState {
 func (c *Core) Idle(serviceIdle bool) bool {
 	if c.front.scheduler != nil {
 		s := c.front.scheduler
-		if s.Output().Valid || s.state.DecodeUnlock.Valid || s.state.IBufferCount != [4]uint8{} {
+		if s.launch.Valid || s.Output().Valid || s.state.DecodeUnlock.Valid || s.state.IBufferCount != [4]uint8{} {
 			return false
 		}
 	}
@@ -160,6 +160,9 @@ func (c *Core) EvaluateExecution(in CoreInputs) (CoreTransition, error) {
 	scheduler, scheduled := c.front.SchedulerState()
 	report := CoreReport{IssueCandidates: c.IssueCandidates(), IssueSelected: front.IssueSelected, Wakeups: append([]SchedulerFeedback(nil), in.Feedback...), Scheduler: scheduler, Scheduled: scheduled, Scoreboard: c.front.ScoreboardState(), Issued: front.Issued, Decoded: front.Decoded, IBufferPop: front.IBufferPop, MemoryResponse: in.MemoryResponse, Executed: executed, CSRRequest: sfu.CSRRequest, Credits: c.front.Credits(), Offered: front.Offered, FetchRequest: front.Request, MemoryRequest: lsu.Request, InstructionAccepted: front.Accepted, FetchAccepted: front.RequestAccepted, FetchResponseReady: front.ResponseReady, MemoryAccepted: lsu.RequestAccepted, MemoryResponseReady: lsu.ResponseReady, Dispatched: front.Releases, Read: front.Read, Writeback: wb.Writeback, PendingRelease: wb.PendingRelease, Branch: alu.Branch, Control: sfu.Control, Flags: fpu.Flags, CSRRequestWindow: sfu.CSRRequestWindow}
 	activeNext := c.ActiveWarps()
+	if c.front.scheduler != nil && c.front.scheduler.launch.Valid {
+		activeNext |= 1 << c.front.scheduler.launch.Token.Warp
+	}
 	for _, event := range orderedFeedback(in.Feedback) {
 		switch event.Kind {
 		case FeedbackSpawn:

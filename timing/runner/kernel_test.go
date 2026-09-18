@@ -10,7 +10,7 @@ import (
 )
 
 func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
-	ram, err := memory.New(4096)
+	ram, err := memory.New(0x12000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,8 +29,8 @@ func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
 	for i, w := range []uint32{0x340020f3, 0x0000a103, 0xcd6021f3, 0x00219193, 0x001181b3, 0x0021a823, 0xcdf02273, 0x0241a023, 0x0000000b} {
 		write(0x200+uint32(i)*4, w)
 	}
-	write(0x800, 0x12345678)
-	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x800, GridDimensions: [3]uint32{4, 1, 1}, BlockDimensions: [3]uint32{1, 1, 1}, BlockSize: 1, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
+	write(0x10800, 0x12345678)
+	launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x10800, GridDimensions: [3]uint32{4, 1, 1}, BlockDimensions: [3]uint32{1, 1, 1}, BlockSize: 1, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
 	k, err := runner.NewKernel(launch, ram, runner.Options{Backend: "std", PeriodPS: 1, MemoryConfig: kernelMemoryConfig(11), Ready: func(c uint64) bool { return c%3 != 0 }})
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
 		t.Fatal("execution completion implied visibility")
 	}
 	var stale [4]byte
-	if err := ram.Read(0x810, stale[:]); err != nil {
+	if err := ram.Read(0x10810, stale[:]); err != nil {
 		t.Fatal(err)
 	}
 	if binary.LittleEndian.Uint32(stale[:]) != 0 {
@@ -65,7 +65,7 @@ func TestKernelLaunchExecutesStartupEntryAndCTAContexts(t *testing.T) {
 		t.Fatal("flush skipped scan/writeback", done, err)
 	}
 	for c := uint32(0); c < 4; c++ {
-		for address, want := range map[uint32]uint32{0x810 + c*4: 0x12345678, 0x820 + c*4: 0xffff0000 + c*64} {
+		for address, want := range map[uint32]uint32{0x10810 + c*4: 0x12345678, 0x10820 + c*4: 0xffff0000 + c*64} {
 			var b [4]byte
 			kernelVisible(t, k)
 			if err := ram.Read(address, b[:]); err != nil {
@@ -128,19 +128,14 @@ func TestKernelReentryMultiWarpCoordinatesAndResourceWait(t *testing.T) {
 	maxResident := 0
 	if err := k.Run(5000, func(record runner.MultiRecord) {
 		status := k.Status()
-		var generation [4]uint32
-		for _, c := range status.Resident {
-			for _, m := range c.Resident.Members {
-				generation[m.WarpID] = c.Launch.ID
-			}
-		}
 		if record.Report.MemoryRequest.Valid {
 			token := record.Report.MemoryRequest.Token
-			serviceCTA[token.ID] = generation[token.Warp]
+			serviceCTA[token.ID] = record.TokenBindings[token.ID].CTA
 		}
 		for _, service := range record.Services {
 			if service.Resource == "memory-system" {
-				if want, ok := serviceCTA[service.Token.ID]; !ok || want != generation[service.Token.Warp] {
+				binding := record.TokenBindings[service.Token.ID]
+				if want, ok := serviceCTA[service.Token.ID]; !ok || !binding.Valid || want != binding.CTA || binding.PhysicalWarp != service.Token.Warp {
 					t.Fatal("live service lost CTA identity", service)
 				}
 			}

@@ -754,3 +754,721 @@ RTL `tail_r`仅reset清零；新ctx只清warp init mask，不清tail。模型每
 7. 失败分开标注模型误差、RTL自身行为、测试ABI错误、profile不一致和实验基础设施错误；不只输出一个总MAPE或PASS。
 
 目前最有证据支撑的修正方向是 **CTA复用ready条件、fire→schedule相位、跨launch slot状态所有权、响应fragment/背压传播**。本轮只定位和记录，未实施生产修复。
+
+## 11. 授权后的 RTL 源码驱动修复迭代（进行中）
+
+本节接续前述只读诊断；用户已授权直接修复并持续测试。修复基线为 `33bc1be`。
+所有行为依据仓库 `Vortex_rtl`，未借用 SimX/其他模拟器实现，也未修改冻结 RTL。
+下面局部对齐不等于全系统精度验收，特别不能用功能 PASS 替代周期证据。
+
+### 11.1 已修复的因果链
+
+| 问题 | RTL 依据 | 实施与验证 |
+| --- | --- | --- |
+| Runner 在 LSU 未 ready 时提前收取 response，增加不存在的 holding slot | `VX_lsu_slice` / `VX_lsu_scheduler` / `VX_lmem_switch` 的既有返回缓冲与 `valid && ready` | `runnerMemory.receive` 仅呈现组合输出；实际握手时才 pop 和记录功能 receipt；没有改变 Cache/LMEM 容量或添加延迟常数 |
+| physical wid 复用等待软件尾部和 pending 全部排空 | `VX_cta_dispatch.priority_enc.data_in = ~(active_warps \| dispatched_warps)` | 增加硬件 `WarpDispatchable`，保留独立 `WarpQuiescent` 生命周期检查；旧 token 保留原 CTA/warp generation，LMEM 路由固定原物理地址，不随 wid 重绑 |
+| CTA fire 当边沿立即可被 scheduler 选择 | `VX_scheduler` 在 fire 边沿写 active/PC/mask 寄存器 | fire 成为暂存输入，选择仍读取旧状态，下一边沿才可 schedule |
+| NextLaunch 重置 slot tail | `VX_cta_dispatch.tail_r` 仅 reset 清零 | 跨 launch 保留 tail；新的 usable capacity 缩小时按 `base_tail` 回绕 |
+| split 返回仲裁错误采用默认 R | `VX_mem_unit.g_lmem_switches` 明确 `.ARBITER("P")`；`VX_lmem_switch.rsp_arb` global 为输入 0 | IR 与 `SIMDSplit` 同步改成 global 固定优先；新增连续冲突及背压单测，另直接运行冻结 RTL 仲裁器微测试 |
+
+新增 `MultiRecord.TokenBindings`：当前 physical wid 绑定与在途 token 原绑定分开，避免 trace 将旧 CTA commit 归到新 CTA。对外观察发生在内部生命周期清理之后；观察者修改 detached 数据不能改变执行。原 JSON trace fingerprint 因新字段和真实相位修复而更新，observer 开关一致性测试仍保留，不豁免。
+
+### 11.2 已完成的 22 组局部修复对照
+
+记录目录：[repair3-ref](../../.cache/timing-stress-micro-20260917/repair3-ref/measurements.json)，Slurm `12772150`。
+每组都重新执行 RTL 和模型，两个后端 host PASS，PC/mask 对齐。该版本包含 response 与 CTA 修复，尚不包含随后发现的 split P 修复。
+外部 read 服务时间按 cache/address/occurrence 重放，只作诊断；下面 17 组热窗口已经核实无外部请求重叠。
+
+| 第二次 launch 的热窗口 | Timing / RTL cycles | 三段局部时序 |
+| --- | --- | --- |
+| global hit stride 0 / 4 | 1568 / 1568 | 每组 560 条全部对齐 |
+| global hit stride 64 / 1024 | 1498 / 1498 | 每组 560 条全部对齐 |
+| local hit stride 0 / 16 | 1568 / 1568 | 每组 560 条全部对齐 |
+| local hit stride 4 | 1484 / 1484 | 560 条全部对齐 |
+| miss burst stride 0 / 4 | 1736 / 1736 | 每组 672 条全部对齐 |
+| miss burst stride 64 / 1024 | 1792 / 1792 | 每组 672 条全部对齐 |
+| BAR 1 / 4 Warp | 1232 / 1232；1316 / 1316 | 84 / 336 条全部对齐 |
+| WSYNC 1 / 4 Warp | 1204 / 1204 | 84 / 336 条全部对齐 |
+| store→load 1 / 4 Warp | 1484 / 1484 | 140 / 560 条全部对齐 |
+
+三段分别是 schedule→decode、decode→dispatch、dispatch→最后 commit；不只比较总数。
+CTA 8 次复用的第二次 launch，以首 decode→末 commit 测量：1 lane/1 Warp 为 119/119、4 lanes/1 Warp 为 119/119、2 Warp 为 220/220、3 Warp 为 334/334、4 Warp 为 **435/435**（原 **456/435**）。
+
+冷启动仍有独立的前置状态差异：例如 `cta_w4_l16_g8_abi` 的累计 PERF 是首次 536/487，第二次累计 1021/972，第二次增量都为 485。首 schedule→decode 多出的 49 周期集中在首次 I-cache 请求开始服务前；不能将此差值归到 DRAM，也不能在每个 kernel 减去固定 49。
+当前模型在 NewKernel 才创建 Cache，RTL 在 KMU start 前已经进行 reset 后初始化；需要分离 reset→launch 的环境时钟和 kernel 内部延迟，或采用双方 Cache-ready 后统一发起 launch 的受控边界，不能跳过 Cache reset scan。
+
+### 11.3 扩大回归与未关闭边界
+
+全部 31 个小规模 benchmark 的新鲜 STD-FPU RTL / 固定 100-cycle 模型测试位于 [repair-full-ref](../../.cache/timing-stress-micro-20260917/repair-full-ref/manifest.json)，作业 `12772182`；随后将用独立 `repair-full-replay-ref` 保存服务时间受控的诊断，不覆盖固定延迟结果。
+RTL 当前仍启用 IDIV_DPI，不能把 DIV 差值认作串行除法器模型错误；须与使用同一 RTL 硬件分支的参考另比。
+混合子路径请求的 exactly-once 保护与 RTL 未设置 sent 标记的问题仍是 `u-mixed-split`，本次返回 P 修复不代表请求侧已等价。
+TID 内部 pipeline、首启动环境时钟、Cache/外部边界排序也需要继续定向核查。
+
+### 11.4 后续发现与修复：Fetch 握手、slot 释放、实验边界
+
+Fetch 存在与 LSU 同类的额外 holding slot：`VX_fetch.sv:207` 直接将 icache `rsp_ready` 接到 `fetch_if.ready`，旧 runner 在 decode 不 ready 时也先 pop Cache。现改为仅实际 fetch 握手时移除 identity；`TestRTLFetchBackpressureRetainsCacheResponse` 用 4 Warp 连续 WAW 串行 DIV 制造 frontend 背压，确认确实覆盖 blocked 状态且 Cache 所有权未提前丢失。
+
+CTA slot 的 `slot_valid` 生命周期也已分开：`VX_cta_dispatch.sv:371–376` 在最后一个 delayed warp_done 清位，不等待最后的 commit/pending receipt。原模型只修 wid 选择仍会让单 slot 每次复用晚 1 周期。现在物理 slot 在退休表边沿释放，旧 token/LMEM 地址继续保留，最终 Kernel 完成另检查 runner 尾部；没有删除内存身份检查，也没有全局 drain 才允许 admission。
+`TestRTLCTASlotReleaseDoesNotWaitForPendingReceipt` 验证 8 次单 slot 复用：TMC 后第 3 边沿释放、第 4 边沿重新 admission，结束时 token binding 账本为空。
+
+Slurm `12772306`、[repair-slot-ref](../../.cache/timing-stress-micro-20260917/repair-slot-ref/manifest.json) 的 12 个形状测试：10 个有效用例双 PASS；2 个 `16×1×1` 仍双失败，保留原 RTL 坐标缺陷，不改 oracle。9 个有效用例只剩首次启动的累计 +49；例如：
+
+| 用例 | 修 slot 前 Timing/RTL 累计 PERF（两次 launch） | 修后 |
+| --- | --- | --- |
+| `shape_g221_b311_l16384`，仅 1 slot | 1787/1735；3523/3468 | 1784/1735；3517/3468 |
+| `shape_g811_b411_l8192`，2 slots | 1815/1764；3572/3519 | 1813/1764；3568/3519 |
+| `shape_g811_b411_l0`，4 slots | 1171/1103；2266/2197 | 1152/1103；2246/2197 |
+
+这些组第二次 launch 增量完全相同。`shape_g221_b133_l0` 尚有独立差异，不计作闭合。
+
+扩大回归方面，`12772182` 全部 31 项固定100后端与 STD-FPU RTL 双 PASS。后续每批重新保存二进制 hash、结果与逐指令记录，不覆盖失败批次。
+
+重放工具的两项干扰已由实际记录确认，不能归到 L1 建模：
+
+- `repair-full-replay-ref/sgemm2/evidence.json`：同一 read 指定服务 48 cycles，但生产 FIFO 将返回拖到 94；后续实验独立逐端口返回以免叠加全局 head-of-line blocking。
+- `repair-independent-ref/dotproduct/memory.json`：16 个 stack store miss 后，参数 read 在 208 已 offer，软件 external backend 到 216 才接受；这正是预设 `max_inflight=16` 的外部资源限制，不是 coalescer/Cache 凭空多 8 周期。诊断版本把外部容量及接受带宽解除，正式模型的固定100、16在途、1接受/周期保持不变。
+- 变延迟重放中 write 仍固定100会使更短 read 超过写入并读到旧 backing。新的诊断边界明确采用一边沿 write/visibility 服务；它不是生产后端，也不能作为真实 DRAM 精度结论。
+
+上述实验失败（包括 unmatched replay address/occurrence）保留，不允许回退默认延迟冒充匹配。当前必须逐批核对实际 read 返回时间、地址/次数、功能状态、PC/mask 以及局部区间；重放不满足这些条件的行不得纳入准确率。
+
+另构建了 STD FPU + 原有串行 DIV RTL 参考（`12772261`）。`serial-profile.sv` 只在解析既有 header 后 `undef IDIV_DPI`，选中原 `VX_alu_muldiv.serial_div`，不改 datapath；生成的 Verilator 层次已确认包含 serial_div。首次全量运行有10项因节点 GCC运行库版本失败，保留在 `repair-serial-ref`，不算模型失败；统一携带 GCC12 runtime 后重跑到 `repair-serial2-ref`（`12772408`）。
+
+### 11.5 I/O 属性漏传：真实访存路径问题，而非延迟参数
+
+`io_addr` 暴露了独立缺陷：RTL 对 I/O 地址连续发出非缓存请求，模型只做首次 refill，后续误走 cache hit。
+依据冻结 `VX_lsu_slice.sv:83–86` 的属性生成和 `VX_types.toml` 的 memmap，I/O 区间是
+`[0x40, 0x10000)`。该属性此前没有从 runner 传到 `LaneRequest.NonCacheable`。
+现把地址边界纳入 IR，按地址设置 NonCacheable，继续走现有 coalescer/NC bypass；不把 I/O
+错误地标为 NoMerge（`VX_mem_unit` 的 no_merge 使用 AMO 属性）。没有改变 Cache 结构或容量。
+
+`TestRTLIOApertureReachesNoncachedPath` 检查区间两端及 LMEM 地址，并验证两次四-lane I/O load
+都产生真实 NC 请求。`repair-io-ref`（`12772486`）的 `io_addr` 首 decode→末 commit 从
+1266/1398 改为 **1398/1398**。368 条指令的 decode→dispatch、dispatch→commit 全部相同；
+schedule→decode 仅首次冷启动的4条 Warp fetch 各保留 +49，其余364条相同。
+
+完整单元回归随后暴露旧夹具问题：若干 dirty-cache、self-modifying code、flush、refill-fault
+测试把应缓存的数据放在 `0x100`、`0x800` 等 I/O 地址。现搬到 `0x10000` 以上并同步编码、
+backing 容量和结果断言；不删除 dirty 可见性/flush/fault 断言，不放宽周期预算。
+共享夹具的 trace 指纹相应更新，分块执行/诊断开关等独立等价性检查仍保留。
+
+### 11.6 当前修复版的全量小规模结果与准确率边界
+
+两批均重新运行全部31个受支持小规模 benchmark 的模型及 RTL，不复用旧 PASS：
+
+| 批次 | Slurm | 结果 | 外部边界 |
+| --- | --- | --- | --- |
+| [repair-io-fixed-ref](../../.cache/timing-stress-micro-20260917/repair-io-fixed-ref/manifest.json) | 12772552 | 31/31 双 PASS | 正式模型固定100 cycles，16在途，1接受/周期；RTL原外部服务 |
+| [repair-serial-boundary-ref](../../.cache/timing-stress-micro-20260917/repair-serial-boundary-ref/repair-audit.json) | 12772488 | 31/31 双 PASS | STD FPU/串行 DIV 同配置；逐缓存、地址、出现次数重放读服务时间 |
+
+第二批有 **67次 launch、206278条对齐指令**，PC/mask 检查全通过，uop 对齐问题为0。
+以每次 launch 的首 decode→最后 commit 为窗口，**64/67 个窗口完全相等**，
+28/31 benchmark 的所有窗口都相等。非零项如下：
+
+| benchmark / launch | Timing | RTL | 差值 |
+| --- | ---: | ---: | ---: |
+| dogfood / 20 | 1186 | 1188 | -2 |
+| raycast / 1 | 171372 | 171373 | -1 |
+| sgemmx / 1 | 12298 | 12294 | +4 |
+
+例如 occupancy 为647981/647981、sgemm2为10091/10091、softmax为95168/95168。
+窗口净误差最大为0.1684%，但这**不是全模拟器“99.83%周期精度”的证明**：
+
+- 总周期抵消会掩盖局部差异。dogfood/sgemmx 仍有局部 dispatch/commit 区间相差十余周期，
+  不能只看净差1–4周期就宣告所有组件等价。
+- 诊断后端不是原 DRAM：独立端口返回、解除软件外部容量限制、write/visibility一边沿服务；
+  正式生产后端仍为固定100。该结果仅用于定位内部时序，不能替代真实DRAM验证。
+- multikernel 有2次、raycast有1次 read 实际交付晚于计划完成边沿，需要连同接收侧背压解释；
+  其它用例未出现这种交付延后。不能把指定 service latency 当成实际响应时刻。
+- 冷启动初始化先后关系仍不同。首 decode 窗口明确排除了前置边界，并非在每个 Kernel
+  总周期中减49；实际累计 PERF 仍应原样保留。
+
+### 11.7 剩余差异追到哪里：先区分外部接受与内部执行
+
+`repair-serial-boundary-ref/sgemmx` 中首个局部 commit 差异是 Warp1、token174、
+PC `0x800000b4` 的 store：归一化 dispatch 为692/643，commit 为765/717。
+前者保持冷启动偏移49，后者变为48，即该 store 的局部路径短1周期。
+模型 `timing/stderr.log:845`、RTL `rtl/stdout.log:7259` 可定位原事件。
+
+进一步向前查，差异已经出现在外部请求接受，而不是从这条 store 才开始：
+
+| D-cache 外部 read 地址（该次出现） | 模型 accept（首 schedule归一化） | RTL accept（同边界） | 偏移 |
+| --- | ---: | ---: | ---: |
+| `0xfffdbfc0` | 639 | 590 | 49 |
+| `0xfffdffc0` | 640 | 591 | 49 |
+| `0xfffd9fc0` | 641 | 593 | 48 |
+| `0xfffddfc0` | 642 | 594 | 48 |
+
+RTL原始时刻1303接受 `0xfffdffc0`，同周期还有 I-cache miss 请求；1305没有该 D-cache
+read 接受，1307才接受 `0xfffd9fc0`。模型诊断边界连续接受，没有对应空拍。
+证据：RTL日志6363–6397行，模型 BACKEND 日志720、723行及 `memory.json`。
+目前日志证明了**外部接受边界先分歧**，尚不能仅凭握手日志判定该空拍具体由下游 ready
+还是内部 output valid 引起，需要 valid/ready 独立波形；不据此给 Cache 添加经验气泡。
+同地址的后续D-cache core store 接受（例如 `0xfffebfc8`）也变为756/708，
+随后才传播到 LSU/store commit 和 Warp 竞争。
+
+因此下一阶段要用 L1 外侧的逐端口 valid/ready/response 联合轨迹，或在双方接入同一个
+明确固定延迟协议边界；仅逐read重放 latency 不足以消除所有外部因素。
+这轮没有通过调大固定延迟、给 store 加常数、全局 drain 或修改 RTL 来对齐总数。
+混合 local/global 请求的 `u-mixed-split`、内部 TID/Barrier RAM 抽象与首启动环境时钟
+仍明确未关闭；以上小规模通过不能推导为任意参数、任意程序的RTL逐周期等价。
+
+### 11.8 修复版仓库回归
+
+- `go test -mod=vendor ./...`：全部通过，记录 `final-go-tests-v3.log`。
+- `scripts/verify-timing.sh`：IR一致性通过，记录 `final-verify-timing-v2.log`。
+- `scripts/verify-all.sh`：冻结RTL manifest、功能回归、空缓存/禁网络/vendor-only离线构建、测试和vet通过，记录 `final-verify-all-v2.log`。
+- 新增 per-token binding map 的 observer 篡改隔离测试；诊断状态比较和恢复回归改为检查完整 backing 容量，避免夹具搬址后只检查低4KiB。增强后的 diagnostic/state-cost 测试通过，记录 `diagnostic-owner-final.log`。
+- `git diff --check` 通过；没有修改冻结 `Vortex_rtl`。本轮没有参考其它模拟器的时序语义，也没有修改正式 external backend 的固定100周期配置。
+
+以上日志位于 `.cache/timing-stress-micro-20260917/`；批次目录各自保留 manifest、二进制hash、host结果、逐指令对齐与memory证据。
+
+## 12. 后续修复：启动与完成边界，保持 DRAM 不变
+
+本节是第11节之后的版本，不覆盖前面的实验记录。不修改 external backend 的服务延迟、带宽、容量或返回策略，不采用延迟重放；正式模型仍为固定100 cycles。
+
+### 12.1 已实现的修改
+
+1. **设备生命周期与 Kernel 分离。** `runner.PowerOn` 创建初始存储层级和持续时钟，`Initialize(budget)` 逐边运行真实 Cache init 扫描及其流水尾部，`Start` 移交同一层级/时钟给首个 Kernel。冻结配置完全 settle 实测66边，来自64项扫描和两级 bank pipeline，不是拟合出来的启动延迟。允许尚未完成扫描就 Start，剩余初始化仍真实阻塞访问；零budget、分块budget、非法launch不消耗所有权、禁止重复移交都有测试。
+2. **runtime 在创建设备时初始化，不在首次 Kernel 中重建 Cache。** 增加 `initialization_cycles` 独立统计。Kernel 的 `startCycle` 从真实移交时钟取值，busy-qualified PERF 不减常数。`NewKernel` 仍保留“从冷设备直接启动”的显式API。
+3. **KMU start 的寄存阶段。** 根据 `VX_kmu.sv:204–216,299`，start边只更新running，下一边才可向CTA握手。测试验证 start E0→accept E1→select E2→fire E3→schedule E4，4 Warp逐周期fire；不是增加固定memory service延迟。
+4. **TID/context 可见性。** 按 `VX_cta_dispatch.sv:558–642`，冻结4-lane的两级TID流水后才写warp RAM。保留已有有限位宽坐标算法，但不再在wid选择时就向执行上下文暴露最终值；fire E3→RAM写E5→写边后可见。尚不宣称建立了通用BRAM模型。
+5. **硬件结束与软件排空分别观测。** `HardwareComplete/HardwareEndCycle/HardwareCycles` 根据KMU耗尽、scheduler busy、LSU scheduler empty、coalescer empty判断；`Complete`仍要求软件receipt、存储尾部、退休路径安全完成。`TestHardwareEndDoesNotWaitForStoreRefill` 用真实store miss验证硬件先结束、尾部继续存活。runtime新增 `hardware_execution_cycles/hardware_complete`；例如vecadd硬件区间979边、软件安全区间1040边，不能混用。
+
+这里仍有明确的**环境边界限制**：runtime现在选择reset-settled后开始host launch，并未逐拍模拟原生CP在reset之后的所有DCR/host操作。旧RTLSim原生启动可能与Cache初始化重叠，因此“启动结构已支持真实进度”不等于“原生CP的首次启动环境已逐边重现”。没有通过强制减49去宣称两者完全对齐。显式早启动API使这个差别可输入、可测试，而不再与Kernel构造时间混在一起。
+
+### 12.2 mixed 背压：冻结RTL组件反例与防止误报等价
+
+Slurm `12773795`，直接实例化冻结 `VX_lmem_switch`，参数与 `VX_mem_unit` 一致：GLOBAL_OUT_BUF=1、LOCAL_OUT_BUF=1、RSP_OUT_BUF=1、ARBITER=P。
+先用一个local请求占满local buffer并保持下游不ready，再持续呈现合法稳定的mixed父请求，global下游保持ready。
+原RTL记录显示：父请求ready始终0，同一个tag的global子请求握手3次。见
+`.cache/timing-stress-micro-20260917/mixed-rtl-12773795.log` 和 `mixed_rtl_tb.sv`。
+前两次构建因缺少生成头文件路径/RV32宏而失败，日志12773720、12773749保留，不算仿真结论。
+
+这证实了**组件级**重复握手，不等于已经证明所有上游约束下的完整Kernel必然可触发。
+不能通过给模型添加sent位就称作RTL修复，也不能修改冻结RTL让它迁就模型。
+现有软件exactly-once行为仍保留，但新增sticky `RTLTimingIssue`：第一次mixed两侧缓冲接受能力不对称即标记
+`mixed-local-global-asymmetric-acceptance`，经System、KernelStatus一直传到runtime JSONL。
+对应执行即使功能PASS也不得纳入RTL时序等价验收；对称mixed正常接受不误标。
+这关闭的是“静默把软件保护当RTL等价”的缺口，**没有声称已经仿真RTL重复请求及其最终错误行为**。
+
+### 12.3 验证记录
+
+- 启动/完成修复版31项小规模benchmark重新双端执行，Slurm `12773753`，全部31/31双PASS；记录 `startup-fixed-ref`，外部memory仍是原固定100，无重放。该批次在新增mixed诊断标记之前构建；标记不改变请求或周期行为，另外由组件/集成回归覆盖。
+- 5组CTA ABI微测试（8 CTA，1/2/3/4 Warp、1/4 lanes）两次launch全部双PASS，PC/mask全部匹配。首decode→末commit为119、119、220、334、435，两个launch均与RTL完全相同。窗口内RTL没有新的外部read请求；没有利用DRAM重放对齐。
+- 上述微测试的native CP会在launch之间flush，故第二次launch的首次fetch并非天然热命中。这里只把**首次decode之后的同line执行窗口**称为热窗口，不能把整个第二次launch称为零DRAM测试。首fetch与末尾flush仍保留各自实际费用。
+- 微测试记录 `startup-micro-ref`，作业12773840和12773852。首次3个子任务早于manifest准备完成，未执行仿真；准备完成后只补跑这3项，原错误日志保留。
+- 完整Go回归 `startup-full-tests-v2.log` 通过；启动/硬件完成/mixed标记及runtime定向回归 `startup-final-focus.log` 通过；IR检查 `startup-verify-ir.log` 通过。新增测试 `timing/runner/power_test.go`。
+- 最终代码（包含mixed诊断标记及runtime配置清理）再次运行 `go test -mod=vendor ./...` 全部通过，记录 `startup-full-final.log`，runner耗时191.652秒；`scripts/verify-timing.sh` 与 `go vet -mod=vendor ./...` 通过，记录 `startup-ir-final.log`、`startup-vet-final.log`。最后的IR说明文字修正另经 `startup-ir-latest.log` 验证通过。
+- 本轮 `scripts/verify-all.sh` 通过冻结RTL manifest、功能检查和空缓存/禁网络离线构建、测试、vet，记录 `startup-verify-all.log`；最终 `git diff --check` 通过。冻结 `Vortex_rtl` 与 `timing/memsys/backend.go` 无改动。
+
+仍未关闭：完整native CP/DCR启动环境的逐拍输入、通用context/Barrier RAM等价证明、mixed反例的完整Core可达性及重复响应语义。DRAM差异按本次要求不处理，不据本轮固定100对原RTL总周期宣称≤5%。
+
+## 13. 后续授权：直接复用 RTLSim DramSim 并跑通
+
+用户随后明确要求直接接入已有 `dram_sim`。本节是新的可选后端，不改写第12节固定100
+实验结论；原 `fixed` 后端仍保留且默认选择，不要求安装Ramulator。
+
+### 13.1 实施边界
+
+- `integration/dramsim/Makefile` 直接编译工作区 `vortex/sim/common/dram_sim.cpp`，链接
+  `vortex/third_party/ramulator/libramulator.so`；没有复制或改动原DramSim、Ramulator源码。
+  新增的C++代码只负责C ABI、回调ID及生命周期，Go动态加载桥接库。
+- 新增 `ExternalBackend/BackendFactory` 与 `AsyncBackend`，将原有具体后端依赖改为接口。
+  原Cache、LMEM、coalescer、replacement、MSHR、Core流水线和冻结RTL不改。
+- `SIMTIMING_MEMORY_BACKEND=rtlsim-dram` 选择该路径，`SIMTIMING_DRAM_LIBRARY` 为绝对库路径。
+  缺失/非法选择明确失败，不静默降级；functional模式不加载DRAM。
+  每次launch汇总记录 `memory_backend`，跨launch复用同一个DramSim实例。
+- 冻结平台2通道、64字节、默认MEM_CLOCK_RATIO=1；HBM2/FRFCFS/刷新、地址转换和子请求
+  拆分全部来自原DramSim。桥接库编译时验证冻结平台bank数量与总线宽度。
+- 新路径没有叠加100周期。保持明确的桥接容量/带宽（16在途、1接受/周期、1返回/周期），
+  不是声称复刻了RTLSim外围per-bank队列或RTL socket。preview无副作用，背压中的响应保持
+  stable；不同client可按实际完成情况选择返回，同client仍保留接受顺序。
+- 数据在外部接受时读快照/按byte enable写入，沿用RTLSim外部memory harness约定；
+  不改变Cache writeback策略，不在load completion时重新绕过Cache读取backing。
+- 特别注意：原DramSim的write callback是Ramulator接受写请求的应答，不是物理DRAM排空；
+  原64→16拆分只给首子请求挂回调的行为也原样保留。Visibility等待较早桥接应答，
+  不能把它或device Close解释为“所有物理DRAM命令执行结束”。
+
+使用方法见 [DramSim接入说明](../../integration/dramsim/README.md)。
+
+### 13.2 实际测试与周期数
+
+记录根目录 `.cache/dramsim-integration/`。初次作业12774741全部通过；随后增加
+“已阻塞响应不得被另一端口新完成请求抢走”的保持逻辑及回归，用最终库重新执行
+作业 **12774824**，结果位于 `final/`。两批结果分别保留，不覆盖初始证据。
+manifest记录DramSim源码、Ramulator和模拟器库hash、配置、输入参数和job ID。
+
+真实库测试：8个读写请求全部恰好返回一次，完成边包括5、13、19、20、21、24、26、29，
+随后同一实例上的第9个读请求通过。benchmark端也产生实际Ramulator读写计数，
+不是换了后端名字而继续使用固定100。
+
+最终7项全部双端host PASS，指令总数一致；模型的每个launch JSONL均确认 `rtlsim-dram`。
+以下为原样累计PERF，不减启动常数，不重放DRAM延迟：
+
+| benchmark | Timing + 原DramSim | RTLSim | 相对差 |
+| --- | ---: | ---: | ---: |
+| demo | 857 | 873 | -1.83% |
+| fence | 1449 | 1482 | -2.23% |
+| io_addr | 1328 | 1450 | -8.41% |
+| multikernel（3次launch累计） | 12054 | 12439 | -3.10% |
+| sgemm2 | 10082 | 10143 | -0.60% |
+| vecadd | 649 | 672 | -3.42% |
+| wsync | 7148 | 7236 | -1.22% |
+
+这7项等权MAPE约 **2.97%**，6/7在5%以内。仅是小规模接入冒烟样本，**不是全部支持
+benchmark的最终精度验收**。`io_addr`尚有明显偏差，尚未做新版本逐事件归因，不把差值
+直接归为Core、DRAM或启动中的任何一方。复用DramSim并不自动统一外围请求队列、返回
+注册级与启动环境；本轮证明“接通并正确运行”，不声称完整边界等价。
+
+### 13.3 回归
+
+- 完整 `go test ./...` 通过，`full-tests.log`，runner 193.031秒（响应保持强化前）。
+- 响应保持强化后，memsys/runtime定向全包回归通过，`final-focused.log`；另外新增
+  后端选择失败关闭、functional不依赖DRAM测试，`runtime-final-tests.log`通过。
+- `go vet`覆盖改动的memsys、runner、dramsim、runtime包，`vet.log`通过；IR检查`ir.log`通过。
+- 最终原生库在计算节点复跑7项和真实DramSim单测通过，Slurm12774824退出0。
+- 固定后端 `timing/memsys/backend.go`、Cache实现及冻结RTL未修改；`git diff --check`通过。
+
+## 14. DramSim 扩大测试集与规模：61组双端回归
+
+### 14.1 范围、产物与验收口径
+
+本轮只扩大测试并新增统计，没有修改模拟器实现或调参改善误差。
+从第13节7个benchmark扩到当前全部31个受支持benchmark；每项重跑原小规模，另外对30项
+支持调参的benchmark扩大输入，合计 **61组 / 122次仿真**。`packld`没有规模参数，
+不重复同一输入冒充扩大测试。扩大组是中等规模覆盖，不代表每个benchmark的默认/最大规模。
+
+- Slurm数组 **12775578**，CPU `long_cpu`，最多6组并发，每组2核/4GiB。
+  61个任务全部COMPLETED、退出0；每后端1200秒异常保护，**实际无超时、无取消**。
+- 原始记录目录：`.cache/dram-expanded/20260917T104616Z-gz87hsum/`。
+  [完整JSON统计](../../.cache/dram-expanded/20260917T104616Z-gz87hsum/summary.json)、
+  [完整CSV统计](../../.cache/dram-expanded/20260917T104616Z-gz87hsum/summary.csv)、
+  [输入与库manifest](../../.cache/dram-expanded/20260917T104616Z-gz87hsum/manifest.json)。
+  `results/<index>/<rtlsim|simtiming>/`分别保存stdout.log.gz、stderr、Ramulator统计、模型事件；
+  每个case另有status/result JSON。日志压缩只节省存储，不过滤RTL trace。
+- 两端使用相同benchmark/kernel二进制和参数，库与输入快照共74项文件有SHA256。
+  模型使用第13节已验证的最终库；RTL仍是相同冻结配置、STD FPU/串行DIV参考。
+  模型和RTL均加载快照中的同一个Ramulator库。bridge仍为16在途、1接受/周期、1返回/周期。
+- 周期取host原样输出的**最终累计PERF**，不把多个累计快照相加，不扣启动常数，
+  不使用read latency replay。误差为 `(Timing / RTL - 1) × 100%`。
+  软件执行、安全排空和flush周期在CSV中单列，不混入PERF。
+- 每组要求双端host自检通过、退出0、模型launch/finish/flush审计链完整且backing可见、
+  后端确认为`rtlsim-dram`，然后核对最终指令总数。准确率统计还要求无`rtl_timing_issue`。
+  本轮61组全部满足，没有隐藏排除失败或高误差样本。指令总数一致不等于逐指令trace一致；
+  本轮没有重新做全部模型/RTL逐指令对齐。
+
+新增可复用工具 `scripts/vortex-dram-suite.py`，支持prepare/run/aggregate；
+`integration/dramsim/run-suite.sbatch`提交数组。汇总器测试3项、既有审计器测试6项均通过。
+
+### 14.2 汇总结果
+
+| 统计 | 原小规模 | 扩大规模 | 合计 |
+| --- | ---: | ---: | ---: |
+| 双端通过 / 计划 | 31/31 | 30/30 | **61/61** |
+| 可纳入周期统计 | 31 | 30 | 61 |
+| 等权平均绝对误差（MAPE） | 1.627% | 1.154% | **1.394%** |
+| 绝对误差中位数 | 1.167% | 0.413% | 0.732% |
+| 绝对误差P95（nearest rank） | 3.689% | 3.110% | 3.423% |
+| 最大绝对误差 | 8.414% | 14.037% | **14.037%** |
+| 绝对误差≤5% | 30/31 | 29/30 | **59/61（96.72%）** |
+| 绝对误差≤10% | 31/31 | 29/30 | 60/61 |
+| 按RTL周期加权的绝对误差 | 0.267% | 0.207% | 0.219% |
+| 按RTL周期加权的有符号差 | -0.266% | -0.113% | -0.145% |
+
+加权绝对误差为 `Σ|Timing−RTL| / ΣRTL`，不会发生正负抵消，但仍会被长程序主导；
+不能用它替代等权MAPE或最大误差。合计61组是31种程序的两档输入，不是61种独立benchmark。
+相对于第13节7项MAPE下降来自样本集合变化，不是本轮又修复了模型。
+
+模型共执行 **159次launch、1,384,009条PERF指令**，两端每case指令总数全部一致，
+未出现mixed时序限制标记。首任务开始至末任务结束约 **374秒**，计入并发和调度间隔。
+两端子进程运行耗时累计：Timing **1162.38秒**，RTL **308.04秒**；这不是公平速度评测，
+因为RTL库持续输出详细trace并压缩，模型只记录runtime事件，而且受到节点和并发影响。
+原始执行与flush时间、每case wall time均保留在CSV/JSON。
+
+### 14.3 全部参数与周期结果
+
+表内均为 `Timing / RTL（相对差）`。每一行的两个规模都重新执行，没有复用上轮PASS。
+
+| benchmark | 原小规模参数 | 原小规模周期 | 扩大参数 | 扩大周期 |
+| --- | --- | ---: | --- | ---: |
+| async_barrier | `-n8 -t4` | 18840 / 18866 (-0.14%) | `-n32 -t4` | 730246 / 729822 (+0.06%) |
+| conv3 | `-n4 -l` | 1394 / 1432 (-2.65%) | `-n8 -l` | 5039 / 5060 (-0.42%) |
+| demo | `-n4 -x4 -y4` | 857 / 873 (-1.83%) | `-n32 -x4 -y4` | 3664 / 3691 (-0.73%) |
+| diverge | `-n1 -d4` | 5730 / 5725 (+0.09%) | `-n4 -d4` | 59051 / 59295 (-0.41%) |
+| dogfood | `-n4 -s0 -e21 -c` | 160885 / 161569 (-0.42%) | `-n16 -s0 -e21 -c` | 593200 / 593925 (-0.12%) |
+| dotproduct | `-n32` | 3288 / 3320 (-0.96%) | `-n1024` | 98675 / 98707 (-0.03%) |
+| dotproduct2 | `-n32` | 2491 / 2526 (-1.39%) | `-n1024` | 72673 / 72677 (-0.01%) |
+| dropout | `-n32` | 1292 / 1321 (-2.20%) | `-n1024` | 37197 / 37306 (-0.29%) |
+| fence | `-n4` | 1449 / 1482 (-2.23%) | `-n32` | 4665 / 4554 (+2.44%) |
+| io_addr | `-n4` | 1328 / 1450 (-8.41%) | `-n32` | 11081 / 9717 (+14.04%) |
+| jacobi | `-n4` | 15036 / 15211 (-1.15%) | `-n16` | 42141 / 42400 (-0.61%) |
+| madmax | `-n2` | 70904 / 70929 (-0.04%) | `-n4` | 91226 / 91247 (-0.02%) |
+| mstress | `-n4` | 2421 / 2492 (-2.85%) | `-n32` | 16275 / 16533 (-1.56%) |
+| multikernel | `-n32` | 12054 / 12439 (-3.10%) | `-n256` | 46738 / 47303 (-1.19%) |
+| occupancy | `-c3` | 648012 / 648033 (-0.003%) | `-c8` | 1295923 / 1295944 (-0.002%) |
+| packld | 默认 | 3087 / 3088 (-0.03%) | — | 无规模参数 |
+| pathfinder | `-n8` | 4810 / 4958 (-2.99%) | `-n32` | 39409 / 40674 (-3.11%) |
+| raycast | `-n1 -w4 -h4 -s1 -d1` | 170770 / 171425 (-0.38%) | `-n2 -w8 -h8 -s1 -d1` | 790693 / 792845 (-0.27%) |
+| relu | `-n32` | 779 / 802 (-2.87%) | `-n1024` | 21983 / 22192 (-0.94%) |
+| sgemm | `-n8` | 3477 / 3514 (-1.05%) | `-n32` | 115172 / 115119 (+0.05%) |
+| sgemm2 | `-n8 -t4 -c4` | 10082 / 10143 (-0.60%) | `-n32 -t4 -c8` | 381837 / 382156 (-0.08%) |
+| sgemmx | `-n16` | 12299 / 12346 (-0.38%) | `-n32` | 80122 / 80248 (-0.16%) |
+| sgemv | `-m8 -n8` | 1046 / 1073 (-2.52%) | `-m32 -n32` | 5054 / 5106 (-1.02%) |
+| softmax | `-n4` | 94960 / 95220 (-0.27%) | `-n8` | 168205 / 168404 (-0.12%) |
+| sort | `-n2` | 7781 / 7804 (-0.29%) | `-n4` | 29624 / 29653 (-0.10%) |
+| stencil3d | `-n4` | 9087 / 9092 (-0.05%) | `-n8` | 68914 / 68538 (+0.55%) |
+| vecadd | `-n32` | 649 / 672 (-3.42%) | `-n1024` | 17451 / 17660 (-1.18%) |
+| wgather | `-n4 -t4` | 705 / 732 (-3.69%) | `-n8 -t4` | 1223 / 1247 (-1.92%) |
+| basic | `-n32` | 1948 / 1971 (-1.17%) | `-n1024` | 54958 / 55167 (-0.38%) |
+| wsync | `-i16` | 7148 / 7236 (-1.22%) | `-i128` | 51483 / 51892 (-0.79%) |
+| bfs | `-n32` | 14519 / 14821 (-2.04%) | `-n256` | 21477 / 21922 (-2.03%) |
+
+### 14.4 新暴露的精度异常与结论边界
+
+唯一超过5%的benchmark是 **io_addr**，两个规模分别为 -8.41% 和 +14.04%。
+小规模绝对周期差 **-122**，扩大后变为 **+1364**，且两端分别执行相同的368/2832条指令。
+这个变化不能由单一固定启动偏移解释；但本轮未做新的逐事件定位，不能仅凭总数判定
+是NC路径、桥接排队、返回端口或某个Core阶段的错误。后续应优先对该case做NC请求接受、
+DramSim完成、Cache返回和LSU commit的联合trace，而不是给模型补常数。
+
+两边Ramulator统计另有如下事实（`results/9`和`results/40`下各自的`ramulator.stats.log`）：
+
+| io_addr | Timing read / write请求 | RTL read / write请求 | Timing / RTL memory_system_cycles |
+| --- | ---: | ---: | ---: |
+| `-n4` | 444 / 16 | 452 / 16 | 1607 / 1763 |
+| `-n32` | 5260 / 128 | 5268 / 128 | 11360 / 10136 |
+
+这是整个DRAM实例的统计，包含Kernel之外的阶段，而且计数单位是原DramSim拆分后的请求，
+不能直接当作ISA load/store数或Kernel PERF；固定的8个read差异本身也不能定位+1364周期。
+它再次说明“同一Ramulator库”不意味着两边输入请求序列和外部运行边界已经完全相同。
+
+结论：扩大测试支持当前模型在这套冻结配置和输入集合下达到较好的周期近似，
+**59/61组误差在5%内，但不能承诺每种访问模式均在5%内**。本轮没有证明任意更大规模、
+不同DRAM配置或此前未支持路径的精度，也没有以功能PASS替代完整时序等价证明。
+
+## 15. io_addr 异常定位与修复（2026-09-17）
+
+### 15.1 证据范围与测量边界
+
+诊断目录：`.cache/io-dram-diagnosis/`。原始四组联合 trace 在
+`results/n{4,8,16,32}/{rtl,timing}/stdout.log`，同级保留 `aligned.csv`、
+`analysis.json`、`memory.json`、`cta-gaps.json`。观察版只增加 trace，未改变生产参数；
+`n4/n32` 的 PERF 与第14节完全一致。
+
+| 参数 | Timing PERF | RTL PERF | 指令数（两端一致） |
+| --- | ---: | ---: | ---: |
+| `-n4` | 1328 | 1450 | 368 |
+| `-n8` | 2500 | 2674 | 720 |
+| `-n16` | 4844 | 5122 | 1424 |
+| `-n32` | 11081 | 9717 | 2832 |
+
+按逻辑 warp 对齐的 PC/mask 序列全部一致。以各端 first-schedule 为0，
+first-decode 为 Timing 32、RTL 45；n4 last-commit 为1321/1443，n32为11074/9710。
+两端 PERF 均比 last-commit 多7周期。因此本次 -122/+1364 周期不是 commit tail
+统计口径造成的；固定的启动差13周期也无法解释规模增大后误差反向。
+
+### 15.2 外部返回排序域错误：Cache client 不等于物理 memory bank
+
+原 `timing/memsys/external.go` 在 `PreviewResponses` 中按 `seen[e.client]`
+限制返回，错误地把每个 Cache 客户端视为独立 FIFO。
+实际依据是：
+
+- `Vortex_rtl/hw/rtl/libs/VX_mem_bank_adapter.sv:91`：interleave 模式以 line address
+  低位选择物理 bus bank；冻结配置2 banks、64B，即 `(byte_address / 64) % 2`。
+- Vortex 源码 `sim/rtlsim/processor.cpp:339` 起：按物理 bank 遍历
+  `pending_mem_reqs_[b]`，只取队首 ready 请求；I/D 客户端共享该 bank 的排序域。
+
+不是 L1 bank，也不是 Ramulator 内部 DRAM bank。它产生两种相反偏差：
+同一 Cache client 的跨 bank 请求不该互相阻塞；不同 client 的同 bank 请求却不能随意越过。
+
+**RTL 的实际跨 bank 超越证据**（`results/n32/rtl/stdout.log`，时间为原始 RTL
+timestamp，2 timestamp units = 1 core cycle，不直接与归一化 cycle 混用）：
+
+| 事件 | timestamp | 日志行 | D-cache port[1] tag / 地址 |
+| --- | ---: | ---: | --- |
+| request | 811 | 2574 | `0x56 / 0x1080`，bus bank0 |
+| request | 815 | 2602 | `0x6c / 0x1080`，bus bank0 |
+| request | 819 | 2635 | `0x7e / 0x1080`，bus bank0 |
+| request | 921 | 2889 | `0x2 / 0x40`，bus bank1 |
+| response | 983 | 2966 | `0x2`，先于前三个更早请求返回 |
+| response | 997 / 1029 / 1061 | 2990 / 3052 / 3144 | `0x56 / 0x6c / 0x7e` |
+
+Timing n32 的对应机制证据：client2、token245、地址`0x40`在归一化1078接受，
+1100已收到 DramSim completion，却到1137才交付，多等37周期。
+同 client 更早的 `0x1180` 请求直到1104、1120、1136完成；它们属 bank0，
+不应挡住 bank1 的返回。接受/交付日志分别在 Timing stdout 第1221/1290行。
+
+n4 的相反证据：I-cache line `0x80000040`在模型166接受、203完成并返回，
+而同一 bus bank1 的更早 D-cache parameter 请求仍在210～266陆续返回。
+RTL I-cache 同一 line 的请求/返回为原始479→687（104周期，日志1466/1645行），
+模型是37周期。模型允许跨 I/D client 绕过同 bank 队列，造成低估。
+
+一个 Core 局部例子也把差异定位到访存而非普通流水级：n32 CTA2、token213、
+PC`0x8000002c`，schedule→decode 两端均7周期，decode→dispatch 均7周期，
+dispatch→commit 却是96/50周期。Timing dispatch/commit 在1036/1159行，
+RTL在6873/7447行。不能把各条 load 的差值简单相加，因为等待会重叠。
+
+### 15.3 反事实实验：不是容量不足，也不能直接取消所有顺序
+
+实验保留旧 runtime 地址布局，仅临时修改外部桥接副本；正式修复前结果如下。
+完整数据在 `controls.json` 与 `controls-bank.json`。
+
+| 变体 | n4 Timing（RTL1450） | n32 Timing（RTL9717） |
+| --- | ---: | ---: |
+| 原桥接 | 1328（−8.41%） | 11081（+14.04%） |
+| inflight 16→128 | — | 11081 |
+| accept 1→3 / return 1→3 / 两者同时 | — | 均11081 |
+| 取消全部 FIFO 限制 | 1262（−12.97%） | 9775（+0.60%） |
+| 按物理 bus bank FIFO | 1411（−2.69%） | 9819（+1.05%） |
+
+均功能PASS。容量/吞吐实验排除了当前桥接上限作为主要原因；无限制乱序虽然改善n32，
+却进一步破坏n4。正确修复是排序域，不是放宽门禁或拟合延迟。
+
+### 15.4 独立 runtime bug：低地址 reserve 导致自动分配低于用户基址
+
+Vortex 源码 `sw/common/mem_alloc.h` 的 `findNextAddress` 从 `baseAddress_` 开始寻找
+空隙，却无条件把游标改为当前 page end。显式保留低地址 I/O page 后，游标会倒退。
+既有 page 放不下大分配时，普通 buffer 因而可能落入 I/O aperture。
+
+最小复现源文件 `allocator-probe.cpp`，旧结果见 `allocator-probe.log`：
+基址`0x10000`，先 allocate64，再 reserve(`0x40`,64)，allocate512得到`0x10040`，
+allocate4096却得到`0x1040`。这是分配器错误，不是模拟器错误识别缓存属性。
+
+原 benchmark 两端地址相同：n4/8/16 的 source 为`0x10040`（cached），
+n32为`0x1040`（NC）；parameter 分别为`0x1040`/`0x2040`（NC）。
+n32 的1280个 NC read由512 parameter、512 source、256 I/O target组成，
+所以规模增长也改变了访问类型，不能按纯数据量缩放解释。
+
+host-only 实验保持旧桥接：显式把n32 source保留到`0x20000`，Timing/RTL变为
+10218/10098（+1.19%）；把n4 source移到`0x4000`得到1581/1632（−3.13%）。
+该操作也可能影响后续参数分配位置，不能将全部周期差归为单个 buffer 的 cacheability。
+更不能通过移动地址掩盖15.2的桥接错误。
+
+### 15.5 正式修复与验证边界
+
+用户授权后，正式源码修复：
+
+- `AsyncBackend` 显式接收物理 bus bank 数，按64B交错地址执行每-bank FIFO；
+  返回保留原 client/tag/identity，继续保持 valid 在背压时稳定。固定100周期后端不变。
+- native DramSim 插件增加 interleave 配置校验，避免误把非交错平台当成交错。
+- runtime allocator 游标只前进不倒退，普通自动分配不低于基址；显式低地址 I/O reserve仍合法。
+- runtime共享库构建目标增加 allocator header依赖，防止只改头文件却复用旧库。
+- 新增同/异 client × 同/异 bank、返回背压与非法 bank 配置测试；allocator新增低地址
+  reserve、大/小分配、释放复用及耗尽边界回归。
+
+不改 Cache/MSHR、RTL、Ramulator、DRAM延迟常数或 Kernel；目前仍是有限队列的近似桥接，
+并未声称完整复制 RTL socket arbiter/elastic buffer 的每拍行为。
+
+正式构建/回归记录：`build-fix-v2.log`、`fix-go-tests.log`、`fixed-suite/`；
+`bank-fix-only/`专门保留旧runtime，独立验证正式桥接修复，避免地址布局掩盖效果。
+最终数值以这些目录的已完成结果为准，不将上面的临时实验当作正式全量验收。
+
+回归有效性检查：同一份新增 allocator 测试链接旧 header 时返回255，明确报告
+`low reservation moved automatic allocation: 0x1040`（`allocator-before.log`）；
+修复版 `vx_malloc` PASS。旧 per-client 返回策略的 Go overlay 在“异 client 同 bank”与
+“同 client 异 bank”两项失败（`bank-test-before.log`），正式实现均通过。
+修复后最小分配复现 `allocator-after.log`：512B仍为`0x10040`，4096B变为`0x11000`。
+
+Slurm 正式 bridge-only 作业12778585完成，两端功能PASS、指令数一致，正式数值
+1411/1450与9819/9717，分别−2.689655%和+1.049707%，复现临时诊断结论。
+同时修复两处的作业为12778587（4个worker分担63组，不减少测试集）。
+原提交12778028/12778030因45分钟申请超过debug分区30分钟限制而未启动；
+仅取消这两组未启动作业后，以20分钟申请重提，未终止任何 benchmark 进程。
+
+`go test ./...`、`verify-timing.sh`、`verify-all.sh`（含空缓存、禁网的 offline 检查）
+最终均PASS，日志为 `fix-go-tests.log`、`fix-verify-timing.log`、`fix-verify-all-v2.log`。
+首轮 verify-all 被本节文档的外部相对路径拼写触发环境审计；改为“Vortex源码 + 源码内路径”
+后重跑通过，未修改或放宽审计脚本。functional模式 `io_addr -n4/-n32` 也均PASS
+（作业12778654，`functional-fixed/summary.json`）。
+
+修复后的可运行库快照在 `fixed-suite/lib/`，同时包含新的 `libvortex.so`（公共runtime）
+和 `libsimtiminggo.so`（Timing），以及配套 native/backend 库。只替换 Go 库不会修复
+allocator；重新运行时必须同时使用新的公共runtime。旧实验目录、旧库快照和原始日志
+保持不变，不能把第14节结果当作修复版结果。修复涉及 Simulator_timing 与 Vortex 两个
+仓库；本次未执行 git commit。
+
+### 15.6 最终回归结果
+
+作业12778587四个分片全部 `COMPLETED / 0:0`，最慢分片10分50秒。
+原61组全部重跑，并增加io_addr n8/n16，共63组Timing/RTL配对、126次模拟器执行；
+全部功能PASS、指令数匹配、原生执行审计完整，无记录的RTL timing issue。
+
+| 集合 | 通过 / 总数 | MAPE | 最大绝对误差 | ≤5% |
+| --- | ---: | ---: | ---: | ---: |
+| 原小规模集 | 31/31 | 1.473769% | 3.688525% | 31/31 |
+| 原扩大规模集 | 30/30 | 0.693827% | 3.630145% | 30/30 |
+| 含2组新增诊断的全部集 | 63/63 | 1.167612% | 3.688525% | 63/63 |
+
+同时修复桥接与runtime后的io_addr结果（raw累计PERF，不减启动、不拟合）：
+
+| 参数 | Timing | RTL | 误差 | 指令数（两端） |
+| --- | ---: | ---: | ---: | ---: |
+| `-n4` | 1229 | 1276 | −3.683386% | 368 |
+| `-n8` | 2301 | 2386 | −3.562448% | 720 |
+| `-n16` | 4445 | 4606 | −3.495441% | 1424 |
+| `-n32` | 8734 | 9063 | −3.630145% | 2832 |
+
+n32实际 source 两端均由`0x1040`变为`0x11000`；n4 source仍为`0x10040`。
+普通参数分配也不再掉入低地址IO区域，因此正式修复后的RTL基线周期亦发生变化，
+不能把最终表直接与第14节相减来声称都是Timing模型改进。
+单独桥接修复的因果效果应使用15.5的旧runtime对照。
+
+完整逐案例周期、误差和耗时表：`fixed-suite/summary.csv`、`fixed-suite/summary.json`；
+独立桥接对照：`bank-fix-only/summary.json`。加上独立桥接的4次模拟与functional的2次，
+本轮正式benchmark共132次执行，全部通过。上述5%结论只覆盖当前冻结配置和此测试集合，
+不等于任意工作负载、任意平台配置的误差保证，也不宣称RTL逐周期等价。
+
+基础设施说明：trace作业12776175完成；重复提交12776307因目录已存在保护退出，未覆盖证据。
+控制作业12776346的前8组完成，随后因host控制程序尚未成功链接退出；改用匹配C++工具链后，
+12776394完成其余bank/layout实验。这两次退出不计为benchmark功能失败。
+
+### 15.7 最终逐 benchmark 周期误差表
+
+数据来源：`.cache/io-dram-diagnosis/fixed-suite/summary.json`，对应桥接返回排序与公共 runtime 分配器均修复后的作业12778587。以下为最终63组结果，不混入第14节旧结果或仅修桥接的控制实验。
+
+误差定义：`(Timing cycles − RTLSim cycles) / RTLSim cycles × 100%`。正值表示模型周期偏高，负值表示偏低；采用原始最终累计 PERF，不扣除启动周期或 DRAM 周期。误差显示到小数点后3位，汇总使用未舍入值。所有行均功能PASS、指令数一致，且绝对误差≤5%。
+
+#### 小规模：31组
+
+| Benchmark | 参数 | Timing 周期 | RTLSim 周期 | 周期差（Timing−RTL） | 误差 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| async_barrier | `-n8 -t4` | 18840 | 18866 | -26 | -0.138% |
+| conv3 | `-n4 -l` | 1394 | 1432 | -38 | -2.654% |
+| demo | `-n4 -x4 -y4` | 857 | 873 | -16 | -1.833% |
+| diverge | `-n1 -d4` | 5730 | 5725 | +5 | +0.087% |
+| dogfood | `-n4 -s0 -e21 -c` | 160879 | 161569 | -690 | -0.427% |
+| dotproduct | `-n32` | 3288 | 3320 | -32 | -0.964% |
+| dotproduct2 | `-n32` | 2491 | 2526 | -35 | -1.386% |
+| dropout | `-n32` | 1292 | 1321 | -29 | -2.195% |
+| fence | `-n4` | 1449 | 1482 | -33 | -2.227% |
+| io_addr | `-n4` | 1229 | 1276 | -47 | -3.683% |
+| jacobi | `-n4` | 15036 | 15211 | -175 | -1.150% |
+| madmax | `-n2` | 70904 | 70929 | -25 | -0.035% |
+| mstress | `-n4` | 2421 | 2492 | -71 | -2.849% |
+| multikernel | `-n32` | 12054 | 12439 | -385 | -3.095% |
+| occupancy | `-c3` | 648012 | 648033 | -21 | -0.003% |
+| packld | 无 | 3087 | 3088 | -1 | -0.032% |
+| pathfinder | `-n8` | 4810 | 4958 | -148 | -2.985% |
+| raycast | `-n1 -w4 -h4 -s1 -d1` | 170737 | 171425 | -688 | -0.401% |
+| relu | `-n32` | 779 | 802 | -23 | -2.868% |
+| sgemm | `-n8` | 3477 | 3514 | -37 | -1.053% |
+| sgemm2 | `-n8 -t4 -c4` | 10082 | 10143 | -61 | -0.601% |
+| sgemmx | `-n16` | 12303 | 12346 | -43 | -0.348% |
+| sgemv | `-m8 -n8` | 1046 | 1073 | -27 | -2.516% |
+| softmax | `-n4` | 94960 | 95220 | -260 | -0.273% |
+| sort | `-n2` | 7781 | 7804 | -23 | -0.295% |
+| stencil3d | `-n4` | 9087 | 9092 | -5 | -0.055% |
+| vecadd | `-n32` | 649 | 672 | -23 | -3.423% |
+| wgather | `-n4 -t4` | 705 | 732 | -27 | -3.689% |
+| basic | `-n32` | 1948 | 1971 | -23 | -1.167% |
+| wsync | `-i16` | 7148 | 7236 | -88 | -1.216% |
+| bfs | `-n32` | 14519 | 14821 | -302 | -2.038% |
+
+#### 扩大规模：30组
+
+| Benchmark | 参数 | Timing 周期 | RTLSim 周期 | 周期差（Timing−RTL） | 误差 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| async_barrier | `-n32 -t4` | 730246 | 729822 | +424 | +0.058% |
+| conv3 | `-n8 -l` | 5039 | 5060 | -21 | -0.415% |
+| demo | `-n32 -x4 -y4` | 3664 | 3691 | -27 | -0.732% |
+| diverge | `-n4 -d4` | 59051 | 59295 | -244 | -0.412% |
+| dogfood | `-n16 -s0 -e21 -c` | 593200 | 593925 | -725 | -0.122% |
+| dotproduct | `-n1024` | 98675 | 98707 | -32 | -0.032% |
+| dotproduct2 | `-n1024` | 72673 | 72677 | -4 | -0.006% |
+| dropout | `-n1024` | 37197 | 37306 | -109 | -0.292% |
+| fence | `-n32` | 4507 | 4554 | -47 | -1.032% |
+| io_addr | `-n32` | 8734 | 9063 | -329 | -3.630% |
+| jacobi | `-n16` | 42481 | 42400 | +81 | +0.191% |
+| madmax | `-n4` | 91226 | 91247 | -21 | -0.023% |
+| mstress | `-n32` | 16521 | 16533 | -12 | -0.073% |
+| multikernel | `-n256` | 46738 | 47303 | -565 | -1.194% |
+| occupancy | `-c8` | 1295923 | 1295944 | -21 | -0.002% |
+| pathfinder | `-n32` | 39409 | 40674 | -1265 | -3.110% |
+| raycast | `-n2 -w8 -h8 -s1 -d1` | 790890 | 792845 | -1955 | -0.247% |
+| relu | `-n1024` | 21983 | 22192 | -209 | -0.942% |
+| sgemm | `-n32` | 115172 | 115119 | +53 | +0.046% |
+| sgemm2 | `-n32 -t4 -c8` | 381837 | 382156 | -319 | -0.083% |
+| sgemmx | `-n32` | 80139 | 80248 | -109 | -0.136% |
+| sgemv | `-m32 -n32` | 5054 | 5106 | -52 | -1.018% |
+| softmax | `-n8` | 168205 | 168404 | -199 | -0.118% |
+| sort | `-n4` | 29624 | 29653 | -29 | -0.098% |
+| stencil3d | `-n8` | 68914 | 68538 | +376 | +0.549% |
+| vecadd | `-n1024` | 17451 | 17660 | -209 | -1.183% |
+| wgather | `-n8 -t4` | 1223 | 1247 | -24 | -1.925% |
+| basic | `-n1024` | 54958 | 55167 | -209 | -0.379% |
+| wsync | `-i128` | 51483 | 51892 | -409 | -0.788% |
+| bfs | `-n256` | 21488 | 21922 | -434 | -1.980% |
+
+#### 新增 io_addr 诊断：2组
+
+| Benchmark | 参数 | Timing 周期 | RTLSim 周期 | 周期差（Timing−RTL） | 误差 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| io_addr | `-n8` | 2301 | 2386 | -85 | -3.562% |
+| io_addr | `-n16` | 4445 | 4606 | -161 | -3.495% |
+
+`packld` 没有扩大规模参数，因此仅在小规模表出现；新增诊断两行不重复计入前61组。总体63/63组在5%内，MAPE为1.167612%，最大绝对误差为3.688525%（小规模 `wgather -n4 -t4`）。
+
+## 16. 三方简易测速与周期误差（2026-09-17）
+
+### 16.1 测试口径
+
+仅选3个benchmark：简单访存 `vecadd -n1024`、计算/访存混合 `sgemm2 -n16 -t4 -c8`、
+I/O/NC路径 `io_addr -n32`。每项每后端运行3次，共27次进程执行；全部功能PASS，
+各项三方退休指令数一致，3次重复的各自PERF周期数完全一致。未扩展为全量测速。
+
+- 构建作业12778973，3分05秒，COMPLETED/0:0；测试作业12778977，1分05秒，COMPLETED/0:0。
+- 测试都在 `gpu3-9` 同一作业内串行执行，分配2个CPU，记录CPU affinity `[28,29]`，Go `GOMAXPROCS=2`。
+- 每轮轮换后端顺序：RTL→SimX→Timing、SimX→Timing→RTL、Timing→RTL→SimX。
+- 新建独立release构建：C++ `-O2 -DNDEBUG`；SimX与RTLSim关闭详细trace/VCD，保留PERF计数。
+  RTL使用冻结源码、STD FPU和现有serial DIV分支，与此前周期验证profile一致。
+- 当前Vortex与冻结快照的配置TOML、types TOML逐字一致；重新configure生成头文件，未手工篡改配置。
+- 三方使用相同host程序/kernel镜像、同一个修复后公共runtime、同一DramSim源码实现和Ramulator库；
+  各自的Cache/互连及请求次序保留原模型行为，没有回放或强制匹配DRAM响应。
+- Timing复用第15节修复后的正式库，无逐拍trace，仅保留原生执行审计；27份stdout均无TRACE/DEBUG行，
+  输出大小84～9918字节，不启用在线日志压缩。
+- wall time为 `perf_counter` 测得的进程启动至退出，使用阻塞wait，不以轮询周期量化耗时；
+  不包含编译、Slurm排队、结果解析，包含进程初始化、runtime、仿真和普通输出。三次均计入，中位数汇总。
+- 周期误差为最终累计原始PERF相对RTLSim的差值百分比；不减启动、DRAM或commit tail，
+  不声称各后端内部统计边界逐事件完全相同。本轮没有新增trace定位或修改模拟器。
+
+### 16.2 运行速度（秒，中位数）
+
+| Benchmark / 参数 | RTLSim | SimX | Timing | SimX相对RTL加速比 | Timing/RTL耗时 | Timing/SimX耗时 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| vecadd `-n1024` | 0.317862 | 0.054057 | 4.194949 | 5.88× | 13.20× | 77.60× |
+| sgemm2 `-n16 -t4 -c8` | 0.822244 | 0.167850 | 11.969464 | 4.90× | 14.56× | 71.31× |
+| io_addr `-n32` | 0.191312 | 0.039189 | 2.345389 | 4.88× | 12.26× | 59.85× |
+
+三次耗时范围如下；小于1秒的样本易受启动和主机调度抖动影响，不能用小数位数代表统计置信度。
+
+| Benchmark | RTLSim min–max（秒） | SimX min–max（秒） | Timing min–max（秒） |
+| --- | ---: | ---: | ---: |
+| vecadd | 0.267616–0.355058 | 0.046210–0.057802 | 4.099036–4.329358 |
+| sgemm2 | 0.811279–0.862817 | 0.140817–0.184420 | 11.955571–12.236785 |
+| io_addr | 0.145730–0.204798 | 0.037095–0.040711 | 2.243232–2.407617 |
+
+### 16.3 周期误差
+
+| Benchmark / 参数 | 指令数（三方一致） | RTLSim周期 | SimX周期 | SimX误差 | Timing周期 | Timing误差 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| vecadd `-n1024` | 6160 | 17660 | 17260 | -2.265% | 17451 | -1.183% |
+| sgemm2 `-n16 -t4 -c8` | 19408 | 54630 | 55146 | +0.945% | 54644 | +0.026% |
+| io_addr `-n32` | 2832 | 9063 | 8832 | -2.549% | 8734 | -3.630% |
+
+vecadd与io_addr关闭RTL trace后的周期分别仍为17660、9063，与第15节相同，
+因此本次速度差异不是靠改变这两项的RTL执行周期取得的。
+
+### 16.4 结论与适用范围
+
+这三个样本中，SimX比无详细trace的RTLSim快4.88～5.88倍；当前Timing比RTLSim慢
+12.26～14.56倍，比SimX慢59.85～77.60倍。两种软件模型本轮周期误差均在5%内，
+Timing在vecadd/sgemm2上更接近RTL，SimX在io_addr上更接近；3个样本不足以给出全局精度排名。
+
+此前63组的“Timing慢约3.94倍”是相对于开启详细trace的RTL构建；本轮移除该开销后，
+差距明显扩大。两轮输入集合与测量方式也并不完全相同，不应把总倍数直接相除来量化trace成本。
+本轮可以确认当前Timing性能显著落后，而不能据此认定某个Go函数或GC就是主因，仍需profiling。
+
+原始记录：`.cache/three-way-speed-20260917/` 中的 `manifest.json`（输入/库哈希、节点与配置）、
+`results.json`（27次原始耗时、CPU时间、PERF及审计）、`summary.json`（中位数与误差）、
+`results/<benchmark>/<repeat>/<backend>/`（stdout/stderr/结果）。脚本为 `prepare.py`、
+`build.sbatch`、`run.py`、`run.sbatch`，未修改生产模拟器源码。

@@ -14,7 +14,7 @@ import (
 
 func lifecycleKernel(t *testing.T) (*Kernel, device.LaunchState) {
 	t.Helper()
-	ram, err := memory.New(4096)
+	ram, err := memory.New(0x12000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,9 +175,10 @@ func TestDeviceMemoryDirtyAndLocal(t *testing.T) {
 			}
 		}
 	}
-	put(0x100, []uint32{0x02a00113, 0x30202023, 0xcdf020f3, 0x0020a023, 0x0000000b})
+	// The RTL I/O aperture is noncacheable; dirty-line data belongs above it.
+	put(0x100, []uint32{0x02a00113, 0x000100b7, 0x0020a023, 0xcdf020f3, 0x0020a023, 0x0000000b})
 	// CSR local base; local load; global load; stop.
-	put(0x180, []uint32{0xcdf020f3, 0x0000a183, 0x30002203, 0x0000000b})
+	put(0x180, []uint32{0xcdf020f3, 0x0000a183, 0x000100b7, 0x0000a203, 0x0000000b})
 	var err error
 	k, err = NewKernel(launch, ram, Options{Backend: "std", PeriodPS: 1})
 	if err != nil {
@@ -185,7 +186,7 @@ func TestDeviceMemoryDirtyAndLocal(t *testing.T) {
 	}
 	finishLifecycle(t, k)
 	var b [4]byte
-	if err := ram.Read(0x300, b[:]); err != nil {
+	if err := ram.Read(0x10000, b[:]); err != nil {
 		t.Fatal(err)
 	}
 	if binary.LittleEndian.Uint32(b[:]) != 0 {
@@ -209,7 +210,7 @@ func TestDeviceMemoryDirtyAndLocal(t *testing.T) {
 	if done, err := next.FlushCaches(2000); err != nil || !done {
 		t.Fatal(done, err)
 	}
-	if err := ram.Read(0x300, b[:]); err != nil {
+	if err := ram.Read(0x10000, b[:]); err != nil {
 		t.Fatal(err)
 	}
 	if binary.LittleEndian.Uint32(b[:]) != 42 {

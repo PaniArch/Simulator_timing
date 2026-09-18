@@ -45,8 +45,11 @@ func TestKernelTracePackedReuseAndCounters(t *testing.T) {
 					dispatch[[2]uint64{uint64(e.Warp), e.WarpGeneration}] = e
 				}
 			}
-			check := func(w uint8) WarpBinding {
+			check := func(w uint8, id uint64) WarpBinding {
 				b := r.Bindings[w]
+				if id != 0 {
+					b = r.TokenBindings[id]
+				}
 				e, ok := dispatch[[2]uint64{uint64(w), b.WarpGeneration}]
 				if !b.Valid || !ok || b.CTA != e.CTA || b.Rank != e.Rank || b.CTAGeneration != e.Generation || uint32(e.Slot) != b.Slot {
 					t.Fatalf("unbound token: %+v %+v", b, e)
@@ -54,18 +57,18 @@ func TestKernelTracePackedReuseAndCounters(t *testing.T) {
 				return b
 			}
 			for _, e := range r.Events {
-				check(e.Token.Warp)
+				check(e.Token.Warp, e.Token.ID)
 			}
 			for _, tok := range r.Finished {
-				check(tok.Warp)
+				check(tok.Warp, tok.ID)
 				macros++
 			}
 			if r.Report.PendingRelease.Valid {
 				commits++
-				check(r.Report.PendingRelease.Token.Warp)
+				check(r.Report.PendingRelease.Token.Warp, r.Report.PendingRelease.Token.ID)
 			}
 			for _, f := range r.Memory.Transfers {
-				b := check(uint8(f.Request.Identity.Warp))
+				b := check(uint8(f.Request.Identity.Warp), f.Request.Identity.Token)
 				if f.Request.Identity.Kernel != r.LaunchID || f.Request.Identity.WarpGeneration != b.WarpGeneration || f.Request.Identity.CTA != uint64(b.Slot) {
 					t.Fatal("fragment residency", f, b)
 				}

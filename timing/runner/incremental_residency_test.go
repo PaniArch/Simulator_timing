@@ -62,7 +62,7 @@ func incrementalKernel(t *testing.T) (*Kernel, device.LaunchState) {
 
 func TestIncrementalDispatchEdges(t *testing.T) {
 	k, _ := incrementalKernel(t)
-	if err := k.Run(7, nil); err != nil {
+	if err := k.Run(8, nil); err != nil {
 		t.Fatal(err)
 	}
 	events := k.TakeEvents()
@@ -76,7 +76,7 @@ func TestIncrementalDispatchEdges(t *testing.T) {
 		t.Fatal(events)
 	}
 	for rank, e := range fired {
-		if e.Cycle != uint64(2+rank) || e.Rank != uint32(rank) || e.Warp != uint8(rank) || e.LaunchID != 1 || e.WarpGeneration != 1 {
+		if e.Cycle != uint64(3+rank) || e.Rank != uint32(rank) || e.Warp != uint8(rank) || e.LaunchID != 1 || e.WarpGeneration != 1 {
 			t.Fatal(e)
 		}
 	}
@@ -85,7 +85,7 @@ func TestIncrementalDispatchEdges(t *testing.T) {
 	if len(k.Status().Resident) != 2 || k.resident[1].Dispatched != 0 || k.Status().Complete {
 		t.Fatal(k.Status())
 	}
-	// Every one of these seven edges has either CTA admission/DISPATCH or
+	// After the KMU start register edge, seven edges have admission/DISPATCH or
 	// registered Warp busy. The initial admission and selection count before
 	// any Warp is active, directly from VX_cta_dispatch.busy.
 	if k.Counters().Cycle != 7 || k.Counters().Instret != 0 {
@@ -105,7 +105,11 @@ func TestIncrementalEarlyReuseAndNextLaunch(t *testing.T) {
 			for _, e := range k.TakeEvents() {
 				events = append(events, e)
 				if e.Kind == "warp-dispatched" && e.CTA == 1 && e.Rank == 0 {
-					overlap = k.resident[0] != nil && !k.runner.WarpQuiescent(0)
+					for _, c := range k.resident {
+						if c != nil && c.Launch.ID == 0 {
+							overlap = !k.runner.WarpQuiescent(0)
+						}
+					}
 					if e.Warp == 0 || e.WarpGeneration != 2 {
 						t.Fatalf("did not reuse early slot: %+v", e)
 					}
@@ -143,13 +147,14 @@ func TestIncrementalEarlyReuseAndNextLaunch(t *testing.T) {
 
 func TestIncrementalReuseRetainsIdentityTails(t *testing.T) {
 	// Inject software-only tails at a boundary with quiescent initial owners.
-	// Each tail must block the priority encoder from selecting that physical wid.
+	// RTL availability is active_warps, not software receipt drain. Selection
+	// must preserve each tail, without allowing it to change priority.
 	for _, kind := range []string{"completion", "cancel", "cancel-fetch", "accepted", "held-fetch", "held-data", "transport", "parked", "fault"} {
 		t.Run(kind, func(t *testing.T) {
 			k, _ := incrementalKernel(t)
-			if err := k.Run(1, nil); err != nil {
+			if err := k.Run(2, nil); err != nil {
 				t.Fatal(err)
-			} // CTA accepted, no selection yet
+			} // KMU start then CTA accepted, no selection yet
 			id := memsys.Identity{Kernel: 1, CTA: 0, Warp: 0, WarpGeneration: 1, Transaction: 99, Token: 99}
 			m := k.runner.hierarchy
 			switch kind {
@@ -181,8 +186,15 @@ func TestIncrementalReuseRetainsIdentityTails(t *testing.T) {
 				}
 				return
 			}
-			if k.dispatch.selected == nil || k.dispatch.selected.WarpID != 1 {
-				t.Fatal("tail released Warp zero", k.dispatch)
+			first := uint8(0)
+			if kind == "parked" {
+				first = 1
+			}
+			if k.dispatch.selected == nil || k.dispatch.selected.WarpID != first {
+				t.Fatal("software tail changed RTL priority", k.dispatch)
+			}
+			if kind != "parked" && !m.warpPending(0) {
+				t.Fatal("dispatch discarded old transport ownership")
 			}
 			m.complete = nil
 			delete(m.cancelledData, id)
@@ -198,7 +210,7 @@ func TestIncrementalReuseRetainsIdentityTails(t *testing.T) {
 			if err := k.residency(); err != nil {
 				t.Fatal(err)
 			}
-			if k.dispatch.selected == nil || k.dispatch.selected.WarpID != 0 {
+			if k.dispatch.selected == nil || k.dispatch.selected.WarpID != 1-first {
 				t.Fatal("drained slot not reused")
 			}
 			old := k.runner.hierarchy.identity(model.Token{Warp: 0, ID: 1}, 1)
@@ -207,7 +219,8 @@ func TestIncrementalReuseRetainsIdentityTails(t *testing.T) {
 				t.Fatal("old generation routed to new LMEM")
 			}
 			view, err := k.memory.ViewForWarp(0)
-			if err != nil || view.Rank != 1 || view.Size != 4 || view.ThreadCoordinates[1] != (isa.LaneValues{1, 1, 1, 1}) {
+			rank := uint32(first)
+			if err != nil || view.Rank != rank || view.Size != 4 || view.ThreadCoordinates[1] != (isa.LaneValues{rank, rank, rank, rank}) {
 				t.Fatal(view, err)
 			}
 		})
@@ -244,10 +257,10 @@ func TestIncrementalFaultRequiresNewDevice(t *testing.T) {
 	seed, launch := lifecycleKernel(t)
 	var word [4]byte
 	binary.LittleEndian.PutUint32(word[:], 0xb)
-	if err := seed.backing.Write(0x800, word[:]); err != nil {
+	if err := seed.backing.Write(0x10800, word[:]); err != nil {
 		t.Fatal(err)
 	}
-	launch.StartupPC, launch.KernelEntryPC = 0x800, 0x800
+	launch.StartupPC, launch.KernelEntryPC = 0x10800, 0x10800
 	owner := &recoveryReadFault{AtomicMemoryService: seed.backing.(*memory.Memory), fail: true}
 	failed, err := NewKernel(launch, owner, Options{Backend: "std", PeriodPS: 1})
 	if err != nil {

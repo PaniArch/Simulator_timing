@@ -74,8 +74,9 @@ func (r *ResidencyMemory) admit(config CTAConfig, offset uint32, incremental boo
 	return snapshotCTA(candidate), nil
 }
 
-// Release requires the coordinator to have drained all member requests and
-// control state. Bytes remain physical SRAM contents, not freshly zeroed RAM.
+// Release drops slot metadata after hardware retirement. Coordinators must
+// retain already-addressed tails through pinned routes before reusing a slot;
+// unresolved barrier ownership cannot be released. Bytes remain physical SRAM.
 func (r *ResidencyMemory) Release(id uint32) error {
 	m := r.manager
 	m.mu.Lock()
@@ -113,8 +114,9 @@ func (r *ResidencyMemory) Route(id uint8, global warp.MemoryService) (*CTAMemory
 	return NewCTAMemory(r.manager, id, global)
 }
 
-// BindWarp binds the next logical rank; the coordinator must establish complete
-// quiescence before DetachWarp and before launching the new canonical owner.
+// BindWarp binds the next logical rank. The coordinator must establish hardware
+// availability and retain already-addressed old requests independently before
+// DetachWarp/rebinding; complete pipeline quiescence is not an RTL dispatch gate.
 func (r *ResidencyMemory) BindWarp(id, rank uint32, wid uint8) (CTASnapshot, error) {
 	m := r.manager
 	m.mu.Lock()

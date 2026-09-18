@@ -39,7 +39,11 @@ func TestLifecycleReuseTraceAcrossFlush(t *testing.T) {
 				if e.Kind == "warp-dispatched" {
 					dispatch[[2]uint64{uint64(e.Warp), e.WarpGeneration}] = e
 					if e.CTA == 1 && e.Rank == 0 {
-						overlap = k.resident[0] != nil && !k.runner.WarpQuiescent(0) && e.Warp != 0 && e.WarpGeneration == 2
+						for _, c := range k.resident {
+							if c != nil && c.Launch.ID == 0 {
+								overlap = !k.runner.WarpQuiescent(0) && e.Warp != 0 && e.WarpGeneration == 2
+							}
+						}
 					}
 				}
 			}
@@ -50,7 +54,7 @@ func TestLifecycleReuseTraceAcrossFlush(t *testing.T) {
 				if id.Warp >= 4 {
 					t.Fatal("invalid physical Warp", id)
 				}
-				b := r.Bindings[id.Warp]
+				b := r.TokenBindings[id.Token]
 				e, ok := dispatch[[2]uint64{uint64(id.Warp), id.WarpGeneration}]
 				if id.Kernel != run || !b.Valid || !ok || b.CTA != e.CTA || b.Rank != e.Rank ||
 					b.CTAGeneration != e.Generation || b.WarpGeneration != id.WarpGeneration || uint64(b.Slot) != id.CTA {

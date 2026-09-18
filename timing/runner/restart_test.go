@@ -129,8 +129,8 @@ func TestMultiRunnerRecoveryAndFlush(t *testing.T) {
 			if done, err := r.MakeVisible(10000); err != nil || !done {
 				t.Fatal("visibility", done, err)
 			}
-			got, _ := ram.ReadBytes(0, 4096)
-			want, _ := referenceRAM.ReadBytes(0, 4096)
+			got, _ := ram.ReadBytes(0, ram.Size())
+			want, _ := referenceRAM.ReadBytes(0, referenceRAM.Size())
 			if !reflect.DeepEqual(got, want) {
 				t.Fatal("recovery memory mismatch")
 			}

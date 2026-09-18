@@ -28,6 +28,9 @@ type Kernel struct {
 	visibilityID            uint64
 	generations             [4]uint64
 	warpGenerations         [4]uint64
+	tokenBindings           map[uint64]WarpBinding
+	localOwners             map[[2]uint64]warp.AtomicMemoryService
+	bindingRefs             map[[2]uint64]int
 	dispatch                *ctaDispatch
 	retirePipe              [2][]warpRetirement
 	retirementWrite         bool
@@ -47,6 +50,11 @@ type Kernel struct {
 	tail, usable     uint32
 	completed        uint32
 	failed           error
+	started          bool // KMU running is registered from start, before first valid
+	hardwareDone     bool
+	hardwareEndCycle uint64
+	contextReady     [4]bool
+	contextWrites    []contextWrite
 }
 type KernelCTA struct {
 	// Detached lifecycle observations; StoppedWarps describes canonical TMC state,
@@ -64,6 +72,7 @@ type KernelCTA struct {
 // since StartCycle, including any explicit post-execution memory operations.
 // Runtime snapshots it at execution completion before separately counting flush.
 type KernelStatus struct {
+	RTLTimingIssue                string `json:"rtl_timing_issue,omitempty"`
 	DeviceID                      uint64
 	MemoryDrained, BackingVisible bool
 
@@ -73,16 +82,18 @@ type KernelStatus struct {
 	Resident                           []KernelCTA
 	Waiting                            bool
 	Complete                           bool
+	HardwareComplete                   bool
+	HardwareEndCycle, HardwareCycles   uint64
 }
 
 func NewKernel(input device.LaunchState, memory device.BackingMemory, options Options) (*Kernel, error) {
 	if memory == nil {
 		return nil, fmt.Errorf("kernel requires loaded backing memory")
 	}
-	return newKernel(input, memory, options, nil)
+	return newKernel(input, memory, options, nil, nil)
 }
 
-func newKernel(input device.LaunchState, memory device.BackingMemory, options Options, previous *Kernel) (*Kernel, error) {
+func newKernel(input device.LaunchState, memory device.BackingMemory, options Options, previous *Kernel, powered *PoweredDevice) (*Kernel, error) {
 	launch, err := device.ValidateLaunch(input)
 	if err != nil {
 		return nil, err
@@ -92,12 +103,21 @@ func newKernel(input device.LaunchState, memory device.BackingMemory, options Op
 		return nil, err
 	}
 	k := &Kernel{launchID: 1, backing: memory, options: options, barrierEvents: make(map[BarrierEvent]bool), launch: launch, walker: walker, memory: core.NewResidencyMemory(), usable: 4}
+	k.tokenBindings = make(map[uint64]WarpBinding)
+	k.localOwners = make(map[[2]uint64]warp.AtomicMemoryService)
+	k.bindingRefs = make(map[[2]uint64]int)
 	if launch.AlignedLocalMemorySize != 0 {
 		k.usable = min(uint32(4), uint32(16384)/launch.AlignedLocalMemorySize)
 	}
 	if previous != nil {
 		k.launchID = previous.launchID + 1
 		k.startCycle = previous.runner.Cycle()
+		// VX_cta_dispatch.tail_r survives a context/launch change. Only reset
+		// clears it; base_tail wraps it when the new LMEM stride reduces capacity.
+		k.tail = previous.tail
+		if k.tail >= k.usable {
+			k.tail = 0
+		}
 	}
 	var owners [4]*state.WarpState
 	opts := MultiOptions{Options: options}
@@ -109,27 +129,27 @@ func newKernel(input device.LaunchState, memory device.BackingMemory, options Op
 	if options.MemoryConfig != nil {
 		config = *options.MemoryConfig
 	}
-	opts.MemorySystem = &MemorySystemOptions{Config: config}
+	opts.MemorySystem = &MemorySystemOptions{Config: config, Backend: options.MemoryBackend}
 	if previous != nil {
 		opts.MemorySystem.reuse = previous.runner.hierarchy
 	}
+	if powered != nil {
+		opts.MemorySystem.reuse = powered.memory
+	}
 	opts.MemorySystem.Bind = func(t model.Token) memsys.Identity {
-		view, e := k.memory.ViewForWarp(t.Warp)
-		if e != nil {
+		b := k.bindToken(t)
+		if !b.Valid {
 			return memsys.Identity{}
 		}
-		return memsys.Identity{Kernel: k.launchID, CTA: uint64(view.ID), WarpGeneration: k.warpGenerations[t.Warp]}
+		return memsys.Identity{Kernel: k.launchID, CTA: uint64(b.Slot), WarpGeneration: b.WarpGeneration}
 	}
 	opts.MemorySystem.LocalOwner = func(id memsys.Identity) (warp.AtomicMemoryService, error) {
-		if id.Kernel != k.launchID || id.CTA >= 4 || id.Warp >= 4 || k.resident[id.CTA] == nil || id.WarpGeneration != k.warpGenerations[id.Warp] {
+		b := k.tokenBindings[id.Token]
+		if id.Kernel != k.launchID || id.CTA >= 4 || id.Warp >= 4 || !b.Valid || id.Warp != uint32(b.PhysicalWarp) || id.CTA != uint64(b.Slot) || id.WarpGeneration != b.WarpGeneration {
 			return nil, fmt.Errorf("stale kernel local residency")
 		}
-		view, e := k.memory.ViewForWarp(uint8(id.Warp))
-		if e != nil || uint64(view.ID) != id.CTA {
-			return nil, fmt.Errorf("local warp/CTA binding mismatch")
-		}
-		owner, ok := opts.DataMemory[id.Warp].(warp.AtomicMemoryService)
-		if !ok {
+		owner := k.localOwners[[2]uint64{uint64(id.Warp), id.WarpGeneration}]
+		if owner == nil {
 			return nil, fmt.Errorf("local route requires atomic owner")
 		}
 		return owner, nil
@@ -170,6 +190,11 @@ func newKernel(input device.LaunchState, memory device.BackingMemory, options Op
 		for _, cta := range k.resident {
 			if cta != nil {
 				for _, member := range cta.Resident.Members {
+					// Context values are computed by the existing RTL-width owner,
+					// but are not exposed before the TID pipeline writes warp RAM.
+					if !k.contextReady[member.WarpID] {
+						continue
+					}
 					contexts[member.WarpID].CTA, _ = k.memory.ViewForWarp(member.WarpID)
 					phases, _ := k.memory.Barriers().PhaseView(cta.Resident.ID)
 					contexts[member.WarpID].BarrierPhases = &phases
@@ -181,6 +206,12 @@ func newKernel(input device.LaunchState, memory device.BackingMemory, options Op
 	k.runner, err = NewMulti(owners, memory, opts)
 	if err != nil {
 		return nil, err
+	}
+	if powered != nil {
+		k.runner.clock = powered.clock
+		k.startCycle = powered.clock.Cycle()
+		k.runner.hierarchy.bind = opts.MemorySystem.Bind
+		k.runner.hierarchy.localOwner = opts.MemorySystem.LocalOwner
 	}
 	if previous != nil {
 		if err := k.runner.core.ContinueCounters(previous.runner.core); err != nil {
@@ -214,17 +245,22 @@ func (k *Kernel) Status() KernelStatus {
 		}
 	}
 	s.Complete = k.executionComplete()
+	s.RTLTimingIssue = k.runner.hierarchy.system.RTLTimingIssue()
+	s.HardwareComplete, s.HardwareEndCycle = k.hardwareDone, k.hardwareEndCycle
+	if k.hardwareDone {
+		s.HardwareCycles = k.hardwareEndCycle - k.startCycle
+	}
 	return s
 }
 
 // executionComplete reads the existing lifecycle owners, without building the
 // public diagnostic snapshot. Execution completion is not backing visibility or
-// memory drain; residency reclamation continues to enforce its full tail checks.
+// a host visibility operation; slot release and final tail checks are independent.
 func (k *Kernel) executionComplete() bool {
 	if k.transferredStatus != nil {
 		return k.transferredStatus.Complete
 	}
-	if k.failed != nil || k.retirementWrite || len(k.retirePipe[0]) != 0 || len(k.retirePipe[1]) != 0 || k.walker.Remaining() != 0 || k.pending != nil || len(k.barrierEvents) != 0 || k.barrierReleases != 0 {
+	if !k.hardwareDone || k.failed != nil || k.retirementWrite || len(k.retirePipe[0]) != 0 || len(k.retirePipe[1]) != 0 || k.walker.Remaining() != 0 || k.pending != nil || len(k.barrierEvents) != 0 || k.barrierReleases != 0 {
 		return false
 	}
 	for _, c := range k.resident {
@@ -232,7 +268,10 @@ func (k *Kernel) executionComplete() bool {
 			return false
 		}
 	}
-	return true
+	// Releasing the hardware CTA slot does not retire its old pipeline or
+	// memory work. The independent runner completion condition keeps all
+	// outstanding receipts alive after the residency table becomes empty.
+	return k.runner.stopped
 }
 
 // Run advances at most budget actual pipeline edges. Budget exhaustion is
@@ -249,9 +288,14 @@ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
 	}
 	for n := uint64(0); n < budget; n++ {
 		dispatching := k.dispatch != nil
-		if err := k.residency(); err != nil {
-			k.failed = err
-			return err
+		// VX_kmu.running samples start on this edge; valid can reach CTA only
+		// on the following edge. Cache reset progress remains concurrent.
+		starting := !k.started
+		if !starting {
+			if err := k.residency(); err != nil {
+				k.failed = err
+				return err
+			}
 		}
 		// VX_cta_dispatch.busy = old DISPATCH state || kmu_bus_if_fire.
 		// Include the last Warp fire even though residency just returned to IDLE.
@@ -262,15 +306,44 @@ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
 		// The CTA dispatcher remains clocked even while no Warp is active.
 		k.runner.stopped = false
 		if err := k.runner.run(1, observe != nil, func(record MultiRecord) {
+			if record.Report.InstructionAccepted && record.Report.Offered.Valid {
+				k.bindToken(record.Report.Offered.Token)
+			}
 			if err := k.advanceRetirement(record); err != nil {
 				k.failed = err
 			}
 			if err := k.releaseBarriers(); err != nil {
 				k.failed = err
 			}
+			k.commitContextWrites(record.Cycle)
+			if !k.hardwareDone && k.walker.Remaining() == 0 && k.pending == nil && k.dispatch == nil && !k.runner.core.SchedulerBusy() && k.runner.core.LSUSchedulerDrained() && k.runner.hierarchy.system.MemUnitEmpty() {
+				k.hardwareDone, k.hardwareEndCycle = true, record.Cycle+1
+			}
 			if observe != nil {
 				record.DeviceID, record.LaunchID = k.deviceID, k.launchID
 				record.Bindings = k.traceBindings()
+				record.TokenBindings = make(map[uint64]WarpBinding, len(k.tokenBindings))
+				for id, b := range k.tokenBindings {
+					record.TokenBindings[id] = b
+				}
+			}
+			for _, tokens := range [][]model.Token{record.Finished, record.Cancelled} {
+				for _, token := range tokens {
+					if b, ok := k.tokenBindings[token.ID]; ok {
+						k.bindingRefs[[2]uint64{uint64(b.PhysicalWarp), b.WarpGeneration}]--
+						delete(k.tokenBindings, token.ID)
+					}
+				}
+			}
+			for key := range k.localOwners {
+				if key[1] != k.warpGenerations[key[0]] && k.bindingRefs[key] == 0 {
+					delete(k.localOwners, key)
+					delete(k.bindingRefs, key)
+				}
+			}
+			// Deliver only after consuming lifecycle identities. Observers may
+			// mutate detached slices/maps; they cannot alter ownership cleanup.
+			if observe != nil {
 				observe(record)
 			}
 		}); err != nil {
@@ -280,6 +353,7 @@ func (k *Kernel) Run(budget uint64, observe func(MultiRecord)) error {
 		if k.failed != nil {
 			return k.failed
 		}
+		k.started = true
 	}
 	return nil
 }
@@ -403,5 +477,5 @@ func (k *Kernel) NextLaunch(input device.LaunchState) (*Kernel, error) {
 	if nextCycle != k.runner.Cycle() {
 		return nil, fmt.Errorf("device clock and memory edge disagree")
 	}
-	return newKernel(input, k.backing, k.options, k)
+	return newKernel(input, k.backing, k.options, k, nil)
 }

@@ -27,19 +27,19 @@ func (m *flushWriteFault) WriteBatch(a []uint32, d [][]byte) error {
 func TestRuntimeCacheFlushReplacesCachedInstructions(t *testing.T) {
 	for _, latency := range []uint64{3, 31, 7} {
 		t.Run(fmt.Sprint(latency), func(t *testing.T) {
-			ram, _ := memory.New(4096)
+			ram, _ := memory.New(0x12000)
 			old, updated := uint32(0x00100113), uint32(0x00900113)       // addi x2,1 / addi x2,9
 			for i, word := range []uint32{old, 0x0030a023, 0x0000000b} { // sw x3,0(x1); stop
 				var b [4]byte
 				binary.LittleEndian.PutUint32(b[:], word)
-				if err := ram.Write(0x100+uint32(i)*4, b[:]); err != nil {
+				if err := ram.Write(0x10000+uint32(i)*4, b[:]); err != nil {
 					t.Fatal(err)
 				}
 			}
-			initial := state.WarpInitial{Topology: state.FrozenTopology(), PC: 0x100, ActiveMask: 15, Lifecycle: state.WarpRunning}
+			initial := state.WarpInitial{Topology: state.FrozenTopology(), PC: 0x10000, ActiveMask: 15, Lifecycle: state.WarpRunning}
 			for l := uint8(0); l < 4; l++ {
 				lane := state.LaneInitial{ID: l}
-				lane.GPR[1] = 0x100
+				lane.GPR[1] = 0x10000
 				lane.GPR[3] = updated
 				initial.Lanes = append(initial.Lanes, lane)
 			}
@@ -70,7 +70,7 @@ func TestRuntimeCacheFlushReplacesCachedInstructions(t *testing.T) {
 			}
 			restart := func() {
 				t.Helper()
-				if err := owner.SetPC(0x100); err != nil {
+				if err := owner.SetPC(0x10000); err != nil {
 					t.Fatal(err)
 				}
 				if err := owner.SetActiveMask(15, state.WarpRunning); err != nil {
@@ -82,7 +82,7 @@ func TestRuntimeCacheFlushReplacesCachedInstructions(t *testing.T) {
 			}
 			word := func() uint32 {
 				var b [4]byte
-				if err := ram.Read(0x100, b[:]); err != nil {
+				if err := ram.Read(0x10000, b[:]); err != nil {
 					t.Fatal(err)
 				}
 				return binary.LittleEndian.Uint32(b[:])
@@ -140,7 +140,7 @@ func TestRuntimeCacheFlushReplacesCachedInstructions(t *testing.T) {
 					iAccepted = cycle
 				}
 				if n == 0 {
-					if err := r.multi.DispatchWarp(1, 0x100, 0, 15, true); err == nil {
+					if err := r.multi.DispatchWarp(1, 0x10000, 0, 15, true); err == nil {
 						t.Fatal("dispatch stole cache flush")
 					}
 					if err := r.Flush(); err == nil {

@@ -14,6 +14,11 @@ D 为 8 bytes；line/sector/refill 均为 64 bytes。D 的 bank 选择来自 **b
 不是 bit 3；8-byte 合并粒度不能误当 bank 交错粒度。两个 D 输入端口同 bank 时仍要仲裁。
 I 有一个外存端口、D 有两个，最终在软件 external backend 接受边界竞争。
 
+`VX_lsu_slice.g_mem_req_attr` 按完整 memory block 分类 `[VX_MEM_IO_BASE_ADDR,
+VX_MEM_IO_END_ADDR)`；冻结值为 `[0x40, 0x10000)`。该范围的每 lane `is_addr_io`
+必须一路进入 `VX_cache_bypass`，不能当 cached RAM 产生命中。I/O 属性不禁用
+合并器的同组同 word 合并：`VX_mem_unit.in_req_no_merge` 仅来自 AMO 位。
+
 `VX_cache_bank` 的 LATENCY=2 是内部流水级数，不能直接称为总 hit latency。
 MREQ 深度为 next-power-of-two(max(2×LATENCY, writeback ? MSHR : 0)+override)，
 I/D 每 bank 分别为 4/16；CRSQ 两者均为 2。MRSQ 为每外存端口 I=0（旁路）、D=4。
@@ -50,8 +55,11 @@ load completion 必须消费 cache/LMEM 返回值，不能再次读取 backing�
 的部分效果，不能自动重放已应用的子请求。
 
 identity 保留 kernel、CTA residency、warp slot 的 generation、instruction token/epoch 与 subrequest ID。
-这些是软件防迟到事件机制，不是宣称 RTL 总线上存在同名字段。请求、响应、合并映射、effects
-均释放后才能回收其相关 CTA；不能为此要求其它 CTA 全部排空。valid/dirty cache line 本身不阻止回收。
+这些是软件防迟到事件机制，不是宣称 RTL 总线上存在同名字段。物理 wid 的重新分配依照 scheduler
+inactive，CTA slot 的释放依照 dispatcher 最后一个 delayed warp_done；不能因软件 receipt 尾部
+人为推迟物理资源复用。旧请求、响应、合并映射与 effects 所需的 identity/LMEM 物理路由另行保留，
+直到相关尾部释放，不在迟到响应时查新 wid→CTA 归属。软件完整完成仍检查尾部排空。
+不能为此要求其它 CTA 全部排空；valid/dirty cache line 本身不阻止回收。
 
 原功能 backing owner 仍唯一；这个唯一性不禁止合法 cache 副本。dirty cache 持有较新数据，
 backing 只通过正常 external 写请求更新。最终读取 backing 前发起明确写回/可见性操作，

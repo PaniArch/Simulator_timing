@@ -26,9 +26,10 @@ type MultiOptions struct {
 }
 type MultiRecord struct {
 	DeviceID, LaunchID uint64
-	Bindings           [4]WarpBinding    // detached physical-to-logical binding for every token on this edge
-	Memory             memsys.SystemEdge // detached memory handshakes; fragments require TraceMemory
-	Counters           isa.CounterView   // old-edge hardware scheduler counters
+	Bindings           [4]WarpBinding         // current physical-to-logical binding (not old in-flight generations)
+	TokenBindings      map[uint64]WarpBinding // captured at scheduling; includes retiring generations on this edge
+	Memory             memsys.SystemEdge      // detached memory handshakes; fragments require TraceMemory
+	Counters           isa.CounterView        // old-edge hardware scheduler counters
 	Warps              [4]WarpObservation
 	Events             []StageEvent
 	Cancelled          []model.Token // effect contexts removed since the previous edge
@@ -87,7 +88,8 @@ func NewMulti(owners [4]*state.WarpState, memory warp.MemoryService, options Mul
 		// lifetime. Dynamic CTA allocation must use explicit MemorySystem callbacks.
 		routes := options.DataMemory
 		options.MemorySystem = &MemorySystemOptions{
-			Config: config,
+			Config:  config,
+			Backend: options.MemoryBackend,
 			Bind: func(t model.Token) memsys.Identity {
 				return memsys.Identity{Kernel: 1, CTA: uint64(t.Warp), WarpGeneration: 1}
 			},
@@ -184,9 +186,11 @@ func (r *MultiRunner) step(cycle uint64, diagnostics bool) (MultiRecord, error) 
 		return MultiRecord{Cycle: cycle}, err
 	}
 	record := MultiRecord{Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}, Cycle: cycle}
+	// Kernel ownership cleanup needs cancellation identities even when tracing
+	// is disabled, just as it needs Finished on every edge.
+	record.Cancelled = append([]model.Token(nil), r.cancelled...)
 	if diagnostics {
 		record.Events = append([]StageEvent(nil), r.recoveryEvents...)
-		record.Cancelled = append([]model.Token(nil), r.cancelled...)
 	}
 	r.cancelled = nil
 	r.recoveryEvents = nil

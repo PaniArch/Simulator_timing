@@ -98,12 +98,12 @@ func TestPersistentClockEpochVisibilityChunks(t *testing.T) {
 				}
 			}
 			var err error
-			got.Memory, err = f.ram.ReadBytes(0, 4096)
+			got.Memory, err = f.ram.ReadBytes(0, 0x12000)
 			if err != nil {
 				t.Fatal(err)
 			}
 			got.Retired = r.Retired()
-			if binary.LittleEndian.Uint32(got.Memory[0x804:]) != 17 {
+			if binary.LittleEndian.Uint32(got.Memory[0x10804:]) != 17 {
 				t.Fatal("lost store")
 			}
 			if index == 0 {

@@ -36,7 +36,7 @@ func TestRealMemoryCancelPartiallyAppliedMixedStore(t *testing.T) {
 		for modeIndex, mode := range baselineChunks {
 			for _, diag := range []bool{true, false} {
 				t.Run(fmt.Sprintf("flush=%t/%s/diag=%t", flush, mode.name, diag), func(t *testing.T) {
-					ram, _ := memory.New(8192)
+					ram, _ := memory.New(0x12000)
 					for i := 0; i < 32; i++ {
 						var b [4]byte
 						binary.LittleEndian.PutUint32(b[:], 0x0020a023) // sw x2,0(x1)
@@ -67,7 +67,9 @@ func TestRealMemoryCancelPartiallyAppliedMixedStore(t *testing.T) {
 						}
 						for l := uint8(0); l < 4; l++ {
 							lane := state.LaneInitial{ID: l}
-							lane.GPR[1] = 0x800 + uint32(l)*128
+							// This test deliberately fills cached global requests,
+							// not the RTL non-cacheable low-address I/O aperture.
+							lane.GPR[1] = 0x10800 + uint32(l)*128
 							if l == 0 {
 								lane.GPR[1] = isa.FrozenLocalMemBase
 							}
@@ -171,7 +173,7 @@ func TestRealMemoryCancelPartiallyAppliedMixedStore(t *testing.T) {
 					// Compare after real writeback as well as execution: cancellation must
 					// neither replay the applied local subset nor drop the held global tail.
 					result := baselineResult{Cycle: r.Cycle(), Retired: r.Retired(), Counters: isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}}
-					result.Before, err = ram.ReadBytes(0, 8192)
+					result.Before, err = ram.ReadBytes(0, 0x12000)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -193,7 +195,7 @@ func TestRealMemoryCancelPartiallyAppliedMixedStore(t *testing.T) {
 					}
 					result.FlushCycle = r.Cycle()
 					result.FlushCounters = isa.CounterView{Cycle: r.core.Cycles(), Instret: r.core.Instret()}
-					result.After, err = ram.ReadBytes(0, 8192)
+					result.After, err = ram.ReadBytes(0, 0x12000)
 					if err != nil {
 						t.Fatal(err)
 					}

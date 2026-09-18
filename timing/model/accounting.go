@@ -80,6 +80,10 @@ func (c *Core) LSUSchedulerDrained() bool {
 // Cycles is the scheduler busy-qualified counter, not the runner wall clock.
 func (c *Core) Cycles() uint64 { return c.account.cycles }
 
+// SchedulerBusy exposes busy_buf after the edge; the caller adds the current
+// CTA-dispatch busy signal and the other VX_core.busy contributors separately.
+func (c *Core) SchedulerBusy() bool { return c.account.busy }
+
 // ActiveWarps reads the registered scheduler mask. Explicit-token mode has no
 // autonomous warp residency and returns zero.
 func (c *Core) ActiveWarps() (mask uint8) {

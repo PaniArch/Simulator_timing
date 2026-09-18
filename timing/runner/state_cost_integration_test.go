@@ -149,10 +149,10 @@ func TestStateCostDelayedFaultChunks(t *testing.T) {
 				ram := seed.backing.(*memory.Memory)
 				var b [4]byte
 				binary.LittleEndian.PutUint32(b[:], 0xb)
-				if err := ram.Write(0x800, b[:]); err != nil {
+				if err := ram.Write(0x10800, b[:]); err != nil {
 					t.Fatal(err)
 				}
-				launch.StartupPC, launch.KernelEntryPC = 0x800, 0x800
+				launch.StartupPC, launch.KernelEntryPC = 0x10800, 0x10800
 				backing := &recoveryReadFault{AtomicMemoryService: ram, fail: true}
 				k, err := NewKernel(launch, backing, Options{Backend: "std", PeriodPS: 1, TraceMemory: true})
 				if err != nil {

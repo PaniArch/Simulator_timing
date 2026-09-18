@@ -1,5 +1,35 @@
 # T11 Kernel launch / residency implementation progress
 
+## Current device power and startup boundary (RTL repair)
+
+The sections describing the original fixed service below are historical T11
+interfaces; current execution uses the T12 storage hierarchy. `runner.PowerOn`
+creates that hierarchy and its device clock before any launch. `Initialize`
+clocks actual bank reset scans until their pipeline tails settle; its budget is
+resumable and its predicate is derived from cache state. It issues no memory
+requests, flushes, or fabricated fills. `Start` transfers the same hierarchy and
+clock into the first Kernel. An early start is also supported: remaining reset
+work competes with real fetch exactly as in the cache bank. Runtime selects the
+reset-settled launch boundary at device creation, not a calibrated cycle offset.
+
+`NewKernel` remains the explicit cold/early-start convenience API. Every launch
+samples a KMU start edge before admission. Thus start at E0 leads to CTA accept
+E1, wid selection E2, registered fire E3, first scheduler visibility E4. This is
+derived from `VX_kmu.running` and `VX_cta_dispatch`, not an added service delay.
+TID coordinates retain the existing RTL-width computation but context exposure
+is gated by the two frozen TID pipeline registers and following warp-RAM write:
+fire E3 -> write E5 -> readable view after E5. This does not claim a general
+BRAM implementation or a proof for non-frozen parameterizations.
+
+`KernelStatus.HardwareComplete/HardwareEndCycle/HardwareCycles` observes KMU
+exhaustion plus scheduler busy, LSU scheduler empty and coalescer empty. It does
+not wait for cache refill/store application or software receipts. `Complete`
+remains the safe software boundary requiring those tails and CTA retirement as
+well. Runtime reports both intervals; host access and ownership transfer still
+require the safe boundary. Native Busy is therefore not a cycle-accurate CP
+polling interface. `TestHardwareEndDoesNotWaitForStoreRefill` checks a genuine
+outstanding store miss between the two boundaries.
+
 ## Implemented memory boundary
 
 `runner.MultiOptions.DataMemory[warp]` selects the data service for that Warp;
@@ -41,18 +71,29 @@ separate global outputs. It does not yet claim Kernel launch coverage.
 empty frontend ownership, scoreboard state, registered issue/pending accounting,
 and every pipeline token resource. `runner.MultiRunner.WarpQuiescent` also checks
 canonical inactivity, software receipts, blocked/wake records, queued services
-and held responses. This is a conservative resource-reuse gate; it is never used
-for hardware WSYNC or BAR drain. Other Warps can remain active and in flight.
+and held responses. This remains a conservative lifecycle/drain observation,
+not a normal physical-wid dispatch gate and never a WSYNC/BAR gate.
+RTL `VX_cta_dispatch` selects from `~(active_warps | dispatched_warps)`;
+`WarpDispatchable` now follows hardware availability without waiting for old
+commit/pending receipts. Other Warps can remain active and in flight.
 
 `MultiRunner.DispatchWarp` stages canonical `StageWarpLaunch` and scheduler
-`Core.DispatchWarp` from that boundary. First use selects startup PC; reuse uses
+`Core.DispatchWarp` from the inactive hardware boundary. First use selects startup PC; reuse uses
 the frozen 20-byte reentry rule, and mscratch receives the parameter address.
 The scheduler retains the global monotonic instruction-ID allocator and all
 other slots. The event is recorded as `cta-dispatch`. This synchronous operation
-runs between pipeline edges (or in the post-edge observer); it does not claim
-the RTL dispatcher's internal pipeline latency. It performs no external
+runs between pipeline edges (or in the post-edge observer). The scheduler fire
+input updates active/PC/mask at the next edge, not combinationally before selection.
+Kernel models accept/select/registered fire; TID RAM internals remain abstract.
+It performs no external
 callbacks, and the runner is single-threaded. Kernel allocation and context
 installation must precede dispatch.
+
+Across reuse, per-token generation bindings and pinned physical LMEM routes
+retain old ownership until completion/cancellation. Canonical activation marks
+old sequential-PC receipts as superseded, without discarding register/memory
+receipts. Current wid bindings are not a valid trace join for old tokens; use
+`MultiRecord.TokenBindings`. Slot tail survives `NextLaunch`, as in the RTL.
 
 `TestCTADispatchPreservesOtherWorkAndRejectsStale` checks per-slot availability,
 stale transaction rejection and retained hardware pending. The runner regression
@@ -105,11 +146,13 @@ from this physical CSR placement.
 Kernel admission uses a round-robin slot tail and fixed stride equal to aligned
 launch local-memory size. The usable slot count is bounded by LMEM capacity;
 first cluster members pre-wrap and wait for the whole slot window. Warps are
-selected from free quiescent slots in increasing order. Admission currently
-installs one whole CTA at a boundary before a pipeline edge, abstracting the
-RTL per-Warp dispatch/context pipeline latency. It does not require unrelated
-resident CTAs to finish. Reclaim retains membership until all member slots are
-quiescent, including external services; physical SRAM bytes are preserved.
+selected from hardware-inactive slots in increasing order, with registered
+one-Warp dispatch and scheduler visibility on the following edge. Internal TID
+RAM stages remain abstract. It does not require unrelated resident CTAs to
+finish. The last delayed warp_done releases the physical CTA slot, independently
+of outstanding software receipts. Per-token bindings and pinned physical LMEM
+routes retain old ownership across reuse; physical SRAM bytes are preserved.
+The observer's full-quiescence predicate is not the slot-admission gate.
 
 `TestKernelLaunchExecutesStartupEntryAndCTAContexts` exercises four resident CTAs
 through startup entry-CSR read/jump, parameter read, block-index CSR output

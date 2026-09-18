@@ -144,7 +144,7 @@ func (a *Adapter) validateReport(cycle uint64, r model.CoreReport) error {
 			return err
 		}
 	}
-	if r.MemoryResponse.Valid {
+	if r.MemoryResponse.Valid && r.MemoryResponseReady {
 		if _, err := a.responsePart(r.MemoryResponse); err != nil {
 			return err
 		}

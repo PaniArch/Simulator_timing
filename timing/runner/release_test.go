@@ -163,7 +163,7 @@ func TestBarrierReleaseDoesNotWaitForExternalStoreTail(t *testing.T) {
 			t.Fatal("barrier release failed to resume work", w, v)
 		}
 		var data [4]byte
-		if err := ram.Read(uint32(0x800+w*0x100), data[:]); err != nil || binary.LittleEndian.Uint32(data[:]) != 0x42 {
+		if err := ram.Read(uint32(0x10800+w*0x100), data[:]); err != nil || binary.LittleEndian.Uint32(data[:]) != 0x42 {
 			t.Fatal("store service did not finish", data, err)
 		}
 	}

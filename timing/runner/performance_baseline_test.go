@@ -29,7 +29,7 @@ type baselineFixture struct {
 
 func newBaselineFixture(t testing.TB, kind string, diagnostics, fault bool) *baselineFixture {
 	t.Helper()
-	ram, err := memory.New(4096)
+	ram, err := memory.New(0x12000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,12 +53,12 @@ func newBaselineFixture(t testing.TB, kind string, diagnostics, fault bool) *bas
 		put(0x100+uint32(i)*4, w)
 	}
 	for w := 0; w < 4; w++ {
-		put(0x800+uint32(w)*16, uint32(10+w))
+		put(0x10800+uint32(w)*16, uint32(10+w))
 	}
 	options := Options{Backend: "std", PeriodPS: 1, TraceMemory: diagnostics, MemoryConfig: &memsys.Config{Latency: 11, AcceptsPerCycle: 1, MaxInflight: 16, ReturnsPerCycle: 1}, Ready: func(c uint64) bool { return c%5 != 0 }}
 	f := &baselineFixture{ram: ram}
 	if kind == "kernel" {
-		launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x100, ParameterAddress: 0x800, GridDimensions: [3]uint32{1, 1, 1}, BlockDimensions: [3]uint32{4, 1, 1}, BlockSize: 4, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
+		launch := device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x100, ParameterAddress: 0x10800, GridDimensions: [3]uint32{1, 1, 1}, BlockDimensions: [3]uint32{4, 1, 1}, BlockSize: 4, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}
 		f.kernel, err = NewKernel(launch, ram, options)
 		if err != nil {
 			t.Fatal(err)
@@ -73,7 +73,7 @@ func newBaselineFixture(t testing.TB, kind string, diagnostics, fault bool) *bas
 			initial := state.WarpInitial{Topology: state.FrozenTopology(), WarpID: uint8(w), PC: 0x100, ActiveMask: 15, Lifecycle: state.WarpRunning}
 			for lane := uint8(0); lane < 4; lane++ {
 				l := state.LaneInitial{ID: lane}
-				l.GPR[1] = 0x800 + uint32(w)*16
+				l.GPR[1] = 0x10800 + uint32(w)*16
 				initial.Lanes = append(initial.Lanes, l)
 			}
 			owners[w], err = state.NewWarp(initial)
@@ -200,7 +200,7 @@ func baselineRun(t *testing.T, kind string, chunks []uint64, diag, fault bool) (
 			t.Fatal(err)
 		}
 	}
-	result.Before, err = f.ram.ReadBytes(0, 4096)
+	result.Before, err = f.ram.ReadBytes(0, 0x12000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func baselineRun(t *testing.T, kind string, chunks []uint64, diag, fault bool) (
 	}
 	result.FlushCycle = f.multi.Cycle()
 	result.FlushCounters = isa.CounterView{Cycle: f.multi.core.Cycles(), Instret: f.multi.core.Instret()}
-	result.After, err = f.ram.ReadBytes(0, 4096)
+	result.After, err = f.ram.ReadBytes(0, 0x12000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestRunnerBaselineChunkEquivalence(t *testing.T) {
 					if total != expected {
 						t.Fatalf("retired %d want %d", total, expected)
 					}
-					if binary.LittleEndian.Uint32(want.After[0x804:]) != 17 || binary.LittleEndian.Uint32(want.Before[0x804:]) != 0 {
+					if binary.LittleEndian.Uint32(want.After[0x10804:]) != 17 || binary.LittleEndian.Uint32(want.Before[0x10804:]) != 0 {
 						t.Fatal("store/flush value")
 					}
 				}

@@ -77,7 +77,7 @@ func TestMultiRunnerRealMemory(t *testing.T) {
 			t.Fatal("unrelated warp did not progress during load miss")
 		}
 		b := make([]byte, 4)
-		if err := ram.Read(0x904, b); err != nil {
+		if err := ram.Read(0x10904, b); err != nil {
 			t.Fatal(err)
 		}
 		if binary.LittleEndian.Uint32(b) == 9 {
@@ -92,8 +92,8 @@ func TestMultiRunnerRealMemory(t *testing.T) {
 		if done, err := r.MakeVisible(10000); err != nil || !done {
 			t.Fatal("visibility failed", done, err)
 		}
-		gotBytes, _ := ram.ReadBytes(0, 4096)
-		wantBytes, _ := ramRef.ReadBytes(0, 4096)
+		gotBytes, _ := ram.ReadBytes(0, 0x12000)
+		wantBytes, _ := ramRef.ReadBytes(0, 0x12000)
 		if !bytes.Equal(gotBytes, wantBytes) {
 			t.Fatal("default memory output differs after writeback")
 		}
@@ -233,7 +233,7 @@ func TestRealMemoryFenceReturnsOriginalRequest(t *testing.T) {
 		}
 	}
 	var bytes [4]byte
-	if err := ram.Read(0x904, bytes[:]); err != nil {
+	if err := ram.Read(0x10904, bytes[:]); err != nil {
 		t.Fatal(err)
 	}
 	if binary.LittleEndian.Uint32(bytes[:]) != 9 {

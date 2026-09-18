@@ -15,7 +15,7 @@ type kernelReadCounter struct {
 }
 
 func (m *kernelReadCounter) Read(a uint32, d []byte) error {
-	if a >= 0x800 && a < 0xc00 {
+	if a >= 0x10800 && a < 0x10c00 {
 		m.globalRefills++
 	}
 	return m.Memory.Read(a, d)
@@ -36,7 +36,7 @@ func TestKernelMixedMemoryLifecycle(t *testing.T) {
 	} {
 		latency := tc.latency
 		measure := metrics{}
-		ram, _ := memory.New(8192)
+		ram, _ := memory.New(0x12000)
 		put := func(pc, word uint32) {
 			var b [4]byte
 			binary.LittleEndian.PutUint32(b[:], word)
@@ -70,7 +70,8 @@ func TestKernelMixedMemoryLifecycle(t *testing.T) {
 		config, _ := memsys.DefaultConfig()
 		config.Latency = latency
 		counted := &kernelReadCounter{Memory: ram}
-		k, err := NewKernel(device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x800, GridDimensions: [3]uint32{6, 1, 1}, BlockDimensions: [3]uint32{4, 1, 1}, BlockSize: 4, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}, counted, Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config, Ready: func(c uint64) bool { return c%tc.period == 0 }})
+		// Cache miss-pattern assertions require RAM above the RTL I/O aperture.
+		k, err := NewKernel(device.LaunchState{StartupPC: 0x100, KernelEntryPC: 0x200, ParameterAddress: 0x10800, GridDimensions: [3]uint32{6, 1, 1}, BlockDimensions: [3]uint32{4, 1, 1}, BlockSize: 4, ClusterDimensions: [3]uint32{1, 1, 1}, LocalMemorySize: 64}, counted, Options{Backend: "std", PeriodPS: 1, MemoryConfig: &config, Ready: func(c uint64) bool { return c%tc.period == 0 }})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,7 +145,7 @@ func TestKernelMixedMemoryLifecycle(t *testing.T) {
 			for lane := uint32(0); lane < 4; lane++ {
 				expected[lane] = 10 + c*16 + lane
 				var b [4]byte
-				if err := ram.Read(0xc00+c*16+lane*4, b[:]); err != nil {
+				if err := ram.Read(0x10c00+c*16+lane*4, b[:]); err != nil {
 					t.Fatal(err)
 				}
 				if got := binary.LittleEndian.Uint32(b[:]); got != expected[lane] {

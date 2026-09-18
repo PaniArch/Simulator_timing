@@ -29,8 +29,20 @@ func TestCTADispatchPreservesOtherWorkAndRejectsStale(t *testing.T) {
 	if err = CommitEdge(stale); err == nil {
 		t.Fatal("stale activation accepted")
 	}
+	if c.front.scheduler.Output().Token.Warp != 1 || c.front.scheduler.State().Warps[0].Active {
+		t.Fatal("CTA fire bypassed active register")
+	}
+	edge, err := c.EvaluateExecution(CoreInputs{ControlAllowed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = CommitEdge(edge.Transition); err != nil {
+		t.Fatal(err)
+	}
 	s := c.front.scheduler.State()
-	if s.Warps[1] != contexts[1] || s.Warps[2].Active || !s.Warps[0].Active || s.Warps[0].Mask != 3 || s.Warps[0].PC != 0x200 {
+	w1 := contexts[1]
+	w1.Stalled = true // the existing Warp was scheduled on the CTA fire edge
+	if s.Warps[1] != w1 || s.Warps[2].Active || !s.Warps[0].Active || s.Warps[0].Mask != 3 || s.Warps[0].PC != 0x200 {
 		t.Fatal(s)
 	}
 	if _, err = c.DispatchWarp(0, 0x400, 15); err == nil {

@@ -18,6 +18,7 @@ import (
 type MemorySystemOptions struct {
 	reuse      *runnerMemory // internal, transferred only after full drain
 	Config     memsys.Config
+	Backend    memsys.BackendFactory
 	Bind       func(model.Token) memsys.Identity
 	LocalOwner memsys.LocalOwner
 }
@@ -53,7 +54,7 @@ func newRunnerMemory(owner warp.MemoryService, o *MemorySystemOptions) (*runnerM
 		return o.reuse, nil
 	}
 	m := &runnerMemory{localOwner: o.LocalOwner}
-	s, err := memsys.NewSystem(atomic, func(id memsys.Identity) (warp.AtomicMemoryService, error) { return m.localOwner(id) }, o.Config)
+	s, err := memsys.NewSystemWithBackend(atomic, func(id memsys.Identity) (warp.AtomicMemoryService, error) { return m.localOwner(id) }, o.Config, o.Backend)
 	if err != nil {
 		return nil, err
 	}
@@ -104,16 +105,41 @@ func (m *runnerMemory) receive(r *MultiRunner, cycle uint64) error {
 			return &warp.Fault{Kind: warp.FaultInstructionAccess, PC: t.PC, Cause: f.Response.Err}
 		}
 		r.fetchResponse = model.Response{Valid: true, ID: t.ID, Epoch: t.Epoch, Warp: t.Warp, Mask: t.Mask, Word: binary.LittleEndian.Uint32(f.Response.Data[:4])}
-		m.fetchPop = true
-		delete(m.fetchTokens, f.Response.Identity)
 	}
 	if d.Valid && m.cancelledData[d.Response.Identity] {
 		m.dataPop = true
-	} else if d.Valid && !r.response.Valid && m.accepted[d.Response.Identity] {
+	} else if d.Valid && m.accepted[d.Response.Identity] {
 		t, ok := m.dataTokens[d.Response.Identity]
 		if !ok {
 			return fmt.Errorf("unknown LSU response identity")
 		}
+		// Combinational view of the existing RTL split response register, NOT
+		// another elastic holding slot. Dequeue and functional receipt occur
+		// only when the LSU's actual ready accepts this fragment in step.
+		r.response = model.Response{Valid: true, ID: t.ID, Epoch: t.Epoch, Warp: t.Warp, Uop: t.Uop, Mask: d.Response.Mask}
+	}
+	return nil
+}
+
+func (m *runnerMemory) acceptResponse(r *MultiRunner, cycle uint64, report model.CoreReport) error {
+	// VX_fetch directly wires icache rsp_ready to fetch_if.ready. The
+	// runner's preview must not create an additional instruction holding slot.
+	if r.fetchResponse.Valid && report.FetchResponseReady && !m.fetchPop {
+		f, _ := m.system.Responses()
+		t, ok := m.fetchTokens[f.Response.Identity]
+		if !f.Valid || !ok || t.ID != r.fetchResponse.ID || t.Epoch != r.fetchResponse.Epoch {
+			return fmt.Errorf("fetch response handshake without owned cache output")
+		}
+		m.fetchPop = true
+		delete(m.fetchTokens, f.Response.Identity)
+	}
+	if report.MemoryResponse.Valid && report.MemoryResponseReady && !m.dataPop {
+		_, d := m.system.Responses()
+		t, ok := m.dataTokens[d.Response.Identity]
+		if !d.Valid || !ok || !m.accepted[d.Response.Identity] {
+			return fmt.Errorf("LSU response handshake without owned memory output")
+		}
+		var accepted model.Response
 		var err error
 		if t.Path == model.FENCE {
 			var completionError error
@@ -122,18 +148,24 @@ func (m *runnerMemory) receive(r *MultiRunner, cycle uint64) error {
 					completionError = errors.Join(completionError, e)
 				}
 			}
-			r.response, err = r.effects.AcceptOrderingFragment(cycle, t, d.Response.Mask, completionError)
+			accepted, err = r.effects.AcceptOrderingFragment(cycle, t, d.Response.Mask, completionError)
 		} else {
-			r.response, err = r.effects.AcceptMemoryResult(cycle, t, effects.MemoryResult{Mask: d.Response.Mask, Data: d.Response.Data, Errors: d.Response.Errors})
+			accepted, err = r.effects.AcceptMemoryResult(cycle, t, effects.MemoryResult{Mask: d.Response.Mask, Data: d.Response.Data, Errors: d.Response.Errors})
 		}
 		if err != nil {
 			return err
+		}
+		if accepted != report.MemoryResponse {
+			return fmt.Errorf("functional memory receipt differs from accepted RTL response")
 		}
 		m.dataPop = true
 	}
 	return nil
 }
 func (m *runnerMemory) step(r *MultiRunner, cycle uint64, report model.CoreReport) (memsys.SystemEdge, error) {
+	if err := m.acceptResponse(r, cycle, report); err != nil {
+		return memsys.SystemEdge{}, err
+	}
 	admit := r.options.Ready == nil || r.options.Ready(cycle)
 	if report.FetchRequest.Valid && !m.fetch.Valid && admit {
 		m.fetchSeq++
@@ -154,7 +186,7 @@ func (m *runnerMemory) step(r *MultiRunner, cycle uint64, report model.CoreRepor
 		// The frozen local aperture is validated by LocalMemory; classify the same
 		// architectural address range here, with its base supplied by Timing IR.
 		lane := func(n uint8, address uint32, mask uint8, data uint32) {
-			v := memsys.LaneRequest{Address: address, ByteEnable: mask, Local: m.system.IsLocal(address)}
+			v := memsys.LaneRequest{Address: address, ByteEnable: mask, Local: m.system.IsLocal(address), NonCacheable: m.system.IsIO(address)}
 			binary.LittleEndian.PutUint32(v.Data[:], data)
 			req.Lanes[n] = v
 		}

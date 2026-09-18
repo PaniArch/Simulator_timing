@@ -7,6 +7,36 @@ import (
 	"time"
 )
 
+func TestMemoryBackendSelectionFailsClosed(t *testing.T) {
+	t.Setenv("SIMTIMING_MEMORY_BACKEND", "unknown")
+	if _, err := NewDeviceWithMode(Timing); err == nil {
+		t.Fatal("unknown backend silently accepted")
+	}
+	t.Setenv("SIMTIMING_MEMORY_BACKEND", "rtlsim-dram")
+	t.Setenv("SIMTIMING_DRAM_LIBRARY", "/nonexistent/simulator-dram.so")
+	if _, err := NewDeviceWithMode(Timing); err == nil {
+		t.Fatal("missing DramSim silently fell back")
+	}
+	d, err := NewDeviceWithMode(Functional)
+	if err != nil {
+		t.Fatal("functional mode incorrectly requires DRAM", err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SIMTIMING_MEMORY_BACKEND", "fixed")
+	d, err = NewDeviceWithMode(Timing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.dram != nil || d.memoryBackend != "fixed" {
+		t.Fatal("fixed mode loaded DRAM")
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func putWord(t *testing.T, d *Device, address, word uint32) {
 	t.Helper()
 	var data [4]byte
@@ -52,10 +82,12 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			launchOneLane(t, d, 0x100)
-			putWord(t, d, 0x100, 0x02a00093) // addi x1,x0,42
-			putWord(t, d, 0x104, 0x10102023) // sw x1,256(x0)
-			putWord(t, d, 0x108, 0x0000000b) // tmc x0
+			// Cached-RAM fixture, outside RTL's [0x40,0x10000) I/O aperture.
+			launchOneLane(t, d, 0x10000)
+			putWord(t, d, 0x10000, 0x02a00093) // addi x1,x0,42
+			putWord(t, d, 0x10004, 0x00010137) // lui x2,0x10
+			putWord(t, d, 0x10008, 0x00112023) // sw x1,0(x2)
+			putWord(t, d, 0x1000c, 0x0000000b) // tmc x0
 			if err := d.Start(); err != nil {
 				t.Fatal(err)
 			}
@@ -68,7 +100,7 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 					t.Fatal(d.LastRun())
 				}
 				var before [4]byte
-				if err := d.Memory().Read(0x100, before[:]); err != nil {
+				if err := d.Memory().Read(0x10000, before[:]); err != nil {
 					t.Fatal(err)
 				}
 				if binary.LittleEndian.Uint32(before[:]) != 0x02a00093 {
@@ -79,10 +111,10 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 				t.Fatal(err)
 			}
 			var data [4]byte
-			if err := d.Memory().Read(0x100, data[:]); err != nil {
+			if err := d.Memory().Read(0x10000, data[:]); err != nil {
 				t.Fatal(err)
 			}
-			// Program and result overlap at 0x100 in this tiny fixture; the store must
+			// Program and result overlap at 0x10000 in this tiny fixture; the store must
 			// replace the first word with 42.
 			if got := binary.LittleEndian.Uint32(data[:]); got != 42 {
 				t.Fatalf("stored=%d", got)
@@ -99,7 +131,7 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 				previousCycle = previous.Status().Cycle
 			}
 			// Reload the same VMA after the real CP flush, then launch again.
-			putWord(t, d, 0x100, 0x02b00093)
+			putWord(t, d, 0x10000, 0x02b00093)
 			if err := d.Start(); err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +151,7 @@ func TestNativeLaunchCompletesAndWritesMemory(t *testing.T) {
 			if _, err := d.ReadDCR(dcrCacheFlush, 0); err != nil {
 				t.Fatal(err)
 			}
-			if err := d.Memory().Read(0x100, data[:]); err != nil {
+			if err := d.Memory().Read(0x10000, data[:]); err != nil {
 				t.Fatal(err)
 			}
 			if binary.LittleEndian.Uint32(data[:]) != 43 {

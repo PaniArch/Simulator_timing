@@ -50,15 +50,26 @@ type splitRecord struct {
 	accepted                 bool
 }
 type SIMDSplit struct {
-	requests      [2]cacheQueue[SIMDRequest]
-	responses     cacheQueue[SIMDResponse]
-	rr            int
-	held          SIMDOffer
-	heldReads     [2]SIMDReply
-	submitted     uint8
-	records       map[Identity]*splitRecord
-	cycle, last   uint64
-	started, used bool
+	requests       [2]cacheQueue[SIMDRequest]
+	responses      cacheQueue[SIMDResponse]
+	held           SIMDOffer
+	heldReads      [2]SIMDReply
+	submitted      uint8
+	records        map[Identity]*splitRecord
+	cycle, last    uint64
+	started, used  bool
+	rtlMixedHazard bool
+}
+
+// RTLTimingIssue is sticky: under asymmetric mixed-buffer acceptance the
+// frozen RTL can enqueue a subset repeatedly, whereas this functional adapter
+// retains its existing exactly-once contract. Such execution must never be
+// certified as RTL timing-equivalent merely because the host output passes.
+func (s *SIMDSplit) RTLTimingIssue() string {
+	if s.rtlMixedHazard {
+		return "mixed-local-global-asymmetric-acceptance"
+	}
+	return ""
 }
 
 func NewSIMDSplit() (*SIMDSplit, error) {
@@ -85,7 +96,7 @@ func NewSIMDSplit() (*SIMDSplit, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.Inputs != 2 || a.Policy != "R" || a.Sticky {
+	if a.Inputs != 2 || a.Policy != "P" || a.Sticky {
 		return nil, fmt.Errorf("unsupported split arbiter")
 	}
 	return s, nil
@@ -122,7 +133,9 @@ func (s *SIMDSplit) Response() SIMDReply {
 }
 func (s *SIMDSplit) ReadReady(reads [2]SIMDReply, responseReady bool) [2]bool {
 	var ready [2]bool
-	selected := pick(s.rr, []bool{reads[0].Valid, reads[1].Valid})
+	// VX_mem_unit overrides VX_lmem_switch's default R with P. Input 0
+	// is global: it wins every contested grant, not only the first one.
+	selected := pick(0, []bool{reads[0].Valid, reads[1].Valid})
 	if selected >= 0 && s.responses.ready(len(s.responses.values) > 0 && responseReady) {
 		ready[selected] = true
 	}
@@ -219,6 +232,16 @@ func (s *SIMDSplit) Step(cycle uint64, in SplitInput) (SplitEdge, error) {
 	if err := s.validate(cycle, in); err != nil {
 		return SplitEdge{}, err
 	}
+	if in.Request.Valid {
+		masks := splitMasks(in.Request.Request)
+		if masks[0] != 0 && masks[1] != 0 {
+			g := s.requests[0].ready(len(s.requests[0].values) > 0 && in.PathReady[0])
+			l := s.requests[1].ready(len(s.requests[1].values) > 0 && in.PathReady[1])
+			if g != l {
+				s.rtlMixedHazard = true
+			}
+		}
+	}
 	for p := 0; p < 2; p++ {
 		for _, r := range in.Progress[p] {
 			s.records[r.Identity].sent |= r.Mask
@@ -245,7 +268,6 @@ func (s *SIMDSplit) Step(cycle uint64, in SplitInput) (SplitEdge, error) {
 			r := in.Reads[p].Response
 			s.records[r.Identity].arrived |= r.Mask
 			rspPush = &r
-			s.rr = 1 - p
 		}
 		for _, r := range in.Stores[p] {
 			rec := s.records[r.Identity]

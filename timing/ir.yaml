@@ -185,6 +185,12 @@ sources:
   kernel-launch-owner:
     path: timing/runner/kernel.go
     locator: NewKernel and Run; GridWalker to actual MultiRunner with fixed-stride residency
+  kernel-power-owner:
+    path: timing/runner/power.go
+    locator: PowerOn Initialize Start; actual reset scan and continuous device clock before KMU start
+  kernel-power-regression:
+    path: timing/runner/power_test.go
+    locator: reset chunking early start KMU fire TID write and hardware completion before store refill
   kernel-launch-regression:
     path: timing/runner/kernel_test.go
     locator: startup entry CSR jump, parameter and block context, physical LMEM address and global output
@@ -653,6 +659,8 @@ config:
   - mem::g_coalescing
   - types::memmap
   - types-header::VX_MEM_LMEM_BASE_ADDR
+  - types-header::VX_MEM_IO_BASE_ADDR/VX_MEM_IO_END_ADDR
+  - lsu-slice::g_mem_req_attr is_addr_io block comparison
   values:
     memory_block_bytes: 64
     lsu_word_bytes: 4
@@ -663,6 +671,8 @@ config:
     local_base_address: 0xffff0000
     local_size_bytes: 16384
     local_banks: 4
+    io_base_address: 64
+    io_end_address: 65536
     icache_word_bytes: 4
     icache_core_ports: 1
     icache_memory_ports: 1
@@ -1972,8 +1982,9 @@ boundaries:
   status: FROZEN
   evidence:
   - mem::VX_lmem_switch.RSP_OUT_BUF
+  - mem::VX_lmem_switch.ARBITER P overrides module default R
   - lmem-switch::rsp_arb/ARBITER
-  - generic-arbiter::g_round_robin
+  - generic-arbiter::g_priority
   - elastic::SIZE branches
   - platform::TO_OUT_BUF_SIZE/REG
   kind: output_buffer_encoding
@@ -1981,7 +1992,7 @@ boundaries:
     OUT_BUF: 1
   arbitration:
     inputs: 2
-    policy: R
+    policy: P
     sticky: 0
     model: 1
   encoding_ref: b-encoding
@@ -5102,7 +5113,7 @@ rules:
   boundary_refs: [b-split-global_out_buf, b-split-local_out_buf, b-split-rsp_out_buf]
   unknown_ref: u-t12-memory-order
   evidence: [split-model::Step/ReadReady, split-model-tests::TestSplitAsymmetricAcceptanceAndCompletion/TestSplitPartialProgressBeforeChildInputRelease, lmem-switch::req_global_buf/req_local_buf/rsp_arb, routing-progress::software boundary]
-  statement: SIMDSplit uses the frozen single-entry child request buffers and round-robin single-entry response buffer. Per-input submitted bits suppress a child after buffer acceptance while the other child remains blocked; these software once-only bits address the documented mixed-valid RTL gap without claiming signal equivalence. Identity bookkeeping separately records queued lane masks, child input release, downstream partial progress, received fragments and delivered/applied lanes. Partial coalescer batches may report progress before releasing the child input. Completion waits all lanes and all child references; store application events do not occupy load-response buffers. Unresolved global overlap is rejected before either mixed subset can be accepted. The ledger adds no hardware queue or backpressure credit, and notification sorting does not choose byte winners. The global word adapter is implemented separately; local adapter and LMEM are exercised together in the mixed-path component test.
+  statement: SIMDSplit uses the frozen single-entry child request buffers and fixed-global-priority single-entry response buffer (VX_mem_unit overrides ARBITER=P). Per-input submitted bits suppress a child after buffer acceptance while the other child remains blocked; these software once-only bits address the documented mixed-valid RTL gap without claiming signal equivalence. Asymmetric mixed acceptance latches RTLTimingIssue and is excluded from RTL timing-equivalence certification. Identity bookkeeping separately records queued lane masks, child input release, downstream partial progress, received fragments and delivered/applied lanes. Partial coalescer batches may report progress before releasing the child input. Completion waits all lanes and all child references; store application events do not occupy load-response buffers. Unresolved global overlap is rejected before either mixed subset can be accepted. The ledger adds no hardware queue or backpressure credit, and notification sorting does not choose byte winners. The global word adapter is implemented separately; local adapter and LMEM are exercised together in the mixed-path component test.
 - id: r-software-global-adapter
   status: PROVISIONAL
   nodes: [n-global-adapter, n-coalescer, n-dcache]
@@ -5287,9 +5298,8 @@ unknowns:
   question: Can a ready local/global subset be accepted repeatedly while the other subset prevents the upstream
     handshake?
   known: Both subset valid signals are independently driven from upstream valid; AND-ready is returned upstream;
-    no sent mask in this module.
-  missing: Directed sequence validation or source-level proof of an upstream/downstream invariant preventing asymmetric
-    readiness for mixed masks.
+    no sent mask in this module. A directed frozen-module simulation with a blocked local buffer observes three repeated global transfers while the mixed parent remains unaccepted. The software adapter retains exactly-once semantics but now latches mixed-local-global-asymmetric-acceptance as an RTLTimingIssue, propagated to KernelStatus and native run summaries; functional PASS must not be interpreted as RTL timing equivalence on that execution.
+  missing: Full-core reachability validation or a source-level proof of an upstream/downstream invariant preventing this component-level counterexample; native RTL error/duplicate response behavior is not yet emulated.
   affected:
   - n-lmem-switch
   - n-lsu-scheduler
@@ -6325,12 +6335,12 @@ cycle_contracts:
   condition: frozen single-core Kernel launch with CTA-local barrier and spawn coordination
   trigger: boundary before each actual timing Core edge
   sampled_state: validated GridWalker record, fixed-stride slot window, per-Warp pipeline and service ownership
-  next_state: reclaim only drained CTA members; admit next CTA into free round-robin cluster window; initialize canonical mask PC mscratch and CTA CSR view; retain monotonic instruction identities
+  next_state: release physical CTA slot after last delayed warp_done; select hardware-inactive wid without waiting for old commit receipts; admit into free round-robin cluster window; register one-Warp fire with next-edge scheduler visibility; retain original per-token generation and physical LMEM route until dependent tails complete
   consumer: next timing pipeline edge and bound per-Warp byte-service route
   consumer_offset: 0
-  simultaneous: unrelated CTAs continue while allocation waits; accepted requests retain membership until service and receipt completion; dispatch latency is abstracted and full-CTA activation is not an RTL cycle-equivalence claim
+  simultaneous: KMU start registers running before next-edge admission; unrelated CTAs continue while allocation waits; old tokens retain original binding across physical reuse; slot tail survives NextLaunch; TID context is exposed after two frozen pipeline registers and the warp RAM write edge; general BRAM and barrier-owner gating remain provisional
   rule_refs: [r-software-edge, r-software-program-runner]
-  evidence: [kernel-launch-owner::residency and Run, independent-residency-memory::Admit explicit physical offsets, kernel-launch-regression::reentry thread coordinates service tails and cluster prewrap, kernel-residency-progress::Kernel API and current execution coverage]
+  evidence: [kernel-launch-owner::residency and Run, kernel-power-owner::reset initialization and launch transfer, kernel-power-regression::start and context edges, kmu::registered running and bus valid, independent-residency-memory::Admit explicit physical offsets, kernel-launch-regression::reentry thread coordinates service tails and cluster prewrap, kernel-residency-progress::Kernel API and current execution coverage]
 
 - id: cc-kernel-barrier-owner
   status: PROVISIONAL

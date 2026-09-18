@@ -36,8 +36,9 @@ func (k *Kernel) event(kind string, cta uint32, slot int, warps isa.WarpMask) {
 	k.events = append(k.events, e)
 }
 
-// observeCTA is also the actual release predicate, so status cannot advertise
-// reuse while a cache/coalescer/adapter or architectural token retains residency.
+// observeCTA exposes conservative full-generation quiescence. Hardware slot
+// admission is separate: slot_valid clears at the delayed final warp_done,
+// while in-flight token bindings and physical LMEM routes retain old ownership.
 func (k *Kernel) observeCTA(slot int, c *KernelCTA) KernelCTA {
 	out := *c
 	out.Generation = k.generations[slot]

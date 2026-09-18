@@ -7,8 +7,17 @@ import (
 	"vortex.local/simulator/timing/model"
 )
 
+func (r *MultiRunner) warpDispatchable(warp uint8) bool {
+	if r == nil || r.failed || !r.core.WarpDispatchable(warp) || r.parked[warp] {
+		return false
+	}
+	s, err := r.owners[warp].Snapshot()
+	return err == nil && s.Lifecycle() == state.WarpInactive && s.ActiveMask() == 0
+}
+
 // WarpQuiescent includes byte-service tails and effect receipts as well as the
-// hardware pipeline. It is a resource-reuse condition, not a WSYNC/BAR gate.
+// hardware pipeline. It is a lifecycle condition, not physical dispatch readiness
+// and not a WSYNC/BAR gate.
 func (r *MultiRunner) WarpQuiescent(warp uint8) bool {
 	if r == nil || r.failed || warp >= 4 || !r.core.WarpQuiescent(warp) {
 		return false
@@ -52,7 +61,7 @@ func (r *MultiRunner) DispatchWarp(warp uint8, startupPC, parameter uint32, mask
 	if r.cacheFlush != nil {
 		return fmt.Errorf("finish FlushCaches before changing residency")
 	}
-	if !r.WarpQuiescent(warp) || r.parked[warp] {
+	if !r.warpDispatchable(warp) {
 		return fmt.Errorf("CTA dispatch requires available Warp slot")
 	}
 	stage, err := state.StageWarpLaunch([]state.WarpLaunchTarget{{WarpID: warp, Owner: r.owners[warp], StartupPC: startupPC, ParameterAddress: parameter, ActiveMask: mask, FirstUse: firstUse}})
@@ -73,6 +82,7 @@ func (r *MultiRunner) DispatchWarp(warp uint8, startupPC, parameter uint32, mask
 		r.failed = true
 		return err
 	}
+	r.effects.ActivateWarp(warp)
 	r.stopped = false
 	r.recoveryEvents = append(r.recoveryEvents, StageEvent{Resource: "scheduler", Kind: "cta-dispatch", Token: model.Token{Warp: warp, Epoch: r.epoch, PC: result.PC, Mask: uint8(mask)}, Reason: "residency"})
 	return nil
